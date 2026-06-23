@@ -15,6 +15,9 @@ import { CartToast } from "@/components/catalog/CartToast";
 export const metadata: Metadata = {
   title: "Косметичка",
   description: "Интернет-магазин косметики",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

@@ -1,0 +1,14 @@
+meta:
+  environment: nodejs
+  toolVersion: "18"
+
+build:
+  buildCommands:
+    - npm install
+    - npx prisma generate
+    - npm run build
+
+run:
+  persistenceMount: /storage
+  containerPort: 3000
+  runCommand: npm start
