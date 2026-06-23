@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model ProductImage {
+  id Int @id @default(autoincrement())
+
+  path String
+  hash String?
+
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Category {
+  id Int @id @default(autoincrement())
+
+  guid String @unique
+  name String
+
+  parentGuid String?
+
+  parent   Category?  @relation("CategoryTree", fields: [parentGuid], references: [guid])
+  children Category[] @relation("CategoryTree")
+
+  products Product[]
+}
+
+model Brand {
+  id   Int    @id @default(autoincrement())
+  guid String @unique
+  name String
+
+  products Product[]
+}
+
+model Product {
+  id Int @id @default(autoincrement())
+
+  guid    String  @unique
+  article String?
+
+  name        String
+  barcode     String?
+  description String? @db.Text
+
+  stock  Float?
+  prices ProductPrice[]
+
+  brandGuid String?
+  brand     Brand?  @relation(fields: [brandGuid], references: [guid])
+
+  categoryGuid String?
+  category     Category? @relation(fields: [categoryGuid], references: [guid])
+
+  images ProductImage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProductPrice {
+  id Int @id @default(autoincrement())
+
+  productGuid String
+  product     Product @relation(fields: [productGuid], references: [guid])
+
+  priceType String
+  price     Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productGuid, priceType])
+}
+
+model Customer {
+  id Int @id @default(autoincrement())
+
+  name        String?
+  companyName String?
+  phone       String?
+  email       String?
+
+  inn     String?
+  city    String?
+  address String?
+
+  password String
+
+  oneCId  String?
+  manager String?
+
+  priceType String @default("wholesale")
+
+  isActive   Boolean @default(true)
+  isApproved Boolean @default(false)
+
+  role String @default("customer")
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  login     String   @unique
+  password  String
+  role      String   @default("manager")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Order {
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  status  String  @default("pending")
+  total   Int     @default(0)
+  comment String? @db.Text
+
+  items OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrderItem {
+  id Int @id @default(autoincrement())
+
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id])
+
+  productId   Int
+  productName String
+  barcode     String?
+  quantity    Int
+  price       Int
+  total       Int
+}
+
+model OneCCustomer {
+  id Int @id @default(autoincrement())
+
+  oneCId String  @unique
+  name   String
+  phone  String?
+
+  manager   String?
+  priceType String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
