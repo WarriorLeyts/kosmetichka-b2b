@@ -1,24 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exec } from "child_process";
+import { createHmac } from "crypto";
+
+async function verifyGithubSignature(request: NextRequest, body: string) {
+  const signature = request.headers.get("x-hub-signature-256");
+  if (!signature) return false;
+
+  const secret = process.env.DEPLOY_SECRET ?? "";
+  const expected = "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
+
+  return signature === expected;
+}
 
 export async function POST(request: NextRequest) {
-  const secret = request.headers.get("x-deploy-secret");
+  const body = await request.text();
 
-  if (!secret || secret !== process.env.DEPLOY_SECRET) {
+  const valid = await verifyGithubSignature(request, body);
+  if (!valid) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const cwd = process.cwd();
+  const scriptPath = `${process.env.HOME ?? "/root"}/deploy.sh`;
 
-  const cmd = [
-    "git pull origin main",
-    "npm install --production=false",
-    "npx prisma generate",
-    "npm run build",
-    "pm2 restart kosmetichka",
-  ].join(" && ");
-
-  exec(cmd, { cwd }, (err, stdout, stderr) => {
+  exec(`bash ${scriptPath}`, (err, stdout, stderr) => {
     if (err) {
       console.error("[deploy] error:", err.message, stderr);
     } else {
