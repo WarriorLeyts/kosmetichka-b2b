@@ -1,5 +1,5 @@
-# Синхронизация 1С <-> kosmetichka-opt.ru
-# Запускается каждые 5 минут через Task Scheduler
+# 1C <-> kosmetichka-opt.ru sync
+# Runs every 5 minutes via Task Scheduler
 
 $ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -24,27 +24,27 @@ function Find-LatestFile($fileName) {
 
 function Upload-File($localPath, $remoteName) {
     try {
-        Log "Найден $remoteName`: $localPath"
+        Log "Found $remoteName`: $localPath"
         $bytes = [System.IO.File]::ReadAllBytes($localPath)
         Invoke-RestMethod -Uri "$BaseUrl/api/1c/upload?file=$remoteName" `
             -Method POST -Headers $Headers -Body $bytes `
             -ContentType "application/xml; charset=utf-8"
-        Log "$remoteName загружен ($($bytes.Length) байт)"
+        Log "$remoteName uploaded ($($bytes.Length) bytes)"
     } catch {
         Log "ERROR uploading $remoteName`: $_"
     }
 }
 
 function Sync-Images {
-    # Найти папку import_files (внутри webdata - ...)
+    # Find import_files folder (inside webdata - ...)
     $importFilesDir = Get-ChildItem -Path $LocalDir -Filter "import_files" -Recurse -Directory -ErrorAction SilentlyContinue |
                       Select-Object -First 1
     if (-not $importFilesDir) {
-        Log "import_files не найден, пропускаем синхронизацию картинок"
+        Log "import_files not found, skipping image sync"
         return
     }
 
-    # Файл отслеживания уже отправленных картинок
+    # Tracking file for already uploaded images
     $trackFile = "$LocalDir\synced_images.txt"
     $syncedSet  = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     if (Test-Path $trackFile) {
@@ -53,19 +53,19 @@ function Sync-Images {
             ForEach-Object { $null = $syncedSet.Add($_.Trim()) }
     }
 
-    # Найти все изображения
+    # Find all images
     $allImages = Get-ChildItem -Path $importFilesDir.FullName -Recurse -File -ErrorAction SilentlyContinue |
                  Where-Object { $_.Extension -match '\.(jpg|jpeg|png|gif|webp|bmp)$' }
     $newImages  = $allImages | Where-Object { -not $syncedSet.Contains($_.Name) }
 
-    Log "Картинок на диске: $($allImages.Count) | Новых для загрузки: $($newImages.Count)"
+    Log "Images on disk: $($allImages.Count) | New to upload: $($newImages.Count)"
     if ($newImages.Count -eq 0) { return }
 
     $SshKey     = "C:\Users\muhammad\.ssh\id_rsa"
     $SshDest    = "root@5.42.98.4"
     $RemoteBase = "/root/kosmetichka-b2b/data/1c/import_files"
 
-    # Создать все нужные папки на сервере одной SSH-командой
+    # Create all required remote directories in one SSH call
     $dirsToCreate = $newImages | ForEach-Object {
         $relDir = $_.DirectoryName.Substring($importFilesDir.FullName.Length).TrimStart("\").Replace("\", "/")
         if ($relDir) { "$RemoteBase/$relDir" } else { $RemoteBase }
@@ -74,8 +74,8 @@ function Sync-Images {
     $mkdirCmd = "mkdir -p " + ($dirsToCreate -join " ")
     & ssh -i $SshKey -o StrictHostKeyChecking=no -o BatchMode=yes $SshDest $mkdirCmd 2>&1 | Out-Null
 
-    # Загрузить новые файлы по одному через SCP
-    $uploaded    = 0
+    # Upload new files one by one via SCP
+    $uploaded     = 0
     $newFileNames = [System.Collections.Generic.List[string]]::new()
 
     foreach ($img in $newImages) {
@@ -90,35 +90,35 @@ function Sync-Images {
             Log "ERROR scp $($img.Name)"
         }
         if ($uploaded -gt 0 -and $uploaded % 100 -eq 0) {
-            Log "Картинок загружено: $uploaded / $($newImages.Count)"
+            Log "Images uploaded: $uploaded / $($newImages.Count)"
         }
     }
 
-    # Добавить успешно загруженные в tracking файл
+    # Save successfully uploaded filenames to tracking file
     if ($newFileNames.Count -gt 0) {
         [System.IO.File]::AppendAllText($trackFile, ($newFileNames -join "`n") + "`n", [System.Text.Encoding]::UTF8)
     }
-    Log "Синхронизация картинок завершена: $uploaded из $($newImages.Count)"
+    Log "Image sync done: $uploaded of $($newImages.Count)"
 }
 
 Log "=== Sync started ==="
 
-# 1. Загрузить import.xml
+# 1. Upload import.xml
 $importFile = Find-LatestFile "import.xml"
 if ($importFile) { Upload-File $importFile "import.xml" }
-else { Log "import.xml не найден, пропускаем" }
+else { Log "import.xml not found, skipping" }
 
-# 2. Загрузить offers.xml
+# 2. Upload offers.xml
 $offersFile = Find-LatestFile "offers.xml"
 if ($offersFile) { Upload-File $offersFile "offers.xml" }
-else { Log "offers.xml не найден, пропускаем" }
+else { Log "offers.xml not found, skipping" }
 
-# 3. Загрузить customers.xml
+# 3. Upload customers.xml
 $customersFile = Find-LatestFile "customers.xml"
 if ($customersFile) { Upload-File $customersFile "customers.xml" }
-else { Log "customers.xml не найден, пропускаем" }
+else { Log "customers.xml not found, skipping" }
 
-# 4. Запустить импорт на сервере (каталог, цены, контрагенты, картинки)
+# 4. Trigger server-side import (catalog, prices, customers, images)
 try {
     $result = Invoke-RestMethod -Uri "$BaseUrl/api/1c/sync" `
         -Method POST -Headers $Headers
@@ -127,15 +127,15 @@ try {
     Log "ERROR triggering sync: $_"
 }
 
-# 5. Синхронизировать картинки через SCP
+# 5. Sync images via SCP
 Sync-Images
 
-# 6. Скачать заказы с сервера
+# 6. Download orders from server
 try {
     $ordersXml  = Invoke-RestMethod -Uri "$BaseUrl/api/1c/orders" -Method GET -Headers $Headers
     $ordersPath = "$LocalDir\Orders.xml"
     [System.IO.File]::WriteAllText($ordersPath, $ordersXml, [System.Text.Encoding]::UTF8)
-    Log "Orders.xml скачан: $ordersPath"
+    Log "Orders.xml saved: $ordersPath"
 } catch {
     Log "ERROR downloading orders: $_"
 }
