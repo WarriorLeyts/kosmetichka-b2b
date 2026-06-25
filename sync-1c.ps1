@@ -144,7 +144,7 @@ try {
         Log "Orders downloaded: $($ids.Count) new order(s), IDs: $($ids -join ', ')"
 
         # Acknowledge: mark as exported so they do not appear again
-        $ackBody = @{ ids = $ids } | ConvertTo-Json
+        $ackBody = @{ ids = @($ids) } | ConvertTo-Json
         Invoke-RestMethod -Uri "$BaseUrl/api/1c/orders/ack" `
             -Method POST -Headers $Headers -Body $ackBody `
             -ContentType "application/json" | Out-Null
