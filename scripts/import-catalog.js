@@ -112,11 +112,13 @@ async function main() {
     const brandGuid = getBrandGuid(product);
 
     const description =
+      (product["Описание"] ? String(product["Описание"]).trim() : null) ||
       getRequisite(product, [
         "Описание",
         "Описание товара",
         "Полное описание",
-      ]) || null;
+      ]) ||
+      null;
 
     await prisma.product.upsert({
       where: {
