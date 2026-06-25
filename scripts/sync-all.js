@@ -21,7 +21,7 @@ for (const script of scripts) {
     console.log("OK:", script);
   } catch (err) {
     console.error("FAILED:", script, err.message);
-    process.exit(1);
+    // Продолжаем остальные скрипты даже при ошибке
   }
 }
 

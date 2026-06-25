@@ -61,7 +61,12 @@ function normalizePriceType(value) {
 }
 
 async function main() {
-  const xml = fs.readFileSync("./data/1c/customers.xml", "utf8");
+  const filePath = "./data/1c/customers.xml";
+  if (!fs.existsSync(filePath)) {
+    console.log("customers.xml не найден, пропускаем импорт контрагентов");
+    return;
+  }
+  const xml = fs.readFileSync(filePath, "utf8");
 
   const data = parser.parse(xml);
 

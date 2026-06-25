@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-const ALLOWED_FILES = ["import.xml", "offers.xml"];
+const ALLOWED_FILES = ["import.xml", "offers.xml", "customers.xml"];
 
 function checkApiKey(request: NextRequest) {
   const key = request.headers.get("x-1c-key");
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
   if (!filename || !ALLOWED_FILES.includes(filename)) {
     return NextResponse.json(
-      { error: "Invalid file. Allowed: import.xml, offers.xml" },
+      { error: "Invalid file. Allowed: import.xml, offers.xml, customers.xml" },
       { status: 400 }
     );
   }
