@@ -15,10 +15,19 @@ function Log($msg) {
 
 Log "=== Sync started ==="
 
+# Найти самый свежий файл с именем $fileName в любой подпапке $LocalDir
+function Find-LatestFile($fileName) {
+    $found = Get-ChildItem -Path $LocalDir -Filter $fileName -Recurse -ErrorAction SilentlyContinue |
+             Sort-Object LastWriteTime -Descending |
+             Select-Object -First 1
+    return $found?.FullName
+}
+
 # 1. Загрузить import.xml на сервер
-$importFile = "$LocalDir\import.xml"
-if (Test-Path $importFile) {
+$importFile = Find-LatestFile "import.xml"
+if ($importFile) {
     try {
+        Log "Найден import.xml: $importFile"
         $body = [System.IO.File]::ReadAllText($importFile, [System.Text.Encoding]::UTF8)
         Invoke-RestMethod -Uri "$BaseUrl/api/1c/upload?file=import.xml" `
             -Method POST -Headers $Headers `
@@ -33,9 +42,10 @@ if (Test-Path $importFile) {
 }
 
 # 2. Загрузить offers.xml на сервер
-$offersFile = "$LocalDir\offers.xml"
-if (Test-Path $offersFile) {
+$offersFile = Find-LatestFile "offers.xml"
+if ($offersFile) {
     try {
+        Log "Найден offers.xml: $offersFile"
         $body = [System.IO.File]::ReadAllText($offersFile, [System.Text.Encoding]::UTF8)
         Invoke-RestMethod -Uri "$BaseUrl/api/1c/upload?file=offers.xml" `
             -Method POST -Headers $Headers `
