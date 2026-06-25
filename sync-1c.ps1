@@ -28,7 +28,7 @@ function Upload-File($localPath, $remoteName) {
         $bytes = [System.IO.File]::ReadAllBytes($localPath)
         Invoke-RestMethod -Uri "$BaseUrl/api/1c/upload?file=$remoteName" `
             -Method POST -Headers $Headers -Body $bytes `
-            -ContentType "application/xml; charset=utf-8"
+            -ContentType "application/xml; charset=utf-8" | Out-Null
         Log "$remoteName uploaded ($($bytes.Length) bytes)"
     } catch {
         Log "ERROR uploading $remoteName`: $_"
@@ -132,17 +132,18 @@ Sync-Images
 
 # 6. Download orders from server and acknowledge
 try {
-    $ordersXml  = Invoke-RestMethod -Uri "$BaseUrl/api/1c/orders" -Method GET -Headers $Headers
+    $response   = Invoke-WebRequest -Uri "$BaseUrl/api/1c/orders" -Method GET -Headers $Headers -UseBasicParsing
+    $ordersXml  = $response.Content
     $ordersPath = "$LocalDir\Orders.xml"
     [System.IO.File]::WriteAllText($ordersPath, $ordersXml, [System.Text.Encoding]::UTF8)
 
-    # Extract order IDs from XML attribute ИдЗаказов="1,2,3"
-    $match = [regex]::Match($ordersXml, 'ИдЗаказов="([^"]*)"')
-    if ($match.Success -and $match.Groups[1].Value) {
-        $ids = $match.Groups[1].Value -split "," | Where-Object { $_ } | ForEach-Object { [int]$_ }
-        Log "Orders downloaded: $($ids.Count) new order(s) — IDs: $($ids -join ', ')"
+    # Read order IDs from response header X-Order-Ids
+    $orderIdsHeader = $response.Headers["X-Order-Ids"]
+    if ($orderIdsHeader) {
+        $ids = $orderIdsHeader -split "," | Where-Object { $_ } | ForEach-Object { [int]$_ }
+        Log "Orders downloaded: $($ids.Count) new order(s), IDs: $($ids -join ', ')"
 
-        # Acknowledge — mark as exported so they won't appear again
+        # Acknowledge: mark as exported so they do not appear again
         $ackBody = @{ ids = $ids } | ConvertTo-Json
         Invoke-RestMethod -Uri "$BaseUrl/api/1c/orders/ack" `
             -Method POST -Headers $Headers -Body $ackBody `

@@ -26,88 +26,89 @@ export async function GET(request: NextRequest) {
     },
     include: {
       customer: true,
-      items: {
-        include: { order: { include: { customer: true } } },
-      },
+      items: true,
     },
     orderBy: { createdAt: "desc" },
     take: 500,
   });
 
-  const now = new Date().toISOString().replace("Z", "");
+  const date = new Date().toISOString().slice(0, 10);
+  const orderIds = orders.map((o) => o.id).join(",");
 
   const docs = orders
     .map((order) => {
-      const itemsXml = order.items
-        .map((item) => {
-          // Find product guid by joining through product
-          return `    <Товар>
-      <Наименование>${escapeXml(item.productName)}</Наименование>
-      ${item.barcode ? `<Штрихкод>${escapeXml(item.barcode)}</Штрихкод>` : ""}
-      <БазоваяЕдиница>шт</БазоваяЕдиница>
-      <Количество>${item.quantity}</Количество>
-      <ЦенаЗаЕдиницу>${item.price}</ЦенаЗаЕдиницу>
-      <Сумма>${item.total}</Сумма>
-    </Товар>`;
-        })
-        .join("\n");
-
       const customer = order.customer;
-      const statusMap: Record<string, string> = {
-        pending: "Принят",
-        approved: "Подтверждён",
-        cancelled: "Отменён",
-      };
+      const time = order.createdAt.toTimeString().slice(0, 8);
+      const phone = customer.phone || "";
+      const name = escapeXml(customer.companyName || customer.name || "");
+
+      const itemsXml = order.items
+        .map(
+          (item) => `    <Товар>
+      <Ид>${item.productId}</Ид>
+      <Артикул>${escapeXml(item.barcode || "")}</Артикул>
+      <Наименование>${escapeXml(item.productName)}</Наименование>
+      <БазоваяЕдиница Код="796" НаименованиеПолное="Штука">шт</БазоваяЕдиница>
+      <ЦенаЗаЕдиницу>${item.price}</ЦенаЗаЕдиницу>
+      <Количество>${item.quantity}</Количество>
+      <Сумма>${item.total}</Сумма>
+    </Товар>`
+        )
+        .join("\n");
 
       return `  <Документ>
     <Ид>${order.id}</Ид>
     <Номер>${order.id}</Номер>
     <Дата>${order.createdAt.toISOString().slice(0, 10)}</Дата>
-    <ХозяйственнаяОперация>Заказ товара</ХозяйственнаяОперация>
-    <Роль>Покупатель</Роль>
-    <Валюта>RUB</Валюта>
+    <Время>${time}</Время>
+    <ХозОперация>Заказ товара</ХозОперация>
+    <Роль>Продавец</Роль>
+    <Валюта>руб</Валюта>
+    <Курс>1</Курс>
     <Сумма>${order.total}</Сумма>
     <Контрагенты>
       <Контрагент>
-        <Ид>customer-${customer.id}</Ид>
-        <Наименование>${escapeXml(customer.companyName || customer.name || "")}</Наименование>
+        <Ид>${escapeXml(customer.oneCId || `customer-${customer.id}`)}</Ид>
+        <Наименование>${name}</Наименование>
+        <ПолноеНаименование>${name}</ПолноеНаименование>
+        ${phone ? `<Телефон>${escapeXml(phone)}</Телефон>` : ""}
         <Роль>Покупатель</Роль>
-        ${customer.inn ? `<ИНН>${escapeXml(customer.inn)}</ИНН>` : ""}
-        ${customer.phone ? `<КонтактнаяИнформация>
-          <КонтактнаяИнформация Тип="Телефон">
-            <Представление>${escapeXml(customer.phone)}</Представление>
-          </КонтактнаяИнформация>
-        </КонтактнаяИнформация>` : ""}
       </Контрагент>
     </Контрагенты>
     <Товары>
 ${itemsXml}
     </Товары>
-    ${order.comment ? `<Комментарий>${escapeXml(order.comment)}</Комментарий>` : ""}
     <ЗначенияРеквизитов>
       <ЗначениеРеквизита>
         <Наименование>Статус заказа</Наименование>
-        <Значение>${statusMap[order.status] ?? order.status}</Значение>
+        <Значение>Новый</Значение>
       </ЗначениеРеквизита>
-      ${customer.oneCId ? `<ЗначениеРеквизита>
-        <Наименование>Ид контрагента</Наименование>
-        <Значение>${escapeXml(customer.oneCId)}</Значение>
-      </ЗначениеРеквизита>` : ""}
+      <ЗначениеРеквизита>
+        <Наименование>Комментарий</Наименование>
+        <Значение>${escapeXml(order.comment || "")}</Значение>
+      </ЗначениеРеквизита>
+      <ЗначениеРеквизита>
+        <Наименование>Ответственный</Наименование>
+        <Значение></Значение>
+      </ЗначениеРеквизита>
+      <ЗначениеРеквизита>
+        <Наименование>ВидЦен</Наименование>
+        <Значение>${escapeXml(customer.priceType || "wholesale")}</Значение>
+      </ЗначениеРеквизита>
     </ЗначенияРеквизитов>
   </Документ>`;
     })
     .join("\n");
 
-  const orderIds = orders.map((o) => o.id).join(",");
-
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<КоммерческаяИнформация ВерсияСхемы="2.05" ДатаФормирования="${now}" ИдЗаказов="${orderIds}">
+<КоммерческаяИнформация ВерсияСхемы="2.05" ДатаФормирования="${date}">
 ${docs}
 </КоммерческаяИнформация>`;
 
   return new NextResponse(xml, {
     headers: {
       "Content-Type": "application/xml; charset=utf-8",
+      "X-Order-Ids": orderIds,
     },
   });
 }
