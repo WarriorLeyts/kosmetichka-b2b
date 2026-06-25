@@ -20,7 +20,10 @@ export async function GET(request: NextRequest) {
   }
 
   const orders = await prisma.order.findMany({
-    where: { status: { in: ["pending", "approved"] } },
+    where: {
+      status: { in: ["pending", "approved"] },
+      oneCExportedAt: null,
+    },
     include: {
       customer: true,
       items: {
@@ -95,8 +98,10 @@ ${itemsXml}
     })
     .join("\n");
 
+  const orderIds = orders.map((o) => o.id).join(",");
+
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<КоммерческаяИнформация ВерсияСхемы="2.05" ДатаФормирования="${now}">
+<КоммерческаяИнформация ВерсияСхемы="2.05" ДатаФормирования="${now}" ИдЗаказов="${orderIds}">
 ${docs}
 </КоммерческаяИнформация>`;
 

@@ -130,12 +130,27 @@ try {
 # 5. Sync images via SCP
 Sync-Images
 
-# 6. Download orders from server
+# 6. Download orders from server and acknowledge
 try {
     $ordersXml  = Invoke-RestMethod -Uri "$BaseUrl/api/1c/orders" -Method GET -Headers $Headers
     $ordersPath = "$LocalDir\Orders.xml"
     [System.IO.File]::WriteAllText($ordersPath, $ordersXml, [System.Text.Encoding]::UTF8)
-    Log "Orders.xml saved: $ordersPath"
+
+    # Extract order IDs from XML attribute ИдЗаказов="1,2,3"
+    $match = [regex]::Match($ordersXml, 'ИдЗаказов="([^"]*)"')
+    if ($match.Success -and $match.Groups[1].Value) {
+        $ids = $match.Groups[1].Value -split "," | Where-Object { $_ } | ForEach-Object { [int]$_ }
+        Log "Orders downloaded: $($ids.Count) new order(s) — IDs: $($ids -join ', ')"
+
+        # Acknowledge — mark as exported so they won't appear again
+        $ackBody = @{ ids = $ids } | ConvertTo-Json
+        Invoke-RestMethod -Uri "$BaseUrl/api/1c/orders/ack" `
+            -Method POST -Headers $Headers -Body $ackBody `
+            -ContentType "application/json" | Out-Null
+        Log "Orders acknowledged in DB"
+    } else {
+        Log "No new orders to download"
+    }
 } catch {
     Log "ERROR downloading orders: $_"
 }
