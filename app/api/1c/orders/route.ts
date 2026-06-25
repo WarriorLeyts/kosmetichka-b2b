@@ -6,6 +6,17 @@ function checkApiKey(request: NextRequest) {
   return key === process.env.SYNC_API_KEY;
 }
 
+const PRICE_TYPE_LABELS: Record<string, string> = {
+  wholesale: "Опт",
+  big_wholesale: "Крупный опт",
+  retail: "Розница",
+  discount: "Скидка",
+};
+
+function priceTypeLabel(type: string | null): string {
+  return PRICE_TYPE_LABELS[type ?? ""] ?? type ?? "Опт";
+}
+
 function escapeXml(str: string) {
   return String(str)
     .replace(/&/g, "&amp;")
@@ -93,7 +104,7 @@ ${itemsXml}
       </ЗначениеРеквизита>
       <ЗначениеРеквизита>
         <Наименование>ВидЦен</Наименование>
-        <Значение>${escapeXml(customer.priceType || "wholesale")}</Значение>
+        <Значение>${priceTypeLabel(customer.priceType)}</Значение>
       </ЗначениеРеквизита>
     </ЗначенияРеквизитов>
   </Документ>`;
