@@ -77,6 +77,7 @@ export async function GET(request: NextRequest) {
     <Валюта>руб</Валюта>
     <Курс>1</Курс>
     <Сумма>${order.total}</Сумма>
+    <Комментарий>${escapeXml(order.comment || "")}</Комментарий>
     <Контрагенты>
       <Контрагент>
         <Ид>${escapeXml(customer.oneCId || `customer-${customer.id}`)}</Ид>
