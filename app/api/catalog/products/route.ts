@@ -1,12 +1,26 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { withFlatPrices } from "@/lib/utils";
+import { verifyToken } from "@/lib/auth";
 
 const SORTS = ["popularity", "price_asc", "price_desc", "name"] as const;
 type Sort = (typeof SORTS)[number];
 
+/** Скрывает оптовые цены от незарегистрированных пользователей */
+function maskGuestPrices(product: any) {
+  const { wholesalePrice, bigWholesalePrice, prices, ...rest } = product;
+  return { ...rest, prices: [] };
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+
+  // Проверяем авторизацию
+  const cookieStore = await cookies();
+  const token = cookieStore.get("auth_token")?.value;
+  const payload = token ? await verifyToken(token) : null;
+  const isAuthenticated = Boolean(payload?.id);
 
   const page = Number(searchParams.get("page") || 1);
   const limit = 40;
@@ -58,6 +72,11 @@ export async function GET(request: Request) {
     prices: true,
   };
 
+  const applyPrices = (product: any) => {
+    const flat = withFlatPrices(product);
+    return isAuthenticated ? flat : maskGuestPrices(flat);
+  };
+
   // Prices live in a separate ProductPrice relation, so they can only be
   // filtered/sorted by loading them into memory — that's expensive on a
   // big catalog. Only pay that cost when the request actually needs it
@@ -90,7 +109,7 @@ export async function GET(request: Request) {
     ]);
 
     return NextResponse.json({
-      products: products.map(withFlatPrices),
+      products: products.map(applyPrices),
       total,
       page,
       hasMore: page * limit < total,
@@ -183,7 +202,7 @@ export async function GET(request: Request) {
     .filter((product): product is NonNullable<typeof product> => Boolean(product));
 
   return NextResponse.json({
-    products: ordered.map(withFlatPrices),
+    products: ordered.map(applyPrices),
     total,
     page,
     hasMore: page * limit < total,
