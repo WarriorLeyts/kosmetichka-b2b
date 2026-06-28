@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   const page = Number(searchParams.get("page") || 1);
   const limit = 40;
 
-  const categoryGuid = searchParams.get("categoryGuid");
+  const categoryGuids = searchParams.getAll("categoryGuid").filter(Boolean);
   const brandGuids = searchParams.getAll("brandGuid").filter(Boolean);
   const search = searchParams.get("search");
   const onlyStock = searchParams.get("onlyStock") === "true";
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
   newSince.setDate(newSince.getDate() - 30);
 
   const where: any = {
-    ...(categoryGuid ? { categoryGuid } : {}),
+    ...(categoryGuids.length > 0 ? { categoryGuid: { in: categoryGuids } } : {}),
     ...(brandGuids.length > 0 ? { brandGuid: { in: brandGuids } } : {}),
     ...(onlyStock ? { stock: { gt: 0 } } : {}),
     ...(quick.includes("new") ? { createdAt: { gte: newSince } } : {}),

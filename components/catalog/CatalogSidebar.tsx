@@ -122,10 +122,7 @@ export function CatalogSidebar({
     const children = childrenOf(category.guid);
 
     if (children.length > 0) {
-      setOpenGroups((prev) => ({
-        ...prev,
-        [category.guid]: true,
-      }));
+      toggleGroup(category.guid);
     }
   }
 

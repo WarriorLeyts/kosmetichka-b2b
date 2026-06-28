@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { CatalogClient } from "@/components/catalog/CatalogClient";
 
 export default async function CatalogPage() {
-  const categories = await prisma.category.findMany({ orderBy: { name: "asc" } });
+  const categories = await prisma.category.findMany({ orderBy: { id: "asc" } });
   const brands = await prisma.brand.findMany({ orderBy: { name: "asc" } });
 
   return (

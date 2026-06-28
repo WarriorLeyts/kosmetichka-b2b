@@ -9,6 +9,15 @@ import { CatalogHeader } from "./CatalogHeader";
 import { ProductGrid } from "./ProductGrid";
 import { useCartStore } from "@/store/cartStore";
 
+function getDescendantGuids(categories: any[], parentGuid: string): string[] {
+  const result = [parentGuid];
+  const children = categories.filter((c) => c.parentGuid === parentGuid);
+  for (const child of children) {
+    result.push(...getDescendantGuids(categories, child.guid));
+  }
+  return result;
+}
+
 export function CatalogClient({
   categories,
   brands,
@@ -86,7 +95,8 @@ export function CatalogClient({
     );
 
     if (selectedCategory?.guid) {
-      params.set("categoryGuid", selectedCategory.guid);
+      const guids = getDescendantGuids(categories, selectedCategory.guid);
+      guids.forEach((guid) => params.append("categoryGuid", guid));
     }
 
     brandGuids.forEach((guid) => params.append("brandGuid", guid));
