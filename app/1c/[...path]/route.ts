@@ -2,6 +2,14 @@ import { NextRequest } from "next/server";
 import fs from "fs";
 import path from "path";
 
+function mimeType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".png") return "image/png";
+  if (ext === ".gif") return "image/gif";
+  if (ext === ".webp") return "image/webp";
+  return "image/jpeg";
+}
+
 export async function GET(
 request: NextRequest,
 { params }: { params: Promise<{ path: string[] }> }
@@ -30,7 +38,7 @@ const file = fs.readFileSync(resolvedPath);
 
 return new Response(file, {
 headers: {
-"Content-Type": "image/jpeg",
+"Content-Type": mimeType(resolvedPath),
 "Cache-Control": "public, max-age=86400",
 },
 });
