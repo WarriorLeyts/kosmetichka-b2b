@@ -2315,23 +2315,23 @@ transform: translateX(0);
 
 @media (max-width: 600px) {
 .cart-toast {
-top: 50%;
+top: 80px;
 left: 50%;
 right: auto;
-transform: translate(-50%, -50%);
-width: calc(100% - 48px);
-max-width: 340px;
+transform: translateX(-50%);
+width: calc(100% - 32px);
+max-width: 360px;
 animation: cart-toast-in-mobile 0.25s ease;
 }
 
 @keyframes cart-toast-in-mobile {
 from {
 opacity: 0;
-transform: translate(-50%, calc(-50% - 12px));
+transform: translate(-50%, -10px);
 }
 to {
 opacity: 1;
-transform: translate(-50%, -50%);
+transform: translateX(-50%);
 }
 }
 }
