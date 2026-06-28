@@ -23,6 +23,7 @@ model Category {
   guid String @unique
   name String
 
+  sortOrder  Int     @default(999)
   parentGuid String?
 
   parent   Category?  @relation("CategoryTree", fields: [parentGuid], references: [guid])
