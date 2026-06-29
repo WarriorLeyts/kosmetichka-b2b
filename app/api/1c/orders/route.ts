@@ -57,7 +57,13 @@ export async function GET(request: NextRequest) {
   const docs = orders
     .map((order) => {
       const customer = order.customer;
-      const time = order.createdAt.toTimeString().slice(0, 8);
+      const time = order.createdAt.toLocaleTimeString("ru-RU", {
+        timeZone: "Europe/Moscow",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      });
       const phone = customer.phone || "";
       const name = escapeXml(customer.companyName || customer.name || "");
 
