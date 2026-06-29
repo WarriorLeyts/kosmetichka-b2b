@@ -43,6 +43,14 @@ export async function GET(request: NextRequest) {
     take: 500,
   });
 
+  // Fetch product GUIDs for all order items
+  const allProductIds = orders.flatMap((o) => o.items.map((i) => i.productId));
+  const products = await prisma.product.findMany({
+    where: { id: { in: allProductIds } },
+    select: { id: true, guid: true },
+  });
+  const productGuidMap = new Map(products.map((p) => [p.id, p.guid]));
+
   const date = new Date().toISOString().slice(0, 10);
   const orderIds = orders.map((o) => o.id).join(",");
 
@@ -56,7 +64,7 @@ export async function GET(request: NextRequest) {
       const itemsXml = order.items
         .map(
           (item) => `    <Товар>
-      <Ид>${item.productId}</Ид>
+      <Ид>${escapeXml(productGuidMap.get(item.productId) || String(item.productId))}</Ид>
       <Артикул>${escapeXml(item.barcode || "")}</Артикул>
       <Наименование>${escapeXml(item.productName)}</Наименование>
       <БазоваяЕдиница Код="796" НаименованиеПолное="Штука">шт</БазоваяЕдиница>
