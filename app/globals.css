@@ -2277,16 +2277,24 @@ color: white;
 
 .cart-toast strong {
 display: block;
-font-size: 13.5px;
+font-size: 13px;
 font-weight: 800;
 color: white;
-line-height: 1.4;
+line-height: 1.45;
+text-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+letter-spacing: 0.01em;
 }
 
 .cart-toast span {
-font-size: 12.5px;
+display: block;
+margin-top: 6px;
+font-size: 12px;
 font-weight: 700;
-color: rgba(255, 255, 255, 0.8);
+color: white;
+background: rgba(255, 255, 255, 0.18);
+border-radius: 8px;
+padding: 3px 8px;
+width: fit-content;
 }
 
 @keyframes cart-toast-in {

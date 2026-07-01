@@ -53,7 +53,7 @@ const exists = cart.find((item) => item.id === product.id);
 
 const notification = {
 id: Date.now(),
-message: `«${product.name}» добавлен в корзину`,
+message: `${product.name} — добавлен в корзину`,
 image: product.images?.[0]?.path ? "/1c/" + product.images[0].path : null,
 };
 
