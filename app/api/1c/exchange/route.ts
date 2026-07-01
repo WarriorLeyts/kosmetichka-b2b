@@ -73,8 +73,11 @@ export async function GET(request: NextRequest) {
     const filename = searchParams.get("filename") ?? "";
     console.log(`[exchange] import triggered for ${filename}`);
 
-    // Run sync only when import.xml is imported (last significant file)
-    if (filename === "import.xml" || filename.endsWith("import.xml")) {
+    // Run sync when any main XML file is imported
+    const isMainXml = ["import.xml", "offers.xml", "customers.xml"].some(
+      (f) => filename === f || filename.endsWith(f)
+    );
+    if (isMainXml) {
       // Run in background, return success immediately
       runSync().catch(console.error);
     }
