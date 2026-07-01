@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Disallow: /login
+Disallow: /register
+
+Sitemap: https://kosmetichka-opt.ru/sitemap.xml
