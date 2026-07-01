@@ -28,10 +28,7 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-    },
+    googleBot: { index: true, follow: true },
   },
   icons: {
     icon: "/favicon.svg",
