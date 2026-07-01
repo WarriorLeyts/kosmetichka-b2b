@@ -13,12 +13,8 @@ const parser = new XMLParser({
 function normalizePhone(value) {
   if (!value) return null;
 
-  // Extract first phone number only (e.g. "89001234567 89007654321" → "89001234567")
-  const str = String(value).trim();
-  const match = str.match(/(?:\+7|8|7|9)\d[\d\s()-]{8,}/);
-  if (!match) return null;
-
-  const digits = match[0].replace(/\D/g, "");
+  // Remove all non-digits, then take first 11 digits
+  const digits = String(value).replace(/\D/g, "").slice(0, 11);
 
   if (digits.length === 11 && digits.startsWith("7")) {
     return "8" + digits.slice(1);
