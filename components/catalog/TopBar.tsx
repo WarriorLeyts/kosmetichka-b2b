@@ -50,16 +50,16 @@ export function TopBar({ search, setSearch }: TopBarProps) {
 
   return (
     <header className="topbar">
-      <Link href="/" className="brand-logo">
+      <div className="brand-logo">
         <div className="heart-logo">♡</div>
 
-        <div className="brand-text">
+        <div>
           <div className="brand-name">Косметичка</div>
           <div className="brand-subtitle-text bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-xs font-semibold text-transparent">
             сеть магазинов косметики и парфюмерии
           </div>
         </div>
-      </Link>
+      </div>
 
       <Link href="/catalog" className="catalog-button">
         <Menu size={18} />
@@ -108,7 +108,7 @@ export function TopBar({ search, setSearch }: TopBarProps) {
             </button>
 
             {menuOpen && (
-              <div className="absolute left-0 top-12 z-50 w-56 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
+              <div className="absolute right-0 top-12 z-50 w-56 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
                 <div className="mb-3 border-b border-slate-100 pb-3">
                   <div className="font-black text-slate-800">
                     {customer.name}
