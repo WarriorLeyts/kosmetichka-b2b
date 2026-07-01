@@ -121,7 +121,7 @@ export function TopBar({ search, setSearch }: TopBarProps) {
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 top-12 z-50 w-56 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
+              <div className="absolute right-0 md:right-auto md:left-0 top-12 z-50 w-56 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
                 <div className="mb-3 border-b border-slate-100 pb-3">
                   <div className="font-black text-slate-800">
                     {customer.name}
