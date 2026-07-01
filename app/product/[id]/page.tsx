@@ -19,7 +19,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       name: true,
       description: true,
       images: { take: 1 },
-      prices: true,
       brand: { select: { name: true } },
     },
   });
@@ -39,9 +38,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: {
-      canonical: `/product/${id}`,
-    },
+    alternates: { canonical: `/product/${id}` },
     openGraph: {
       title,
       description,
@@ -56,9 +53,7 @@ export default async function ProductPage({ params }: Props) {
   const { id } = await params;
 
   const product = await prisma.product.findUnique({
-    where: {
-      id: Number(id),
-    },
+    where: { id: Number(id) },
     include: {
       category: true,
       brand: true,
@@ -73,28 +68,16 @@ export default async function ProductPage({ params }: Props) {
 
   const relatedProducts = product.brandGuid
     ? await prisma.product.findMany({
-        where: {
-          brandGuid: product.brandGuid,
-          id: {
-            not: product.id,
-          },
-        },
+        where: { brandGuid: product.brandGuid, id: { not: product.id } },
         take: 8,
-        include: {
-          category: true,
-          brand: true,
-          images: true,
-          prices: true,
-        },
-        orderBy: {
-          name: "asc",
-        },
+        include: { category: true, brand: true, images: true, prices: true },
+        orderBy: { name: "asc" },
       })
     : [];
 
-  // Schema.org JSON-LD для товара
-  const retailPrice = product.prices.find((p) => p.type === "retail");
-  const wholesalePrice = product.prices.find((p) => p.type === "wholesale");
+  // Schema.org JSON-LD
+  const retailPrice = product.prices.find((p) => p.priceType === "retail");
+  const wholesalePrice = product.prices.find((p) => p.priceType === "wholesale");
   const price = retailPrice ?? wholesalePrice ?? product.prices[0];
   const imageUrl = product.images[0]?.path
     ? product.images[0].path.startsWith("http")
@@ -106,28 +89,25 @@ export default async function ProductPage({ params }: Props) {
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.name,
-    description: product.description ?? undefined,
-    image: imageUrl,
-    sku: product.barcode ?? undefined,
-    brand: product.brand
-      ? { "@type": "Brand", name: product.brand.name }
-      : undefined,
-    offers: price
+    ...(product.description ? { description: product.description } : {}),
+    ...(imageUrl ? { image: imageUrl } : {}),
+    ...(product.barcode ? { sku: product.barcode } : {}),
+    ...(product.brand ? { brand: { "@type": "Brand", name: product.brand.name } } : {}),
+    ...(price
       ? {
-          "@type": "Offer",
-          url: `https://kosmetichka-opt.ru/product/${product.id}`,
-          priceCurrency: "RUB",
-          price: price.value,
-          availability:
-            (product.stock ?? 0) > 0
-              ? "https://schema.org/InStock"
-              : "https://schema.org/OutOfStock",
-          seller: {
-            "@type": "Organization",
-            name: "Косметичка",
+          offers: {
+            "@type": "Offer",
+            url: `https://kosmetichka-opt.ru/product/${product.id}`,
+            priceCurrency: "RUB",
+            price: price.price,
+            availability:
+              (product.stock ?? 0) > 0
+                ? "https://schema.org/InStock"
+                : "https://schema.org/OutOfStock",
+            seller: { "@type": "Organization", name: "Косметичка" },
           },
         }
-      : undefined,
+      : {}),
   };
 
   return (
