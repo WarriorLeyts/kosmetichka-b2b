@@ -78,7 +78,7 @@ export default async function AdminOrdersPage({
   });
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <h1 className="mb-6 text-2xl font-bold">Заказы</h1>
 
       <form className="mb-6 grid gap-3 rounded-xl border bg-white p-4 md:grid-cols-4">
@@ -172,15 +172,15 @@ export default async function AdminOrdersPage({
               <div>Телефон: {order.customer.phone}</div>
             </div>
 
-            <div className="overflow-hidden rounded-lg border">
+            <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-sm">
                 <thead className="bg-gray-100">
                   <tr>
-                    <th className="p-2 text-left">Товар</th>
-                    <th className="p-2 text-left">Штрихкод</th>
-                    <th className="p-2 text-center">Кол-во</th>
-                    <th className="p-2 text-right">Цена</th>
-                    <th className="p-2 text-right">Сумма</th>
+                    <th className="p-2 text-left whitespace-nowrap">Товар</th>
+                    <th className="p-2 text-left whitespace-nowrap">Штрихкод</th>
+                    <th className="p-2 text-center whitespace-nowrap">Кол-во</th>
+                    <th className="p-2 text-right whitespace-nowrap">Цена</th>
+                    <th className="p-2 text-right whitespace-nowrap">Сумма</th>
                   </tr>
                 </thead>
 
@@ -188,10 +188,10 @@ export default async function AdminOrdersPage({
                   {order.items.map((item) => (
                     <tr key={item.id} className="border-t">
                       <td className="p-2">{item.productName}</td>
-                      <td className="p-2">{item.barcode || "—"}</td>
+                      <td className="p-2 whitespace-nowrap">{item.barcode || "—"}</td>
                       <td className="p-2 text-center">{item.quantity}</td>
-                      <td className="p-2 text-right">{item.price} ₽</td>
-                      <td className="p-2 text-right">{item.total} ₽</td>
+                      <td className="p-2 text-right whitespace-nowrap">{item.price} ₽</td>
+                      <td className="p-2 text-right whitespace-nowrap">{item.total} ₽</td>
                     </tr>
                   ))}
                 </tbody>
