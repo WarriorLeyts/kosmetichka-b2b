@@ -13,17 +13,26 @@ const parser = new XMLParser({
 function normalizePhone(value) {
   if (!value) return null;
 
-  const digits = String(value).replace(/\D/g, "");
+  // Extract first phone number only (e.g. "89001234567 89007654321" → "89001234567")
+  const str = String(value).trim();
+  const match = str.match(/(?:\+7|8|7|9)\d[\d\s()-]{8,}/);
+  if (!match) return null;
+
+  const digits = match[0].replace(/\D/g, "");
 
   if (digits.length === 11 && digits.startsWith("7")) {
     return "8" + digits.slice(1);
+  }
+
+  if (digits.length === 11 && digits.startsWith("8")) {
+    return digits;
   }
 
   if (digits.length === 10 && digits.startsWith("9")) {
     return "8" + digits;
   }
 
-  return digits || null;
+  return null;
 }
 
 function extractPhoneFromName(name) {
@@ -61,12 +70,7 @@ function normalizePriceType(value) {
 }
 
 async function main() {
-  const filePath = "./data/1c/customers.xml";
-  if (!fs.existsSync(filePath)) {
-    console.log("customers.xml не найден, пропускаем импорт контрагентов");
-    return;
-  }
-  const xml = fs.readFileSync(filePath, "utf8");
+  const xml = fs.readFileSync("./data/1c/customers.xml", "utf8");
 
   const data = parser.parse(xml);
 
