@@ -7,7 +7,7 @@ import { useFavoriteStore } from "@/store/favoriteStore";
 import { Button } from "../ui/button";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/store/authStore";
 
 type TopBarProps = {
@@ -39,6 +39,19 @@ export function TopBar({ search, setSearch }: TopBarProps) {
   }, [fetchCustomer]);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    if (menuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
 
   const cartCount = mounted
     ? cart.reduce((sum, item) => sum + item.quantity, 0)
@@ -95,7 +108,7 @@ export function TopBar({ search, setSearch }: TopBarProps) {
         {loading ? (
           <div className="h-10 w-32 animate-pulse rounded-2xl bg-slate-100" />
         ) : customer ? (
-          <div className="relative">
+          <div className="relative" ref={menuRef}>
             <button
               onClick={() => setMenuOpen(!menuOpen)}
               className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 font-bold text-slate-800 transition hover:bg-slate-50 hover:text-pink-500"
