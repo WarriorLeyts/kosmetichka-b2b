@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: process.env.IMAGES_HOSTNAME ?? "" },
     ],
   },
+  devIndicators: false,
 };
 
 export default nextConfig;
