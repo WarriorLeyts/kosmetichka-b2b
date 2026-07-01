@@ -194,13 +194,6 @@ display: flex;
 align-items: center;
 gap: 12px;
 min-width: 260px;
-text-decoration: none;
-color: inherit;
-}
-
-.brand-text {
-min-width: 0;
-overflow: hidden;
 }
 
 .heart-logo {
@@ -216,8 +209,6 @@ font-size: 25px;
 font-weight: 900;
 letter-spacing: -0.8px;
 text-transform: uppercase;
-white-space: nowrap;
-overflow: hidden;
 background: var(--gradient);
 -webkit-background-clip: text;
 -webkit-text-fill-color: transparent;
@@ -899,9 +890,8 @@ order: 0;
 margin-bottom: 10px;
 }
 
-.brand-text {
+.brand-logo > div {
 min-width: 0;
-overflow: hidden;
 }
 
 .heart-logo {
@@ -912,8 +902,6 @@ flex-shrink: 0;
 .brand-name {
 font-size: 16px;
 letter-spacing: -0.3px;
-white-space: nowrap;
-overflow: hidden;
 }
 
 .top-actions {
@@ -2288,12 +2276,10 @@ margin-bottom: 4px;
 
 .cart-toast strong {
 display: block;
-overflow: hidden;
-text-overflow: ellipsis;
-white-space: nowrap;
 font-size: 13.5px;
 font-weight: 800;
 color: var(--text);
+line-height: 1.4;
 }
 
 .cart-toast span {
@@ -2315,23 +2301,23 @@ transform: translateX(0);
 
 @media (max-width: 600px) {
 .cart-toast {
-top: 80px;
-left: 50%;
-right: auto;
-transform: translateX(-50%);
-width: calc(100% - 32px);
-max-width: 360px;
+top: auto;
+bottom: 24px;
+left: 16px;
+right: 16px;
+max-width: 100%;
+transform: none;
 animation: cart-toast-in-mobile 0.25s ease;
 }
 
 @keyframes cart-toast-in-mobile {
 from {
 opacity: 0;
-transform: translate(-50%, -10px);
+transform: translateY(12px);
 }
 to {
 opacity: 1;
-transform: translateX(-50%);
+transform: translateY(0);
 }
 }
 }
