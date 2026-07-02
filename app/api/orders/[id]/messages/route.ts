@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 
 // Prefix we put on customer messages when posting to Bitrix timeline.
-// This lets us skip them when fetching manager replies (everything else is from a manager).
+// This lets us skip them when fetching manager replies.
 const CUSTOMER_MARKER = "[🛒 Сообщение покупателя]\n";
 
 async function bitrixPost(webhookUrl: string, method: string, body: object): Promise<any> {
@@ -45,6 +45,10 @@ async function resolveBitrixDealId(
 type Props = { params: Promise<{ id: string }> };
 
 // ── GET /api/orders/[id]/messages ──────────────────────────────────────────
+//
+// Manager replies are saved to DB by the Bitrix event webhook:
+//   POST /api/bitrix/comment  (ONCRMTIMELINECOMMENTADD event)
+// This endpoint just reads the DB — no Bitrix polling needed.
 
 export async function GET(_request: NextRequest, { params }: Props) {
   const cookieStore = await cookies();
@@ -60,46 +64,6 @@ export async function GET(_request: NextRequest, { params }: Props) {
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order || order.customerId !== Number(payload.id)) {
     return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
-  }
-
-  // ── Sync manager replies from Bitrix ─────────────────────────────────────
-  const webhookUrl = process.env.BITRIX_WEBHOOK_URL;
-  if (webhookUrl) {
-    const dealId = await resolveBitrixDealId(orderId, order.bitrixDealId, webhookUrl);
-    if (dealId) {
-      try {
-        const r = await bitrixPost(webhookUrl, "crm.timeline.comment.list", {
-          entityTypeId: 2, // deals
-          entityId: dealId,
-        });
-        const comments: any[] = r.result || [];
-
-        for (const c of comments) {
-          const text: string = String(c.COMMENT || "").trim();
-          const commentId = String(c.ID);
-
-          // Skip comments that are customer messages we posted ourselves
-          if (text.startsWith(CUSTOMER_MARKER.trim()) || text.startsWith("[🛒")) continue;
-          if (!text) continue;
-
-          // Save new manager message (UNIQUE constraint on bitrixCommentId prevents duplicates)
-          try {
-            await prisma.orderMessage.create({
-              data: {
-                orderId,
-                text,
-                isFromManager: true,
-                bitrixCommentId: commentId,
-              },
-            });
-          } catch {
-            // Duplicate — already saved, skip
-          }
-        }
-      } catch {
-        // Bitrix unavailable — return cached messages
-      }
-    }
   }
 
   const messages = await prisma.orderMessage.findMany({
