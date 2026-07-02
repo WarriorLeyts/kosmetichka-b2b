@@ -4,6 +4,7 @@ import "./globals.css";
 import { CartDrawer } from "@/components/catalog/CartDrawer";
 import { FavoriteDrawer } from "@/components/catalog/FavoriteDrawer";
 import { CartToast } from "@/components/catalog/CartToast";
+import { OrderNotifications } from "@/components/orders/OrderNotifications";
 
 export const metadata: Metadata = {
   title: {
@@ -50,6 +51,7 @@ export default function RootLayout({
         <CartDrawer />
         <FavoriteDrawer />
         <CartToast />
+        <OrderNotifications />
       </body>
     </html>
   );
