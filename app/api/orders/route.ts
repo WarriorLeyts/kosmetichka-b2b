@@ -9,7 +9,7 @@ async function sendToBitrix(order: {
   id: number;
   total: number;
   comment: string | null;
-  customer: { name: string; phone: string | null; email: string; companyName: string | null };
+  customer: { name: string; phone: string | null; email: string | null; companyName: string | null };
   items: { productName: string; barcode: string | null; quantity: number; price: number; total: number }[];
 }) {
   const webhookUrl = process.env.BITRIX_WEBHOOK_URL;
@@ -152,7 +152,7 @@ export async function POST(request: Request) {
       customer: {
         name: customer.name ?? "",
         phone: customer.phone ?? null,
-        email: customer.email,
+        email: customer.email ?? "",
         companyName: customer.companyName ?? null,
       },
       items: order.items,
