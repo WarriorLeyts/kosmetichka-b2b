@@ -133,6 +133,7 @@ async function sendToBitrix(order: {
       CURRENCY_ID: "RUB",
       STAGE_ID: "NEW",
       SOURCE_ID: "WEB",
+      XML_ID: String(order.id), // используем для обратного поиска заказа
     };
     if (order.comment) dealFields.COMMENTS = order.comment;
     if (contactId) dealFields.CONTACT_ID = contactId;
