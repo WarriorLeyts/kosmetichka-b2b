@@ -26,7 +26,12 @@ export function RepeatOrderButton({ items }: { items: OrderItem[] }) {
         id: item.productId,
         name: item.productName,
         barcode: item.barcode,
+        // Заполняем все варианты цены чтобы корзина показывала правильно
+        // независимо от типа цен клиента
         wholesalePrice: item.price,
+        bigWholesalePrice: item.price,
+        retailPrice: item.price,
+        discountPrice: item.price,
         quantity: item.quantity,
         images: item.imagePath ? [{ path: item.imagePath }] : [],
       }))
