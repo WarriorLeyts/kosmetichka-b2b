@@ -74,13 +74,25 @@ async function findOrCreateProduct(
   webhookUrl: string,
   item: { productName: string; barcode: string | null; price: number; imagePath: string | null }
 ): Promise<number | null> {
-  // Search by barcode
+  // Search by barcode — if found, update name and price from site
   if (item.barcode) {
     const r = await bitrixCall(webhookUrl, "crm.product.list", {
       filter: { XML_ID: item.barcode },
       select: ["ID"],
     });
-    if (r.result?.length > 0) return Number(r.result[0].ID);
+    if (r.result?.length > 0) {
+      const productId = Number(r.result[0].ID);
+      await bitrixCall(webhookUrl, "crm.product.update", {
+        id: productId,
+        fields: {
+          NAME: item.productName,
+          PRICE: item.price,
+          CURRENCY_ID: "RUB",
+        },
+      });
+      console.log("[Bitrix24] Товар обновлён в каталоге:", productId, item.productName);
+      return productId;
+    }
   }
 
   // Build product fields
@@ -150,8 +162,12 @@ async function sendToBitrix(order: {
     const productRows = await Promise.all(
       order.items.map(async (item) => {
         const bitrixProductId = await findOrCreateProduct(webhookUrl, item);
+        // Добавляем штрихкод в название для обратного поиска при синхронизации
+        const displayName = item.barcode
+          ? `${item.productName} (${item.barcode})`
+          : item.productName;
         const row: any = {
-          PRODUCT_NAME: item.productName,
+          PRODUCT_NAME: displayName,
           PRICE: item.price,
           QUANTITY: item.quantity,
           DISCOUNT_SUM: 0,
