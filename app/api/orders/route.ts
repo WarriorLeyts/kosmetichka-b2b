@@ -150,10 +150,10 @@ export async function POST(request: Request) {
       total: order.total,
       comment: order.comment,
       customer: {
-        name: customer.name,
-        phone: customer.phone,
+        name: customer.name ?? "",
+        phone: customer.phone ?? null,
         email: customer.email,
-        companyName: customer.companyName,
+        companyName: customer.companyName ?? null,
       },
       items: order.items,
     }).catch((err) => console.error("[Bitrix24]", err));
