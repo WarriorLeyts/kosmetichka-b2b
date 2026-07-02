@@ -129,8 +129,10 @@ model Order {
   total   Int     @default(0)
   comment String? @db.Text
 
-  items OrderItem[]
+  items    OrderItem[]
+  messages OrderMessage[]
 
+  bitrixDealId   Int?
   oneCExportedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -149,6 +151,20 @@ model OrderItem {
   quantity    Int
   price       Int
   total       Int
+}
+
+model OrderMessage {
+  id      Int   @id @default(autoincrement())
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id])
+
+  text          String  @db.Text
+  isFromManager Boolean @default(false)
+
+  // Bitrix timeline comment ID — used to avoid saving duplicates
+  bitrixCommentId String? @unique
+
+  createdAt DateTime @default(now())
 }
 
 model OneCCustomer {

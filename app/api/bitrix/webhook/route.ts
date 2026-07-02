@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 // Битрикс24 вызывает этот endpoint когда сделка переходит в стадию "Оплачен"
-// Настройка: CRM → Сделки → Роботы → стадия "Оплачен" → Робот "Исходящий Вебхук"
-// URL: https://kosmetichka-opt.ru/api/bitrix/webhook?secret=ВАШ_СЕКРЕТ&deal_id={=Document:ID}
+// Настройка: CRM → Автоматизация → стадия "Оплачен" → Робот "Вебхук"
+// URL: https://kosmetichka-opt.ru/api/bitrix/webhook?secret=ВАШ_СЕКРЕТ
+// Параметры:
+//   order_id = {=Document:XML_ID}   (может быть пустым — тогда ищем через deal_id)
+//   deal_id  = {=Document:ID}
 
 async function bitrixGet(webhookUrl: string, method: string, params: Record<string, any>) {
   const url = new URL(`${webhookUrl}${method}.json`);
@@ -11,6 +14,15 @@ async function bitrixGet(webhookUrl: string, method: string, params: Record<stri
     url.searchParams.set(key, String(val));
   }
   const res = await fetch(url.toString());
+  return res.json();
+}
+
+async function bitrixPost(webhookUrl: string, method: string, body: object): Promise<any> {
+  const res = await fetch(`${webhookUrl}${method}.json`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
   return res.json();
 }
 
@@ -40,13 +52,11 @@ export async function POST(request: NextRequest) {
       params = await request.json();
     } else {
       const text = await request.text();
-      if (text) {
-        const sp = new URLSearchParams(text);
-        sp.forEach((v, k) => { params[k] = v; });
-      }
+      const sp = new URLSearchParams(text);
+      sp.forEach((v, k) => { params[k] = v; });
     }
 
-    // Читаем из тела ИЛИ из URL-параметров
+    // Read from POST body first, then fall back to URL query params
     const qOrderId = request.nextUrl.searchParams.get("order_id");
     const qDealId  = request.nextUrl.searchParams.get("deal_id");
 
@@ -58,23 +68,18 @@ export async function POST(request: NextRequest) {
 
   const webhookUrl = process.env.BITRIX_WEBHOOK_URL;
 
-  // Если order_id не передан — получаем из сделки в Битриксе (XML_ID или из заголовка "Заказ №13 — ...")
+  // If we have a dealId but no orderId — look it up via Bitrix deal XML_ID / TITLE
   if (!orderId && dealId && webhookUrl) {
     try {
       const dealRes = await bitrixGet(webhookUrl, "crm.deal.get", { id: dealId });
       const deal = dealRes.result;
-      // Сначала пробуем XML_ID
-      if (deal?.XML_ID) {
-        orderId = Number(deal.XML_ID) || null;
-      }
-      // Запасной вариант: парсим из заголовка "Заказ №13 — Косметичка"
+      if (deal?.XML_ID) orderId = Number(deal.XML_ID) || null;
       if (!orderId && deal?.TITLE) {
         const match = deal.TITLE.match(/№(\d+)/);
         if (match) orderId = Number(match[1]) || null;
       }
-      console.log(`[Bitrix webhook] dealId=${dealId} XML_ID=${deal?.XML_ID} TITLE=${deal?.TITLE} → orderId=${orderId}`);
-    } catch (err) {
-      console.error("[Bitrix webhook] Не удалось получить сделку:", err);
+    } catch {
+      // Bitrix call failed
     }
   }
 
@@ -98,41 +103,43 @@ export async function POST(request: NextRequest) {
       const rows: any[] = rowsRes.result || [];
 
       if (rows.length > 0) {
-        // Совпадение по штрихкоду (из скобок в названии) или по названию товара
+        // Match order items by barcode (from name) OR by exact product name (fallback)
         const orderItemsByBarcode = new Map(
-          order.items.map((item) => [item.barcode, item])
+          order.items.filter((i) => i.barcode).map((item) => [item.barcode!, item])
         );
         const orderItemsByName = new Map(
-          order.items.map((item) => [item.productName.trim(), item])
+          order.items.map((item) => [item.productName.trim().toLowerCase(), item])
         );
         const updatedIds = new Set<number>();
 
         let newTotal = 0;
 
         for (const row of rows) {
-          const price    = Math.round(Number(row.PRICE)    || 0);
-          const quantity = Math.round(Number(row.QUANTITY) || 1);
-          const barcode  = extractBarcode(row.PRODUCT_NAME);
-          const rowName  = (row.PRODUCT_NAME || "").trim();
+          const rowName   = String(row.PRODUCT_NAME || "").trim();
+          const price     = Math.round(Number(row.PRICE)    || 0);
+          const quantity  = Math.round(Number(row.QUANTITY) || 1);
+          const barcode   = extractBarcode(rowName);
+          // Name without barcode suffix, lowercased for matching
+          const cleanName = rowName.replace(/\s*\(\d{8,14}\)\s*$/, "").trim().toLowerCase();
 
           const orderItem =
             (barcode ? orderItemsByBarcode.get(barcode) : null) ??
-            orderItemsByName.get(rowName) ??
+            orderItemsByName.get(cleanName) ??
+            orderItemsByName.get(rowName.toLowerCase()) ??
             null;
 
-          // Пропускаем если товар уже обновлён (защита от дублей в сделке)
           if (!orderItem || updatedIds.has(orderItem.id)) continue;
           updatedIds.add(orderItem.id);
 
-          await prisma.orderItem.update({
-            where: { id: orderItem.id },
-            data: {
-              price,
-              quantity,
-              total: price * quantity,
-            },
-          });
-          newTotal += price * quantity;
+          if (price > 0 && quantity > 0) {
+            await prisma.orderItem.update({
+              where: { id: orderItem.id },
+              data: { price, quantity, total: price * quantity },
+            });
+            newTotal += price * quantity;
+          } else {
+            newTotal += orderItem.price * orderItem.quantity;
+          }
         }
 
         if (newTotal > 0) {
@@ -145,17 +152,20 @@ export async function POST(request: NextRequest) {
       }
     } catch (err) {
       console.error("[Bitrix webhook] Ошибка синхронизации товаров:", err);
-      // Не прерываем — статус всё равно обновим
     }
   }
 
-  // ── Обновить статус заказа ─────────────────────────────────────────────────
+  // ── Обновить статус и сохранить dealId ────────────────────────────────────
   await prisma.order.update({
     where: { id: orderId },
-    data: { status: "approved" },
+    data: {
+      status: "approved",
+      // Cache the Bitrix deal ID so the chat can post/fetch comments without re-searching
+      ...(dealId ? { bitrixDealId: dealId } : {}),
+    },
   });
 
-  console.log(`[Bitrix webhook] Заказ №${orderId} → approved`);
+  console.log(`[Bitrix webhook] Заказ №${orderId} → approved${dealId ? ` (deal ${dealId})` : ""}`);
 
   return NextResponse.json({ ok: true, orderId, status: "approved" });
 }

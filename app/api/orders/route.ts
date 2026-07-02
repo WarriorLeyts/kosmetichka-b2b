@@ -164,6 +164,12 @@ async function sendToBitrix(order: {
       fields: { XML_ID: String(order.id) },
     });
 
+    // Сохраняем ID сделки в заказ — чат использует его для отправки комментариев
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { bitrixDealId: Number(dealId) },
+    }).catch(() => {/* поле bitrixDealId появится после миграции */});
+
     // 3. Найти / создать товары в каталоге и добавить в сделку
     const productRows = await Promise.all(
       order.items.map(async (item) => {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Search, ShoppingBag, TrendingUp, Package, X } from "lucide-react";
 import { CancelOrderButton } from "./CancelOrderButton";
 import { RepeatOrderButton } from "./RepeatOrderButton";
+import { OrderChat } from "./OrderChat";
 
 type OrderItem = {
   id: number;
@@ -201,6 +202,8 @@ export function OrdersClient({ orders, stats }: { orders: Order[]; stats: Stats 
                 <RepeatOrderButton items={order.items} />
               </div>
             )}
+
+            <OrderChat orderId={order.id} />
           </div>
         ))}
       </div>
