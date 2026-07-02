@@ -33,10 +33,23 @@ export function ProductCard({ product, addToCart }: Props) {
   const mainPrice = priceFor(product, priceType);
   const mainLabel = priceTypeLabel(priceType);
 
+  function saveScrollAndNavigate() {
+    try {
+      sessionStorage.setItem("catalog_scroll", String(window.scrollY));
+    } catch {}
+    router.push(`/product/${product.id}`);
+  }
+
+  function saveScrollOnLinkClick() {
+    try {
+      sessionStorage.setItem("catalog_scroll", String(window.scrollY));
+    } catch {}
+  }
+
   return (
     <article
       className="product-card cursor-pointer"
-      onClick={() => router.push(`/product/${product.id}`)}
+      onClick={saveScrollAndNavigate}
     >
       <div className="product-image-box">
         <SafeImage
@@ -46,7 +59,10 @@ export function ProductCard({ product, addToCart }: Props) {
         />
       </div>
 
-      <Link href={`/product/${product.id}`} onClick={(e) => e.stopPropagation()}>
+      <Link
+        href={`/product/${product.id}`}
+        onClick={(e) => { e.stopPropagation(); saveScrollOnLinkClick(); }}
+      >
         <h2>{product.name}</h2>
       </Link>
 

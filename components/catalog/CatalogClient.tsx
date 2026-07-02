@@ -47,6 +47,58 @@ export function CatalogClient({
   const addToCart = useCartStore((state) => state.addToCart);
 
   const abortRef = useRef<AbortController | null>(null);
+  // When true — skip the first filter-change effect (state was restored from sessionStorage)
+  const isRestored = useRef(false);
+
+  // ── Restore scroll position + loaded products on back-navigation ──────────
+  useEffect(() => {
+    try {
+      const savedScroll = sessionStorage.getItem("catalog_scroll");
+      const savedState = sessionStorage.getItem("catalog_products");
+
+      if (savedScroll && savedState) {
+        const state = JSON.parse(savedState);
+
+        // Mark as restored so the filter-change effect doesn't overwrite
+        isRestored.current = true;
+
+        setProducts(state.products ?? []);
+        setTotal(state.total ?? 0);
+        setPage(state.page ?? 1);
+        setHasMore(state.hasMore ?? false);
+        setSearch(state.search ?? "");
+        setCategoryId(state.categoryId ?? null);
+        setBrandGuids(state.brandGuids ?? []);
+        setOnlyStock(state.onlyStock ?? false);
+        setPriceMin(state.priceMin ?? null);
+        setPriceMax(state.priceMax ?? null);
+        setSort(state.sort ?? "popularity");
+
+        // Scroll after paint — double-raf ensures DOM is fully rendered
+        const scrollY = Number(savedScroll);
+        sessionStorage.removeItem("catalog_scroll");
+
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => window.scrollTo(0, scrollY))
+        );
+        return;
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Save products to sessionStorage whenever the list updates ─────────────
+  useEffect(() => {
+    if (products.length === 0) return;
+    try {
+      sessionStorage.setItem(
+        "catalog_products",
+        JSON.stringify({ products, total, page, hasMore, search, categoryId, brandGuids, onlyStock, priceMin, priceMax, sort })
+      );
+    } catch {}
+  }, [products, total, page, hasMore, search, categoryId, brandGuids, onlyStock, priceMin, priceMax, sort]);
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     fetch("/api/catalog/price-bounds")
@@ -67,9 +119,6 @@ export function CatalogClient({
   async function loadProducts(reset = false) {
     if (!reset && loadingProducts) return;
 
-    // Cancel whatever request is still in flight — without this, fast
-    // typing/filter toggling piles up overlapping requests on both the
-    // browser and the server instead of replacing them.
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -130,6 +179,12 @@ export function CatalogClient({
   }
 
   useEffect(() => {
+    // Skip first run if state was restored from sessionStorage
+    if (isRestored.current) {
+      isRestored.current = false;
+      return;
+    }
+
     const timer = setTimeout(() => {
       loadProducts(true);
     }, 300);
