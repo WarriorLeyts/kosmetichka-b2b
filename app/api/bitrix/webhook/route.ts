@@ -98,9 +98,14 @@ export async function POST(request: NextRequest) {
       const rows: any[] = rowsRes.result || [];
 
       if (rows.length > 0) {
+        // Совпадение по штрихкоду (из скобок в названии) или по названию товара
         const orderItemsByBarcode = new Map(
           order.items.map((item) => [item.barcode, item])
         );
+        const orderItemsByName = new Map(
+          order.items.map((item) => [item.productName.trim(), item])
+        );
+        const updatedIds = new Set<number>();
 
         let newTotal = 0;
 
@@ -108,22 +113,26 @@ export async function POST(request: NextRequest) {
           const price    = Math.round(Number(row.PRICE)    || 0);
           const quantity = Math.round(Number(row.QUANTITY) || 1);
           const barcode  = extractBarcode(row.PRODUCT_NAME);
+          const rowName  = (row.PRODUCT_NAME || "").trim();
 
-          const orderItem = barcode
-            ? (orderItemsByBarcode.get(barcode) ?? null)
-            : null;
+          const orderItem =
+            (barcode ? orderItemsByBarcode.get(barcode) : null) ??
+            orderItemsByName.get(rowName) ??
+            null;
 
-          if (orderItem) {
-            await prisma.orderItem.update({
-              where: { id: orderItem.id },
-              data: {
-                price,
-                quantity,
-                total: price * quantity,
-              },
-            });
-            newTotal += price * quantity;
-          }
+          // Пропускаем если товар уже обновлён (защита от дублей в сделке)
+          if (!orderItem || updatedIds.has(orderItem.id)) continue;
+          updatedIds.add(orderItem.id);
+
+          await prisma.orderItem.update({
+            where: { id: orderItem.id },
+            data: {
+              price,
+              quantity,
+              total: price * quantity,
+            },
+          });
+          newTotal += price * quantity;
         }
 
         if (newTotal > 0) {
