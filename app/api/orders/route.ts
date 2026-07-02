@@ -158,6 +158,12 @@ async function sendToBitrix(order: {
     const dealId = dealRes.result;
     console.log("[Bitrix24] Сделка создана:", dealId);
 
+    // crm.deal.add игнорирует XML_ID — устанавливаем отдельным update
+    await bitrixCall(webhookUrl, "crm.deal.update", {
+      id: dealId,
+      fields: { XML_ID: String(order.id) },
+    });
+
     // 3. Найти / создать товары в каталоге и добавить в сделку
     const productRows = await Promise.all(
       order.items.map(async (item) => {

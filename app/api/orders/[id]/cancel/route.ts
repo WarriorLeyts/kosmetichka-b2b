@@ -16,18 +16,20 @@ async function cancelDealInBitrix(orderId: number) {
   const webhookUrl = process.env.BITRIX_WEBHOOK_URL;
   if (!webhookUrl) return;
   try {
-    // Найти сделку по XML_ID = orderId или по заголовку
+    // Найти сделку по XML_ID = orderId (самую новую)
     const r = await bitrixCall(webhookUrl, "crm.deal.list", {
       filter: { XML_ID: String(orderId) },
       select: ["ID"],
+      order: { DATE_CREATE: "DESC" },
     });
     let dealId: number | null = r.result?.[0]?.ID ? Number(r.result[0].ID) : null;
 
-    // Запасной поиск по заголовку "Заказ №N"
+    // Запасной поиск по заголовку "Заказ №N" — берём самую новую сделку
     if (!dealId) {
       const r2 = await bitrixCall(webhookUrl, "crm.deal.list", {
         filter: { TITLE: `Заказ №${orderId}` },
         select: ["ID"],
+        order: { DATE_CREATE: "DESC" },
       });
       if (r2.result?.length > 0) dealId = Number(r2.result[0].ID);
     }
