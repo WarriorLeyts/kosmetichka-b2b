@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/store/authStore";
+import { useOrdersNotifStore } from "@/store/ordersNotifStore";
 
 type TopBarProps = {
   search: string;
@@ -33,6 +34,8 @@ export function TopBar({ search, setSearch }: TopBarProps) {
   const loading = useAuthStore((state) => state.loading);
   const fetchCustomer = useAuthStore((state) => state.fetchCustomer);
   const logout = useAuthStore((state) => state.logout);
+
+  const pendingCount = useOrdersNotifStore((state) => state.pendingCount);
 
   useEffect(() => {
     fetchCustomer();
@@ -118,6 +121,10 @@ export function TopBar({ search, setSearch }: TopBarProps) {
               </div>
 
               <span className="topbar-customer-name">{customer.name}</span>
+
+              {pendingCount > 0 && (
+                <span className="topbar-pending-badge">{pendingCount}</span>
+              )}
             </button>
 
             {menuOpen && (
@@ -138,6 +145,9 @@ export function TopBar({ search, setSearch }: TopBarProps) {
                 >
                   <ClipboardList size={16} />
                   Мои заказы
+                  {pendingCount > 0 && (
+                    <span className="topbar-menu-badge">{pendingCount}</span>
+                  )}
                 </Link>
 
                 <button
