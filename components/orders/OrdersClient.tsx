@@ -203,7 +203,7 @@ export function OrdersClient({ orders, stats }: { orders: Order[]; stats: Stats 
               </div>
             )}
 
-            <OrderChat orderId={order.id} />
+            {order.status === "pending" && <OrderChat orderId={order.id} />}
           </div>
         ))}
       </div>
