@@ -58,13 +58,21 @@ export async function POST(request: NextRequest) {
 
   const webhookUrl = process.env.BITRIX_WEBHOOK_URL;
 
-  // Если order_id не передан — получаем из поля XML_ID сделки в Битрикс
+  // Если order_id не передан — получаем из сделки в Битриксе (XML_ID или из заголовка "Заказ №13 — ...")
   if (!orderId && dealId && webhookUrl) {
     try {
       const dealRes = await bitrixGet(webhookUrl, "crm.deal.get", { id: dealId });
-      console.log("[Bitrix webhook] deal.get result:", JSON.stringify(dealRes.result));
-      const xmlId = dealRes.result?.XML_ID;
-      if (xmlId) orderId = Number(xmlId) || null;
+      const deal = dealRes.result;
+      // Сначала пробуем XML_ID
+      if (deal?.XML_ID) {
+        orderId = Number(deal.XML_ID) || null;
+      }
+      // Запасной вариант: парсим из заголовка "Заказ №13 — Косметичка"
+      if (!orderId && deal?.TITLE) {
+        const match = deal.TITLE.match(/№(\d+)/);
+        if (match) orderId = Number(match[1]) || null;
+      }
+      console.log(`[Bitrix webhook] dealId=${dealId} XML_ID=${deal?.XML_ID} TITLE=${deal?.TITLE} → orderId=${orderId}`);
     } catch (err) {
       console.error("[Bitrix webhook] Не удалось получить сделку:", err);
     }
