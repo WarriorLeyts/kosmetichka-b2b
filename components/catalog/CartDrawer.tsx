@@ -1,6 +1,6 @@
 "use client";
 
-import { Minus, Plus, Trash2, X, CheckCircle2, Clock, LogIn, Zap } from "lucide-react";
+import { Minus, Plus, Trash2, X, CheckCircle2, Clock, LogIn, Zap, MessageSquare } from "lucide-react";
 import { resolveImageUrl } from "@/lib/image";
 import Link from "next/link";
 import { useCartStore } from "@/store/cartStore";
@@ -102,6 +102,15 @@ export function CartDrawer() {
             <button className="checkout-button" onClick={closeAndReset}>
               Продолжить покупки
             </button>
+            <div className="order-confirm-divider">или</div>
+            <Link
+              href="/orders"
+              className="order-confirm-chat-link"
+              onClick={closeAndReset}
+            >
+              <MessageSquare size={14} />
+              {"Написать менеджеру в чате →"}
+            </Link>
           </div>
         ) : (
           <>

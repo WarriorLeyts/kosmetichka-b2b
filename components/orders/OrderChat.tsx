@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Send, MessageSquare, ChevronDown, ChevronUp } from "lucide-react";
+import { Send, MessageSquare, ChevronDown, ChevronUp, X } from "lucide-react";
 
 type Message = {
   id: number;
@@ -10,7 +10,12 @@ type Message = {
   createdAt: string;
 };
 
-export function OrderChat({ orderId }: { orderId: number }) {
+type Props = {
+  orderId: number;
+  onOpenChange?: (open: boolean) => void;
+};
+
+export function OrderChat({ orderId, onOpenChange }: Props) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
@@ -19,6 +24,7 @@ export function OrderChat({ orderId }: { orderId: number }) {
   const [unread, setUnread] = useState(0);
 
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const prevCountRef = useRef(0);
   const openRef = useRef(open);
   openRef.current = open;
@@ -38,7 +44,6 @@ export function OrderChat({ orderId }: { orderId: number }) {
 
       setMessages(msgs);
 
-      // Count new manager messages that arrived while chat is closed
       if (!openRef.current) {
         const newManager = msgs.filter((m) => m.isFromManager).length;
         const prevManager = prevCountRef.current;
@@ -50,18 +55,16 @@ export function OrderChat({ orderId }: { orderId: number }) {
         prevCountRef.current = msgs.filter((m) => m.isFromManager).length;
       }
     } catch {
-      // Network error — silently skip
+      // silently skip
     }
   }, [orderId]);
 
-  // Initial load + 15-second polling
   useEffect(() => {
     fetchMessages();
     const interval = setInterval(fetchMessages, 15_000);
     return () => clearInterval(interval);
   }, [fetchMessages]);
 
-  // Scroll to bottom when messages change or chat opens
   useEffect(() => {
     if (open) scrollToBottom();
   }, [messages, open]);
@@ -69,9 +72,17 @@ export function OrderChat({ orderId }: { orderId: number }) {
   function handleOpen() {
     setOpen(true);
     setUnread(0);
-    // Count all current manager messages as seen
     prevCountRef.current = messages.filter((m) => m.isFromManager).length;
-    setTimeout(scrollToBottom, 50);
+    onOpenChange?.(true);
+    setTimeout(() => {
+      scrollToBottom();
+      inputRef.current?.focus();
+    }, 50);
+  }
+
+  function handleClose() {
+    setOpen(false);
+    onOpenChange?.(false);
   }
 
   async function send() {
@@ -111,11 +122,10 @@ export function OrderChat({ orderId }: { orderId: number }) {
 
   return (
     <div className="order-chat">
-      {/* Toggle button */}
       <button
         type="button"
-        className="order-chat-toggle"
-        onClick={open ? () => setOpen(false) : handleOpen}
+        className={`order-chat-toggle${open ? " order-chat-toggle--active" : ""}`}
+        onClick={open ? handleClose : handleOpen}
       >
         <MessageSquare size={15} />
         {"Чат с менеджером"}
@@ -125,11 +135,24 @@ export function OrderChat({ orderId }: { orderId: number }) {
 
       {open && (
         <div className="order-chat-panel">
+          {/* Header */}
+          <div className="order-chat-header">
+            <div className="order-chat-header-avatar">М</div>
+            <div>
+              <div className="order-chat-header-name">{"Менеджер"}</div>
+              <div className="order-chat-header-status">{"Отвечаем в рабочее время"}</div>
+            </div>
+            <button className="order-chat-close" onClick={handleClose} type="button">
+              <X size={15} />
+            </button>
+          </div>
+
           {/* Messages */}
           <div className="order-chat-messages" ref={listRef}>
             {messages.length === 0 && (
               <div className="order-chat-empty">
-                {"Напишите менеджеру — мы ответим как можно скорее"}
+                <MessageSquare size={30} strokeWidth={1.5} />
+                <p>{"Напишите нам — ответим как можно скорее"}</p>
               </div>
             )}
             {messages.map((msg) => (
@@ -137,24 +160,30 @@ export function OrderChat({ orderId }: { orderId: number }) {
                 key={msg.id}
                 className={`order-chat-msg ${msg.isFromManager ? "order-chat-msg--manager" : "order-chat-msg--customer"}`}
               >
-                <div className="order-chat-bubble">{msg.text}</div>
-                <div className="order-chat-time">
-                  {new Date(msg.createdAt).toLocaleString("ru-RU", {
-                    day: "numeric",
-                    month: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                {msg.isFromManager && (
+                  <div className="order-chat-msg-avatar">{"М"}</div>
+                )}
+                <div className="order-chat-msg-body">
+                  <div className="order-chat-bubble">{msg.text}</div>
+                  <div className="order-chat-time">
+                    {new Date(msg.createdAt).toLocaleString("ru-RU", {
+                      day: "numeric",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
 
           {/* Input */}
-          <div className="order-chat-input-row">
+          <div className="order-chat-input-wrap">
             <textarea
+              ref={inputRef}
               className="order-chat-input"
-              placeholder={"Ваше сообщение... (Enter — отправить)"}
+              placeholder={"Написать сообщение..."}
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={handleKey}
@@ -171,6 +200,7 @@ export function OrderChat({ orderId }: { orderId: number }) {
             </button>
           </div>
           {error && <div className="order-chat-error">{error}</div>}
+          <div className="order-chat-hint">{"Enter — отправить · Shift+Enter — новая строка"}</div>
         </div>
       )}
     </div>

@@ -165,7 +165,10 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  console.log(`[Bitrix webhook] Заказ №${orderId} → approved${dealId ? ` (deal ${dealId})` : ""}`);
+  // Удаляем переписку — заказ подтверждён, чат больше не нужен
+  await prisma.orderMessage.deleteMany({ where: { orderId } }).catch(() => {});
+
+  console.log(`[Bitrix webhook] Заказ №${orderId} → approved${dealId ? ` (deal ${dealId})` : ""}, чат очищен`);
 
   return NextResponse.json({ ok: true, orderId, status: "approved" });
 }

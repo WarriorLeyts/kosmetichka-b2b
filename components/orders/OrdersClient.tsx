@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { Search, ShoppingBag, TrendingUp, Package, X } from "lucide-react";
+import { Search, ShoppingBag, TrendingUp, Package, X, ArrowLeft } from "lucide-react";
 import { CancelOrderButton } from "./CancelOrderButton";
 import { RepeatOrderButton } from "./RepeatOrderButton";
 import { OrderChat } from "./OrderChat";
@@ -56,6 +56,8 @@ function getStatusClass(status: string) {
 
 export function OrdersClient({ orders, stats }: { orders: Order[]; stats: Stats }) {
   const [query, setQuery] = useState("");
+  // When a chat is open, we only show that order card
+  const [chatOpenOrderId, setChatOpenOrderId] = useState<number | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -70,9 +72,15 @@ export function OrdersClient({ orders, stats }: { orders: Order[]; stats: Stats 
     });
   }, [orders, query]);
 
+  // If a chat is open, only show that one order
+  const displayed = chatOpenOrderId !== null
+    ? filtered.filter((o) => o.id === chatOpenOrderId)
+    : filtered;
+
   return (
     <>
-      {orders.length > 0 && (
+      {/* Stats — hidden when chat is open */}
+      {orders.length > 0 && chatOpenOrderId === null && (
         <div className="orders-stats">
           <div className="orders-stat-card">
             <div className="orders-stat-icon">
@@ -111,7 +119,8 @@ export function OrdersClient({ orders, stats }: { orders: Order[]; stats: Stats 
         </div>
       )}
 
-      {orders.length > 0 && (
+      {/* Search — hidden when chat is open */}
+      {orders.length > 0 && chatOpenOrderId === null && (
         <div className="orders-search-wrap">
           <Search size={16} className="orders-search-icon" />
           <input
@@ -128,7 +137,7 @@ export function OrdersClient({ orders, stats }: { orders: Order[]; stats: Stats 
         </div>
       )}
 
-      {query && (
+      {query && chatOpenOrderId === null && (
         <div className="orders-search-count">
           {filtered.length === 0
             ? "Ничего не найдено"
@@ -136,7 +145,19 @@ export function OrdersClient({ orders, stats }: { orders: Order[]; stats: Stats 
         </div>
       )}
 
-      {filtered.length === 0 && !query && (
+      {/* Back button when chat is open */}
+      {chatOpenOrderId !== null && (
+        <button
+          className="orders-chat-back"
+          onClick={() => setChatOpenOrderId(null)}
+          type="button"
+        >
+          <ArrowLeft size={15} />
+          {"Все заказы"}
+        </button>
+      )}
+
+      {filtered.length === 0 && !query && chatOpenOrderId === null && (
         <div className="orders-empty">
           <p>{"У вас пока нет заказов"}</p>
           <Link href="/catalog" className="checkout-button orders-empty-link">
@@ -145,7 +166,7 @@ export function OrdersClient({ orders, stats }: { orders: Order[]; stats: Stats 
         </div>
       )}
 
-      {filtered.length === 0 && query && (
+      {filtered.length === 0 && query && chatOpenOrderId === null && (
         <div className="orders-empty">
           <p>{`По запросу «${query}» ничего не найдено`}</p>
           <button className="orders-search-reset" onClick={() => setQuery("")}>
@@ -155,7 +176,7 @@ export function OrdersClient({ orders, stats }: { orders: Order[]; stats: Stats 
       )}
 
       <div className="orders-list">
-        {filtered.map((order) => (
+        {displayed.map((order) => (
           <div className="order-card" key={order.id}>
             <div className="order-card-header">
               <div>
@@ -203,7 +224,12 @@ export function OrdersClient({ orders, stats }: { orders: Order[]; stats: Stats 
               </div>
             )}
 
-            {order.status === "pending" && <OrderChat orderId={order.id} />}
+            {order.status === "pending" && (
+              <OrderChat
+                orderId={order.id}
+                onOpenChange={(isOpen) => setChatOpenOrderId(isOpen ? order.id : null)}
+              />
+            )}
           </div>
         ))}
       </div>

@@ -14,15 +14,15 @@ export async function POST(request: Request, { params }: Props) {
   }
 
   const { id } = await params;
+  const orderId = Number(id);
 
   await prisma.order.update({
-    where: {
-      id: Number(id),
-    },
-    data: {
-      status: "approved",
-    },
+    where: { id: orderId },
+    data: { status: "approved" },
   });
+
+  // Удаляем переписку — заказ подтверждён, чат больше не нужен
+  await prisma.orderMessage.deleteMany({ where: { orderId } }).catch(() => {});
 
   return NextResponse.json({ success: true });
 }
