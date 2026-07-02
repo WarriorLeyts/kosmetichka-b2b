@@ -2828,3 +2828,25 @@ align-items: flex-start;
   .orders-toast-stack { bottom: 16px; right: 16px; left: 16px; }
   .orders-toast { min-width: unset; max-width: unset; }
 }
+
+/* ─── TopBar avatar wrap fix (badge outside overflow:hidden button) ──── */
+.topbar-avatar-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+/* Override: badge now positions relative to wrap div, not inside button */
+.topbar-avatar-wrap .topbar-pending-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  pointer-events: none;
+  z-index: 10;
+}
+@media (max-width: 900px) {
+  /* On mobile the button is a 36x36 circle — badge at top-right corner */
+  .topbar-avatar-wrap .topbar-pending-badge {
+    top: 0px;
+    right: 0px;
+  }
+}
