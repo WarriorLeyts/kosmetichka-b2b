@@ -18,7 +18,6 @@ type TopBarProps = {
 
 export function TopBar({ search, setSearch }: TopBarProps) {
   const router = useRouter();
-
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -36,6 +35,8 @@ export function TopBar({ search, setSearch }: TopBarProps) {
   const logout = useAuthStore((state) => state.logout);
 
   const pendingCount = useOrdersNotifStore((state) => state.pendingCount);
+  const newMessageOrderIds = useOrdersNotifStore((state) => state.newMessageOrderIds);
+  const totalBadge = pendingCount + newMessageOrderIds.length;
 
   useEffect(() => {
     fetchCustomer();
@@ -68,7 +69,6 @@ export function TopBar({ search, setSearch }: TopBarProps) {
     <header className="topbar">
       <div className="brand-logo">
         <div className="heart-logo">♡</div>
-
         <div>
           <div className="brand-name">Косметичка</div>
           <div className="brand-subtitle-text bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-xs font-semibold text-transparent">
@@ -98,7 +98,6 @@ export function TopBar({ search, setSearch }: TopBarProps) {
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Поиск по товарам..."
         />
-
         <Button
           type="submit"
           className="w-16 h-full flex items-center justify-center rounded-l-none"
@@ -116,26 +115,24 @@ export function TopBar({ search, setSearch }: TopBarProps) {
               onClick={() => setMenuOpen(!menuOpen)}
               className="flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 font-bold text-slate-800 transition hover:bg-slate-50 hover:text-pink-500"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 text-sm font-black text-white">
-                {customer.name?.charAt(0).toUpperCase()}
+              {/* Avatar with badge overlaid */}
+              <div className="relative">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 text-sm font-black text-white">
+                  {customer.name?.charAt(0).toUpperCase()}
+                </div>
+                {totalBadge > 0 && (
+                  <span className="topbar-pending-badge">{totalBadge}</span>
+                )}
               </div>
 
               <span className="topbar-customer-name">{customer.name}</span>
-
-              {pendingCount > 0 && (
-                <span className="topbar-pending-badge">{pendingCount}</span>
-              )}
             </button>
 
             {menuOpen && (
               <div className="absolute right-0 md:right-auto md:left-0 top-12 z-50 w-56 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
                 <div className="mb-3 border-b border-slate-100 pb-3">
-                  <div className="font-black text-slate-800">
-                    {customer.name}
-                  </div>
-                  <div className="text-xs font-semibold text-slate-400">
-                    {customer.email}
-                  </div>
+                  <div className="font-black text-slate-800">{customer.name}</div>
+                  <div className="text-xs font-semibold text-slate-400">{customer.email}</div>
                 </div>
 
                 <Link
@@ -145,8 +142,8 @@ export function TopBar({ search, setSearch }: TopBarProps) {
                 >
                   <ClipboardList size={16} />
                   Мои заказы
-                  {pendingCount > 0 && (
-                    <span className="topbar-menu-badge">{pendingCount}</span>
+                  {totalBadge > 0 && (
+                    <span className="topbar-menu-badge">{totalBadge}</span>
                   )}
                 </Link>
 
