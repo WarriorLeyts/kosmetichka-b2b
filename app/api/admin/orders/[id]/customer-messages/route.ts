@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+
+function getSecret() {
+  return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
+}
 
 async function getAdminUser() {
   const cookieStore = await cookies();
   const token = cookieStore.get("admin_token")?.value;
   if (!token) return null;
   try {
-    const user = await verifyToken(token);
-    if (!user || !["admin", "manager"].includes(user.role)) return null;
-    return user;
+    const { payload } = await jwtVerify(token, getSecret());
+    const role = payload.role as string;
+    if (!["admin", "manager"].includes(role)) return null;
+    return { id: payload.id as number, role };
   } catch {
     return null;
   }
