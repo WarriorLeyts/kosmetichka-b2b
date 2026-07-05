@@ -181,6 +181,7 @@ export default function AdminOrderClient({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<ProductSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -252,12 +253,21 @@ export default function AdminOrderClient({
 
   async function fetchProducts(q: string, categoryGuid: string) {
     setSearchLoading(true);
+    setSearchError(null);
     try {
-      const res = await fetch(buildSearchUrl(q, categoryGuid));
+      const url = buildSearchUrl(q, categoryGuid);
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setSearchResults(data.products ?? []);
+      } else {
+        const text = await res.text();
+        setSearchError(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+        setSearchResults([]);
       }
+    } catch (e) {
+      setSearchError(String(e));
+      setSearchResults([]);
     } finally {
       setSearchLoading(false);
     }
@@ -993,6 +1003,12 @@ export default function AdminOrderClient({
                   <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                     <div className="mb-3 h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500" />
                     <p className="text-sm">Загружаю товары...</p>
+                  </div>
+                ) : searchError ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-red-400">
+                    <div className="mb-3 text-4xl">⚠️</div>
+                    <p className="text-sm font-semibold mb-1">Ошибка загрузки товаров</p>
+                    <p className="text-xs text-center max-w-xs break-all">{searchError}</p>
                   </div>
                 ) : searchResults.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 text-slate-400">
