@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 
 type CheckStatus =
   | "ok"
@@ -90,6 +89,29 @@ function getInitialState(item: OrderItem): ItemState {
     };
   }
   return { status: null, availableQty: "", note: "" };
+}
+
+function ProductImage({ url, name }: { url: string | null; name: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!url || failed) {
+    return (
+      <div className="flex h-44 w-44 flex-shrink-0 items-center justify-center bg-slate-100 text-5xl sm:h-52 sm:w-52">
+        📦
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-44 w-44 flex-shrink-0 bg-slate-100 sm:h-52 sm:w-52">
+      <img
+        src={url}
+        alt={name}
+        className="h-full w-full object-contain p-2"
+        onError={() => setFailed(true)}
+      />
+    </div>
+  );
 }
 
 export default function PickerOrderClient({
@@ -219,22 +241,7 @@ export default function PickerOrderClient({
               {/* Product image + info */}
               <div className="flex gap-0">
                 {/* Image */}
-                {imageUrl ? (
-                  <div className="relative h-40 w-40 flex-shrink-0 bg-slate-100 sm:h-48 sm:w-48">
-                    <img
-                      src={imageUrl}
-                      alt={item.productName}
-                      className="h-full w-full object-contain p-2"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div className="flex h-40 w-40 flex-shrink-0 items-center justify-center bg-slate-100 text-4xl sm:h-48 sm:w-48">
-                    📦
-                  </div>
-                )}
+                <ProductImage url={imageUrl} name={item.productName} />
 
                 {/* Info */}
                 <div className="flex flex-1 flex-col justify-between p-4">
