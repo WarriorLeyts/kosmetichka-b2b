@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
 
   const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
   const limit = Math.min(Number(request.nextUrl.searchParams.get("limit") ?? "40"), 100);
+  const offset = Math.max(0, Number(request.nextUrl.searchParams.get("offset") ?? "0"));
 
   const categoryGuid = request.nextUrl.searchParams.get("categoryGuid") ?? "";
 
@@ -62,6 +63,7 @@ export async function GET(request: NextRequest) {
 
   const products = await prisma.product.findMany({
     where,
+    skip: offset,
     take: limit,
     orderBy: { name: "asc" },
     select: {
@@ -93,5 +95,5 @@ export async function GET(request: NextRequest) {
     imagePath: p.images[0]?.path ?? null,
   }));
 
-  return NextResponse.json({ products: result });
+  return NextResponse.json({ products: result, hasMore: result.length === limit });
 }

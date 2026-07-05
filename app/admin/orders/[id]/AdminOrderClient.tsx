@@ -183,6 +183,9 @@ export default function AdminOrderClient({
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const paginationRef = useRef({ offset: 0, hasMore: false, loading: false });
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Categories for modal sidebar
@@ -225,41 +228,40 @@ export default function AdminOrderClient({
     setSearchQuery("");
     setSearchResults([]);
     setSelectedCategoryGuid("");
+    setHasMore(false);
+    paginationRef.current = { offset: 0, hasMore: false, loading: false };
   }
 
-  function buildSearchUrl(q: string, categoryGuid: string) {
-    const params = new URLSearchParams({ limit: "80" });
+  function buildSearchUrl(q: string, categoryGuid: string, offset = 0) {
+    const params = new URLSearchParams({ limit: "40" });
     if (q.trim().length >= 2) params.set("q", q.trim());
     if (categoryGuid) params.set("categoryGuid", categoryGuid);
+    if (offset > 0) params.set("offset", String(offset));
     return `/api/admin/products/search?${params.toString()}`;
   }
 
   function handleSearchInput(q: string) {
     setSearchQuery(q);
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    searchDebounce.current = setTimeout(async () => {
-      setSearchLoading(true);
-      try {
-        const res = await fetch(buildSearchUrl(q, selectedCategoryGuid));
-        if (res.ok) {
-          const data = await res.json();
-          setSearchResults(data.products ?? []);
-        }
-      } finally {
-        setSearchLoading(false);
-      }
+    searchDebounce.current = setTimeout(() => {
+      fetchProducts(q, selectedCategoryGuid);
     }, 250);
   }
 
   async function fetchProducts(q: string, categoryGuid: string) {
     setSearchLoading(true);
     setSearchError(null);
+    setHasMore(false);
+    paginationRef.current = { offset: 0, hasMore: false, loading: false };
     try {
-      const url = buildSearchUrl(q, categoryGuid);
-      const res = await fetch(url);
+      const res = await fetch(buildSearchUrl(q, categoryGuid, 0));
       if (res.ok) {
         const data = await res.json();
-        setSearchResults(data.products ?? []);
+        const products = data.products ?? [];
+        setSearchResults(products);
+        const more = data.hasMore ?? false;
+        setHasMore(more);
+        paginationRef.current = { offset: products.length, hasMore: more, loading: false };
       } else {
         const text = await res.text();
         setSearchError(`HTTP ${res.status}: ${text.slice(0, 200)}`);
@@ -270,6 +272,28 @@ export default function AdminOrderClient({
       setSearchResults([]);
     } finally {
       setSearchLoading(false);
+    }
+  }
+
+  async function loadMore(q: string, categoryGuid: string) {
+    const p = paginationRef.current;
+    if (!p.hasMore || p.loading) return;
+    p.loading = true;
+    setLoadingMore(true);
+    try {
+      const res = await fetch(buildSearchUrl(q, categoryGuid, p.offset));
+      if (res.ok) {
+        const data = await res.json();
+        const products = data.products ?? [];
+        setSearchResults((prev) => [...prev, ...products]);
+        const more = data.hasMore ?? false;
+        p.offset += products.length;
+        p.hasMore = more;
+        setHasMore(more);
+      }
+    } finally {
+      p.loading = false;
+      setLoadingMore(false);
     }
   }
 
@@ -1041,7 +1065,15 @@ export default function AdminOrderClient({
               )}
 
               {/* Product grid */}
-              <div className="flex-1 overflow-y-auto p-4">
+              <div
+                className="flex-1 overflow-y-auto p-4"
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 300) {
+                    loadMore(searchQuery, selectedCategoryGuid);
+                  }
+                }}
+              >
                 {searchLoading ? (
                   <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                     <div className="mb-3 h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500" />
@@ -1124,6 +1156,15 @@ export default function AdminOrderClient({
                       );
                     })}
                   </div>
+                )}
+                {/* Load more indicator */}
+                {loadingMore && (
+                  <div className="flex justify-center py-4">
+                    <div className="h-6 w-6 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500" />
+                  </div>
+                )}
+                {!hasMore && searchResults.length > 0 && !searchLoading && (
+                  <p className="py-4 text-center text-xs text-slate-300">Все товары загружены</p>
                 )}
               </div>
             </div>
