@@ -32,7 +32,7 @@ export async function GET(
   const { orderId } = await params;
 
   const messages = await prisma.orderMessage.findMany({
-    where: { orderId: Number(orderId), source: null },
+    where: { orderId: Number(orderId), source: { equals: null } },
     include: { user: { select: { name: true, role: true } } },
     orderBy: { createdAt: "asc" },
   });
