@@ -18,6 +18,7 @@ export default async function PickerOrderPage({
       items: {
         include: {
           check: true,
+          photos: true,
         },
       },
     },
@@ -58,5 +59,6 @@ export default async function PickerOrderPage({
       : null;
   }
 
-  return <PickerOrderClient order={order} imageMap={imageMap} />;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return <PickerOrderClient order={order as any} imageMap={imageMap} />;
 }
