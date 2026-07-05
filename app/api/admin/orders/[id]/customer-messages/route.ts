@@ -32,7 +32,7 @@ async function bitrixPost(webhookUrl: string, method: string, params: Record<str
   return res.json();
 }
 
-async function resolveBitrixDealId(orderId: number): Promise<string | null> {
+async function resolveBitrixDealId(orderId: number): Promise<number | null> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     select: { bitrixDealId: true },
