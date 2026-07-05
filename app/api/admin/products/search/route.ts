@@ -30,15 +30,21 @@ export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
   const limit = Math.min(Number(request.nextUrl.searchParams.get("limit") ?? "40"), 100);
 
-  const where = q.length >= 2
-    ? {
-        OR: [
-          { name: { contains: q, mode: "insensitive" as const } },
-          { barcode: { contains: q, mode: "insensitive" as const } },
-          { article: { contains: q, mode: "insensitive" as const } },
-        ],
-      }
-    : {};
+  const categoryGuid = request.nextUrl.searchParams.get("categoryGuid") ?? "";
+
+  const where: Record<string, unknown> = {};
+
+  if (q.length >= 2) {
+    where.OR = [
+      { name: { contains: q, mode: "insensitive" } },
+      { barcode: { contains: q, mode: "insensitive" } },
+      { article: { contains: q, mode: "insensitive" } },
+    ];
+  }
+
+  if (categoryGuid) {
+    where.categoryGuid = categoryGuid;
+  }
 
   const products = await prisma.product.findMany({
     where,
