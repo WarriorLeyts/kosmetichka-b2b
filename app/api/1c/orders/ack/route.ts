@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const ids: number[] = (body.ids ?? []).map(Number).filter(Boolean);
+  const raw = body.ids ?? [];
+  const ids: number[] = (Array.isArray(raw) ? raw : [raw]).map(Number).filter(Boolean);
 
   if (!ids.length) {
     return NextResponse.json({ error: "No ids provided" }, { status: 400 });

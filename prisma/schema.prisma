@@ -119,9 +119,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  messages   OrderMessage[]
-  statusLogs OrderStatusLog[]
-  checks     OrderItemCheck[]
+  messages       OrderMessage[]
+  statusLogs     OrderStatusLog[]
+  checks         OrderItemCheck[]
+  assignedOrders Order[]          @relation("OrderPicker")
 }
 
 model Order {
@@ -135,8 +136,12 @@ model Order {
 
   items OrderItem[]
 
-  oneCExportedAt DateTime?
-  bitrixDealId   Int?
+  oneCExportedAt    DateTime?
+  bitrixDealId      Int?
+  customerConfirmed Boolean  @default(false)
+
+  pickerId Int?
+  picker   User? @relation("OrderPicker", fields: [pickerId], references: [id])
 
   messages   OrderMessage[]
   statusLogs OrderStatusLog[]

@@ -42,16 +42,22 @@ type StatusLog = {
   createdAt: string;
 };
 
+type PickerUser = { id: number; name: string };
+
 type Order = {
   id: number;
   status: string;
   total: number;
   comment: string | null;
+  customerConfirmed: boolean;
+  pickerId: number | null;
+  picker: { id: number; name: string } | null;
   customer: {
     companyName: string | null;
     name: string | null;
     phone: string | null;
     city: string | null;
+    inn: string | null;
   };
   items: OrderItem[];
   messages: Message[];
@@ -61,6 +67,7 @@ type Order = {
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Ожидание",
+  approved: "Подтверждён",
   assembly: "Сборка",
   consultation: "Консультация",
   payment: "К оплате",
@@ -70,6 +77,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800 border-yellow-300",
+  approved: "bg-green-100 text-green-800 border-green-300",
   assembly: "bg-blue-100 text-blue-800 border-blue-300",
   consultation: "bg-orange-100 text-orange-800 border-orange-300",
   payment: "bg-green-100 text-green-800 border-green-300",
@@ -92,6 +100,11 @@ const TRANSITIONS: Record<string, { label: string; to: string; style: string }[]
     { label: "▶ Передать на сборку", to: "assembly", style: "bg-blue-600 hover:bg-blue-700 text-white" },
     { label: "✕ Отменить заказ", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
+  approved: [
+    { label: "▶ Передать на сборку", to: "assembly", style: "bg-blue-600 hover:bg-blue-700 text-white" },
+    { label: "✓ К оплате", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
+    { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
+  ],
   assembly: [
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
@@ -108,14 +121,27 @@ const TRANSITIONS: Record<string, { label: string; to: string; style: string }[]
 
 function formatDate(str: string) {
   return new Date(str).toLocaleString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
+    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
   });
 }
 
-export default function AdminOrderClient({ order: initialOrder }: { order: Order }) {
+// ── Edit items state ──────────────────────────────────────────────────────────
+type EditableItem = {
+  id: number;
+  productName: string;
+  barcode: string | null;
+  quantity: number;
+  price: number;
+  removed: boolean;
+};
+
+export default function AdminOrderClient({
+  order: initialOrder,
+  pickers,
+}: {
+  order: Order;
+  pickers: PickerUser[];
+}) {
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
   const [messages, setMessages] = useState<Message[]>(initialOrder.messages);
@@ -126,7 +152,119 @@ export default function AdminOrderClient({ order: initialOrder }: { order: Order
   const chatEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Poll messages every 5s when on chat tab
+  // Edit mode
+  const [editMode, setEditMode] = useState(false);
+  const [editItems, setEditItems] = useState<EditableItem[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  // Assign picker
+  const [assigningPicker, setAssigningPicker] = useState(false);
+
+  function enterEditMode() {
+    setEditItems(
+      order.items.map((i) => ({
+        id: i.id,
+        productName: i.productName,
+        barcode: i.barcode,
+        quantity: i.quantity,
+        price: i.price,
+        removed: false,
+      }))
+    );
+    setEditMode(true);
+  }
+
+  function cancelEdit() {
+    setEditMode(false);
+    setEditItems([]);
+  }
+
+  function editQty(id: number, qty: number) {
+    setEditItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, quantity: Math.max(1, qty) } : i))
+    );
+  }
+
+  function editPrice(id: number, price: number) {
+    setEditItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, price: Math.max(0, price) } : i))
+    );
+  }
+
+  function toggleRemove(id: number) {
+    setEditItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, removed: !i.removed } : i))
+    );
+  }
+
+  const editTotal = editItems
+    .filter((i) => !i.removed)
+    .reduce((s, i) => s + i.quantity * i.price, 0);
+
+  async function saveItems() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/orders/${order.id}/items`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: editItems.filter((i) => !i.removed).map((i) => ({
+            id: i.id,
+            quantity: i.quantity,
+            price: i.price,
+          })),
+          removeIds: editItems.filter((i) => i.removed).map((i) => i.id),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Update items and total in local state
+        setOrder((prev) => ({
+          ...prev,
+          total: data.order.total,
+          items: data.order.items.map((i: any) => ({
+            ...i,
+            check: i.check
+              ? {
+                  ...i.check,
+                  updatedAt: i.check.checkedAt ?? i.check.updatedAt,
+                }
+              : null,
+          })),
+        }));
+        setEditMode(false);
+      } else {
+        const d = await res.json();
+        alert(d.error || "Ошибка сохранения");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Assign picker
+  async function assignPicker(pickerId: number | null) {
+    setAssigningPicker(true);
+    try {
+      const res = await fetch(`/api/admin/orders/${order.id}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pickerId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOrder((prev) => ({
+          ...prev,
+          pickerId: data.order.pickerId,
+          picker: data.order.picker,
+        }));
+      }
+    } finally {
+      setAssigningPicker(false);
+    }
+  }
+
+  // Poll messages
   useEffect(() => {
     if (activeTab !== "chat") {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -160,7 +298,6 @@ export default function AdminOrderClient({ order: initialOrder }: { order: Order
       body: JSON.stringify({ status: toStatus }),
     });
     if (res.ok) {
-      router.refresh();
       window.location.reload();
     } else {
       const data = await res.json();
@@ -185,16 +322,13 @@ export default function AdminOrderClient({ order: initialOrder }: { order: Order
     setSendingMsg(false);
   }
 
-  function handlePrint() {
-    window.print();
-  }
-
   const transitions = TRANSITIONS[order.status] || [];
   const pipelineIndex = PIPELINE.indexOf(order.status);
+  const canEdit = ["consultation", "assembly"].includes(order.status);
+  const showInvoice = ["payment", "exported"].includes(order.status);
 
   return (
     <div className="p-4 md:p-6 print:p-0">
-      {/* PRINT STYLES */}
       <style>{`
         @media print {
           .no-print { display: none !important; }
@@ -208,16 +342,16 @@ export default function AdminOrderClient({ order: initialOrder }: { order: Order
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <a
-              href="/admin/orders"
-              className="no-print flex h-9 w-9 items-center justify-center rounded-xl border hover:bg-slate-50"
-            >
-              ←
-            </a>
+            <a href="/admin/orders" className="no-print flex h-9 w-9 items-center justify-center rounded-xl border hover:bg-slate-50">←</a>
             <h1 className="text-2xl font-black">Заказ №{order.id}</h1>
             <span className={`rounded-full border px-3 py-1 text-sm font-bold ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-700 border-gray-200"}`}>
               {STATUS_LABELS[order.status] || order.status}
             </span>
+            {order.customerConfirmed && (
+              <span className="rounded-full bg-emerald-100 border border-emerald-300 px-3 py-1 text-sm font-bold text-emerald-700">
+                ✓ Покупатель подтвердил
+              </span>
+            )}
           </div>
           <div className="mt-2 ml-12 text-sm text-slate-500">
             <div>{order.customer.companyName || order.customer.name} · {order.customer.phone}</div>
@@ -225,9 +359,20 @@ export default function AdminOrderClient({ order: initialOrder }: { order: Order
             <div className="text-xs">{formatDate(order.createdAt)}</div>
           </div>
         </div>
-        <div className="flex items-center gap-2 no-print">
+
+        <div className="flex items-center gap-2 no-print flex-wrap">
+          {showInvoice && (
+            <a
+              href={`/admin/orders/${order.id}/invoice`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+            >
+              📄 Счёт PDF
+            </a>
+          )}
           <button
-            onClick={handlePrint}
+            onClick={() => window.print()}
             className="flex items-center gap-2 rounded-xl border px-4 py-2 text-sm hover:bg-slate-50"
           >
             🖨️ Печать
@@ -240,51 +385,64 @@ export default function AdminOrderClient({ order: initialOrder }: { order: Order
       </div>
 
       {/* Status Pipeline */}
-      <div className="no-print mb-6 overflow-x-auto rounded-2xl border bg-white p-4">
+      <div className="no-print mb-4 overflow-x-auto rounded-2xl border bg-white p-4">
         <div className="flex min-w-max items-center gap-0">
-          {PIPELINE.filter(s => s !== "cancelled").map((s, idx) => {
+          {PIPELINE.filter((s) => s !== "cancelled").map((s, idx) => {
             const isDone = pipelineIndex > idx;
             const isCurrent = pipelineIndex === idx;
-            const isFuture = pipelineIndex < idx;
             return (
               <div key={s} className="flex items-center">
                 <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition-all ${
                   isCurrent ? STATUS_COLORS[s] + " border" :
-                  isDone ? "bg-slate-100 text-slate-400" :
-                  "text-slate-300"
+                  isDone ? "bg-slate-100 text-slate-400" : "text-slate-300"
                 }`}>
                   {isDone && <span>✓</span>}
                   {STATUS_LABELS[s]}
                 </div>
-                {idx < PIPELINE.filter(s => s !== "cancelled").length - 1 && (
+                {idx < PIPELINE.filter((s) => s !== "cancelled").length - 1 && (
                   <div className={`mx-1 text-lg ${isDone ? "text-slate-400" : "text-slate-200"}`}>›</div>
                 )}
               </div>
             );
           })}
           {order.status === "cancelled" && (
-            <div className="ml-4 rounded-xl bg-red-100 px-3 py-2 text-sm font-bold text-red-700 border border-red-300">
-              ✕ Отменён
-            </div>
+            <div className="ml-4 rounded-xl bg-red-100 px-3 py-2 text-sm font-bold text-red-700 border border-red-300">✕ Отменён</div>
           )}
         </div>
       </div>
 
-      {/* Action buttons */}
-      {transitions.length > 0 && (
-        <div className="no-print mb-6 flex flex-wrap gap-2">
-          {transitions.map((t) => (
-            <button
-              key={t.to}
-              onClick={() => changeStatus(t.to)}
-              disabled={changingStatus}
-              className={`rounded-xl px-5 py-2.5 font-bold transition-all disabled:opacity-50 ${t.style}`}
+      {/* Action buttons + Assign Picker */}
+      <div className="no-print mb-6 flex flex-wrap items-center gap-3">
+        {transitions.map((t) => (
+          <button
+            key={t.to}
+            onClick={() => changeStatus(t.to)}
+            disabled={changingStatus}
+            className={`rounded-xl px-5 py-2.5 font-bold transition-all disabled:opacity-50 ${t.style}`}
+          >
+            {changingStatus ? "..." : t.label}
+          </button>
+        ))}
+
+        {/* Assign picker */}
+        {["pending", "assembly", "approved"].includes(order.status) && (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-sm text-slate-500">Сборщик:</span>
+            <select
+              className="rounded-xl border px-3 py-2 text-sm"
+              value={order.pickerId ?? ""}
+              disabled={assigningPicker}
+              onChange={(e) => assignPicker(e.target.value ? Number(e.target.value) : null)}
             >
-              {changingStatus ? "..." : t.label}
-            </button>
-          ))}
-        </div>
-      )}
+              <option value="">— Не назначен —</option>
+              {pickers.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {assigningPicker && <span className="text-xs text-slate-400">Сохраняю...</span>}
+          </div>
+        )}
+      </div>
 
       {/* Print header */}
       <div className="print-only mb-4">
@@ -310,9 +468,51 @@ export default function AdminOrderClient({ order: initialOrder }: { order: Order
         ))}
       </div>
 
-      {/* Items tab */}
+      {/* ── Items tab ── */}
       {(activeTab === "items" || true) && (
         <div className={activeTab === "items" ? "" : "hidden print:block"}>
+          {/* Edit mode toggle */}
+          {canEdit && !editMode && (
+            <div className="no-print mb-3 flex items-center gap-3">
+              <button
+                onClick={enterEditMode}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+              >
+                ✏️ Редактировать позиции
+              </button>
+              {order.status === "consultation" && !order.customerConfirmed && (
+                <span className="text-sm text-orange-600">
+                  ⏳ Ожидаем подтверждения от покупателя
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Edit mode toolbar */}
+          {editMode && (
+            <div className="no-print mb-3 flex items-center gap-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+              <span className="text-sm font-semibold text-amber-800">Режим редактирования</span>
+              <span className="text-sm text-amber-700">
+                Итого: <strong>{editTotal.toLocaleString("ru-RU")} ₽</strong>
+              </span>
+              <div className="ml-auto flex gap-2">
+                <button
+                  onClick={cancelEdit}
+                  className="rounded-xl border px-4 py-1.5 text-sm font-semibold hover:bg-white"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={saveItems}
+                  disabled={saving || editItems.filter((i) => !i.removed).length === 0}
+                  className="rounded-xl bg-blue-600 px-4 py-1.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? "Сохраняю..." : "💾 Сохранить"}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="overflow-hidden rounded-2xl border bg-white">
             <table className="w-full text-sm">
               <thead className="bg-slate-50">
@@ -322,65 +522,112 @@ export default function AdminOrderClient({ order: initialOrder }: { order: Order
                   <th className="p-3 text-center">Кол-во</th>
                   <th className="p-3 text-right">Цена</th>
                   <th className="p-3 text-right">Сумма</th>
-                  <th className="p-3 text-center no-print">Проверка</th>
+                  {!editMode && <th className="p-3 text-center no-print">Проверка</th>}
+                  {editMode && <th className="p-3 text-center no-print">Удалить</th>}
                   <th className="p-3 text-center print-only">✓</th>
                 </tr>
               </thead>
               <tbody>
-                {order.items.map((item) => {
-                  const check = item.check;
-                  const checkInfo = check ? CHECK_LABELS[check.status] : null;
-                  return (
-                    <tr key={item.id} className="border-t">
-                      <td className="p-3">
-                        <div className="font-medium">{item.productName}</div>
-                        {check?.note && (
-                          <div className="mt-0.5 text-xs text-slate-400 no-print">{check.note}</div>
-                        )}
-                        {item.photos.length > 0 && (
-                          <div className="mt-1 flex gap-1 no-print">
-                            {item.photos.map((p) => (
-                              <a key={p.id} href={p.url} target="_blank" rel="noreferrer">
-                                <img src={p.url} alt="" className="h-10 w-10 rounded-lg object-cover border" />
-                              </a>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-3 text-slate-400">{item.barcode || "—"}</td>
-                      <td className="p-3 text-center font-bold">{item.quantity}</td>
-                      <td className="p-3 text-right">{item.price} ₽</td>
-                      <td className="p-3 text-right font-bold">{item.total} ₽</td>
-                      <td className="p-3 text-center no-print">
-                        {checkInfo ? (
-                          <div>
-                            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${checkInfo.color}`}>
-                              {checkInfo.label}
-                            </span>
-                            {check?.availableQty != null && (
-                              <div className="mt-0.5 text-xs text-slate-500">
-                                Есть: {check.availableQty} шт.
+                {editMode
+                  ? editItems.map((item) => (
+                      <tr key={item.id} className={`border-t ${item.removed ? "opacity-40 line-through bg-red-50" : ""}`}>
+                        <td className="p-3">
+                          <div className="font-medium">{item.productName}</div>
+                        </td>
+                        <td className="p-3 text-slate-400">{item.barcode || "—"}</td>
+                        <td className="p-3 text-center">
+                          <input
+                            type="number"
+                            min={1}
+                            value={item.quantity}
+                            disabled={item.removed}
+                            onChange={(e) => editQty(item.id, Number(e.target.value))}
+                            className="w-16 rounded-lg border px-2 py-1 text-center text-sm"
+                          />
+                        </td>
+                        <td className="p-3 text-right">
+                          <input
+                            type="number"
+                            min={0}
+                            value={item.price}
+                            disabled={item.removed}
+                            onChange={(e) => editPrice(item.id, Number(e.target.value))}
+                            className="w-24 rounded-lg border px-2 py-1 text-right text-sm"
+                          />
+                        </td>
+                        <td className="p-3 text-right font-bold">
+                          {(item.quantity * item.price).toLocaleString("ru-RU")} ₽
+                        </td>
+                        <td className="p-3 text-center">
+                          <button
+                            onClick={() => toggleRemove(item.id)}
+                            className={`rounded-lg px-2 py-1 text-xs font-bold ${
+                              item.removed
+                                ? "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                                : "bg-red-100 text-red-600 hover:bg-red-200"
+                            }`}
+                          >
+                            {item.removed ? "↩ Вернуть" : "✕ Удалить"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  : order.items.map((item) => {
+                      const check = item.check;
+                      const checkInfo = check ? CHECK_LABELS[check.status] : null;
+                      return (
+                        <tr key={item.id} className="border-t">
+                          <td className="p-3">
+                            <div className="font-medium">{item.productName}</div>
+                            {check?.note && (
+                              <div className="mt-0.5 text-xs text-slate-400 no-print">{check.note}</div>
+                            )}
+                            {item.photos.length > 0 && (
+                              <div className="mt-1 flex gap-1 no-print">
+                                {item.photos.map((p) => (
+                                  <a key={p.id} href={p.url} target="_blank" rel="noreferrer">
+                                    <img src={p.url} alt="" className="h-10 w-10 rounded-lg object-cover border" />
+                                  </a>
+                                ))}
                               </div>
                             )}
-                            {check?.picker && (
-                              <div className="mt-0.5 text-xs text-slate-400">{check.picker.name}</div>
+                          </td>
+                          <td className="p-3 text-slate-400">{item.barcode || "—"}</td>
+                          <td className="p-3 text-center font-bold">{item.quantity}</td>
+                          <td className="p-3 text-right">{item.price} ₽</td>
+                          <td className="p-3 text-right font-bold">{item.total} ₽</td>
+                          <td className="p-3 text-center no-print">
+                            {checkInfo ? (
+                              <div>
+                                <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${checkInfo.color}`}>
+                                  {checkInfo.label}
+                                </span>
+                                {check?.availableQty != null && (
+                                  <div className="mt-0.5 text-xs text-slate-500">Есть: {check.availableQty} шт.</div>
+                                )}
+                                {check?.picker && (
+                                  <div className="mt-0.5 text-xs text-slate-400">{check.picker.name}</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-300 text-xs">—</span>
                             )}
-                          </div>
-                        ) : (
-                          <span className="text-slate-300 text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-center print-only">
-                        <div className="inline-block h-5 w-5 rounded border border-slate-300"></div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                          </td>
+                          <td className="p-3 text-center print-only">
+                            <div className="inline-block h-5 w-5 rounded border border-slate-300"></div>
+                          </td>
+                        </tr>
+                      );
+                    })}
               </tbody>
               <tfoot className="bg-slate-50">
                 <tr>
-                  <td colSpan={4} className="p-3 text-right font-semibold">Итого:</td>
-                  <td className="p-3 text-right text-lg font-black">{order.total.toLocaleString("ru-RU")} ₽</td>
+                  <td colSpan={editMode ? 4 : 4} className="p-3 text-right font-semibold">Итого:</td>
+                  <td className="p-3 text-right text-lg font-black">
+                    {editMode
+                      ? `${editTotal.toLocaleString("ru-RU")} ₽`
+                      : `${order.total.toLocaleString("ru-RU")} ₽`}
+                  </td>
                   <td colSpan={1} />
                 </tr>
               </tfoot>
@@ -395,9 +642,9 @@ export default function AdminOrderClient({ order: initialOrder }: { order: Order
         </div>
       )}
 
-      {/* Chat tab */}
+      {/* ── Chat tab ── */}
       {activeTab === "chat" && (
-        <div className="no-print flex flex-col rounded-2xl border bg-white overflow-hidden" style={{ height: "480px" }}>
+        <div className="no-print flex flex-col rounded-2xl border bg-white overflow-hidden" style={{ height: 480 }}>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {messages.length === 0 && (
               <div className="text-center text-slate-400 text-sm mt-8">
@@ -415,9 +662,7 @@ export default function AdminOrderClient({ order: initialOrder }: { order: Order
                     {msg.user?.name || (msg.isFromPicker ? "Сборщик" : "Менеджер")}
                   </div>
                   <div>{msg.text}</div>
-                  <div className={`text-xs mt-0.5 opacity-60`}>
-                    {formatDate(msg.createdAt)}
-                  </div>
+                  <div className="text-xs mt-0.5 opacity-60">{formatDate(msg.createdAt)}</div>
                 </div>
               </div>
             ))}
@@ -443,7 +688,7 @@ export default function AdminOrderClient({ order: initialOrder }: { order: Order
         </div>
       )}
 
-      {/* History tab */}
+      {/* ── History tab ── */}
       {activeTab === "history" && (
         <div className="no-print rounded-2xl border bg-white overflow-hidden">
           {order.statusLogs.length === 0 ? (

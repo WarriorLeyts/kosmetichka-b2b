@@ -41,7 +41,7 @@ export default async function OrdersPage() {
     }
   }
 
-  // Stats: only completed orders (payment / exported)
+  // Stats: completed orders (payment / exported)
   const confirmedOrders = orders.filter(
     (o) => o.status === "payment" || o.status === "exported"
   );
@@ -65,13 +65,14 @@ export default async function OrdersPage() {
     id: o.id,
     status: o.status,
     total: o.total,
-    comment: o.comment,
+    comment: o.comment ?? null,
     createdAt: o.createdAt.toISOString(),
+    customerConfirmed: o.customerConfirmed,
     items: o.items.map((item) => ({
       id: item.id,
       productId: item.productId,
       productName: item.productName,
-      barcode: item.barcode,
+      barcode: item.barcode ?? null,
       quantity: item.quantity,
       price: item.price,
       total: item.total,

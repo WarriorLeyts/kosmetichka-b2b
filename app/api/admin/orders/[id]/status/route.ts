@@ -25,6 +25,7 @@ async function getUser() {
 // Valid transitions
 const TRANSITIONS: Record<string, string[]> = {
   pending: ["assembly", "cancelled"],
+  approved: ["assembly", "payment", "cancelled"], // legacy status
   assembly: ["consultation", "payment", "cancelled"],
   consultation: ["assembly", "payment", "cancelled"],
   payment: ["exported", "cancelled"],
