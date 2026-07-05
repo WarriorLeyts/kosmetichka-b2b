@@ -159,16 +159,12 @@ export async function POST(request: NextRequest) {
   await prisma.order.update({
     where: { id: orderId },
     data: {
-      status: "approved",
-      // Cache the Bitrix deal ID so the chat can post/fetch comments without re-searching
+      status: "payment",
       ...(dealId ? { bitrixDealId: dealId } : {}),
     },
   });
 
-  // Удаляем переписку — заказ подтверждён, чат больше не нужен
-  await prisma.orderMessage.deleteMany({ where: { orderId } }).catch(() => {});
+  console.log(`[Bitrix webhook] Заказ №${orderId} → payment${dealId ? ` (deal ${dealId})` : ""}`);
 
-  console.log(`[Bitrix webhook] Заказ №${orderId} → approved${dealId ? ` (deal ${dealId})` : ""}, чат очищен`);
-
-  return NextResponse.json({ ok: true, orderId, status: "approved" });
+  return NextResponse.json({ ok: true, orderId, status: "payment" });
 }
