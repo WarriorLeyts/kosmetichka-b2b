@@ -60,7 +60,7 @@ export default async function AdminOrderPage({
             note: item.check.note,
             availableQty: item.check.availableQty,
             picker: item.check.picker,
-            updatedAt: item.check.updatedAt.toISOString(),
+            updatedAt: item.check.checkedAt.toISOString(),
           }
         : null,
       photos: item.photos.map((p) => ({ id: p.id, url: p.url })),

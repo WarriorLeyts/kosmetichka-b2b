@@ -176,8 +176,7 @@ model OrderItemCheck {
   pickerId Int?
   picker   User? @relation(fields: [pickerId], references: [id])
 
-  checkedAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  checkedAt DateTime @default(now()) @updatedAt
 }
 
 model OrderItemPhoto {
