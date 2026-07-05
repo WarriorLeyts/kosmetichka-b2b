@@ -8,7 +8,7 @@ type CheckStatus = "ok" | "out_of_stock" | "expired" | "bad_condition" | "insuff
 type Photo = { id: number; url: string };
 
 type ItemCheck = {
-  status: CheckStatus;
+  status: string;
   availableQty: number | null;
   note: string | null;
   picker: { name: string } | null;
