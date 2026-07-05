@@ -44,7 +44,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Неверные данные" }, { status: 400 });
   }
 
-  // Verify the order exists and is in assembly status
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: { items: true },
@@ -81,19 +80,28 @@ export async function POST(request: Request) {
     });
   }
 
-  // Determine if all items are OK
   const hasIssues = items.some((i) => i.status !== "ok");
 
-  // If any item has issues → move to consultation; otherwise stay in assembly
-  if (hasIssues) {
-    await prisma.order.update({
+  // Determine new status
+  const newStatus = hasIssues ? "consultation" : "payment";
+
+  await prisma.$transaction([
+    prisma.order.update({
       where: { id: orderId },
-      data: { status: "consultation" },
-    });
-  }
+      data: { status: newStatus },
+    }),
+    prisma.orderStatusLog.create({
+      data: {
+        orderId,
+        fromStatus: "assembly",
+        toStatus: newStatus,
+        userId: user.id,
+      },
+    }),
+  ]);
 
   return NextResponse.json({
     success: true,
-    movedToConsultation: hasIssues,
+    newStatus,
   });
 }

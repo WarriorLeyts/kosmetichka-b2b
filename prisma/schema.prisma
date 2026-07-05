@@ -116,11 +116,11 @@ model User {
   login     String   @unique
   password  String
   role      String   @default("manager")
-
-  checks OrderItemCheck[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  checks   OrderItemCheck[]
+  messages OrderMessage[]
 }
 
 model Order {
@@ -128,19 +128,13 @@ model Order {
   customerId Int
   customer   Customer @relation(fields: [customerId], references: [id])
 
-  // Statuses:
-  // pending     — Ожидание менеджера
-  // assembly    — Проверка/Сборка
-  // consultation — Консультация
-  // payment     — К оплате
-  // exported    — Выгружен в 1С
-  // cancelled   — Отменен
   status  String  @default("pending")
   total   Int     @default(0)
   comment String? @db.Text
 
-  items    OrderItem[]
-  messages OrderMessage[]
+  items      OrderItem[]
+  messages   OrderMessage[]
+  statusLogs OrderStatusLog[]
 
   bitrixDealId   Int?
   oneCExportedAt DateTime?
@@ -162,37 +156,49 @@ model OrderItem {
   price       Int
   total       Int
 
-  check OrderItemCheck?
+  check  OrderItemCheck?
+  photos OrderItemPhoto[]
 }
 
 model OrderItemCheck {
   id          Int       @id @default(autoincrement())
   orderItemId Int       @unique
   orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
-
-  // ok | out_of_stock | expired | bad_condition | insufficient_qty
-  status       String
+  status      String
   availableQty Int?
-  note         String?
+  note        String?
+  pickerId    Int?
+  picker      User?     @relation(fields: [pickerId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
 
-  pickerId Int?
-  picker   User? @relation(fields: [pickerId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model OrderItemPhoto {
+  id          Int       @id @default(autoincrement())
+  orderItemId Int
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
+  url         String
+  createdAt   DateTime  @default(now())
 }
 
 model OrderMessage {
-  id      Int    @id @default(autoincrement())
-  orderId Int
-  order   Order  @relation(fields: [orderId], references: [id])
+  id           Int      @id @default(autoincrement())
+  orderId      Int
+  order        Order    @relation(fields: [orderId], references: [id])
+  userId       Int?
+  user         User?    @relation(fields: [userId], references: [id])
+  text         String   @db.Text
+  isFromPicker Boolean  @default(false)
+  createdAt    DateTime @default(now())
+}
 
-  text          String  @db.Text
-  isFromManager Boolean @default(false)
-
-  // Prevents duplicate syncs from Bitrix timeline
-  bitrixCommentId String? @unique
-
+model OrderStatusLog {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id])
+  fromStatus String?
+  toStatus  String
+  userId    Int?
   createdAt DateTime @default(now())
 }
 
