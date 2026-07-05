@@ -100,10 +100,13 @@ export async function PUT(request: NextRequest, { params }: Props) {
     });
   }
 
-  // Recalculate order total
+  // Recalculate order total and reset customer confirmation
   const remaining = await prisma.orderItem.findMany({ where: { orderId } });
   const newTotal = remaining.reduce((s, i) => s + i.total, 0);
-  await prisma.order.update({ where: { id: orderId }, data: { total: newTotal } });
+  await prisma.order.update({
+    where: { id: orderId },
+    data: { total: newTotal, customerConfirmed: false },
+  });
 
   // Fetch updated order with items
   const updated = await prisma.order.findUnique({
