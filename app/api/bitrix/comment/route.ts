@@ -104,21 +104,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, skip: "no matching order" });
     }
 
-    // Save manager message (UNIQUE on bitrixCommentId prevents duplicates)
-    try {
-      await prisma.orderMessage.create({
-        data: {
-          orderId: order.id,
-          text: commentText,
-          isFromManager: true,
-          bitrixCommentId: commentId || null,
-        },
-      });
-      console.log(`[Comment webhook] ✓ Saved manager message order=${order.id} comment=${commentId}`);
-    } catch {
-      // Unique constraint violation — already saved, skip silently
-      console.log(`[Comment webhook] Duplicate comment ${commentId}, skipped`);
-    }
+    // Save manager message (isFromPicker=false means it's from the manager/Bitrix side)
+    await prisma.orderMessage.create({
+      data: {
+        orderId: order.id,
+        text: commentText,
+        isFromPicker: false,
+      },
+    });
+    console.log(`[Comment webhook] ✓ Saved manager message order=${order.id} comment=${commentId}`);
 
     // Always respond 200 to Bitrix (otherwise it retries)
     return NextResponse.json({ ok: true });
