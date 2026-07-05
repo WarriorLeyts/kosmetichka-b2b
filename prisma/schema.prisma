@@ -121,6 +121,7 @@ model User {
 
   messages   OrderMessage[]
   statusLogs OrderStatusLog[]
+  checks     OrderItemCheck[]
 }
 
 model Order {
@@ -166,10 +167,17 @@ model OrderItemCheck {
   orderItemId Int       @unique
   orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
 
-  status  String  @default("ok") // "ok" | "issue"
-  comment String? @db.Text
+  // "ok" | "out_of_stock" | "expired" | "bad_condition" | "insufficient_qty"
+  status       String @default("ok")
+  note         String? @db.Text
+  availableQty Int?
+
+  // Picker who performed the check
+  pickerId Int?
+  picker   User? @relation(fields: [pickerId], references: [id])
 
   checkedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model OrderItemPhoto {

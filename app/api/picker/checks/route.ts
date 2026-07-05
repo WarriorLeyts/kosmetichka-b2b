@@ -80,25 +80,24 @@ export async function POST(request: Request) {
     });
   }
 
+  // Issues → consultation; all OK → payment
   const hasIssues = items.some((i) => i.status !== "ok");
-
-  // Determine new status
   const newStatus = hasIssues ? "consultation" : "payment";
 
-  await prisma.$transaction([
-    prisma.order.update({
-      where: { id: orderId },
-      data: { status: newStatus },
-    }),
-    prisma.orderStatusLog.create({
-      data: {
-        orderId,
-        fromStatus: "assembly",
-        toStatus: newStatus,
-        userId: user.id,
-      },
-    }),
-  ]);
+  await prisma.order.update({
+    where: { id: orderId },
+    data: { status: newStatus },
+  });
+
+  // Log the status change
+  await prisma.orderStatusLog.create({
+    data: {
+      orderId,
+      fromStatus: "assembly",
+      toStatus: newStatus,
+      userId: user.id,
+    },
+  });
 
   return NextResponse.json({
     success: true,
