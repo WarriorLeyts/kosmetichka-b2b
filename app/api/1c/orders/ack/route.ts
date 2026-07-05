@@ -15,8 +15,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const raw = body.ids ?? [];
-  const ids: number[] = (Array.isArray(raw) ? raw : [raw]).map(Number).filter(Boolean);
+  const ids: number[] = (body.ids ?? []).map(Number).filter(Boolean);
 
   if (!ids.length) {
     return NextResponse.json({ error: "No ids provided" }, { status: 400 });
@@ -28,6 +27,7 @@ export async function POST(request: NextRequest) {
       oneCExportedAt: null,
     },
     data: {
+      status: "exported",
       oneCExportedAt: new Date(),
     },
   });
