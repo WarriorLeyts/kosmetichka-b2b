@@ -207,17 +207,22 @@ export default function AdminOrderClient({
     setSearchResults([]);
   }
 
+  function closeCatalog() {
+    setShowSearch(false);
+    setSearchQuery("");
+    setSearchResults([]);
+  }
+
   function handleSearchInput(q: string) {
     setSearchQuery(q);
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    if (q.trim().length < 2) {
-      setSearchResults([]);
-      return;
-    }
     searchDebounce.current = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const res = await fetch(`/api/admin/products/search?q=${encodeURIComponent(q.trim())}`);
+        const url = q.trim().length >= 2
+          ? `/api/admin/products/search?q=${encodeURIComponent(q.trim())}&limit=60`
+          : `/api/admin/products/search?limit=60`;
+        const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
           setSearchResults(data.products ?? []);
@@ -225,7 +230,17 @@ export default function AdminOrderClient({
       } finally {
         setSearchLoading(false);
       }
-    }, 300);
+    }, 250);
+  }
+
+  function openCatalog() {
+    setShowSearch(true);
+    setSearchQuery("");
+    setSearchLoading(true);
+    fetch("/api/admin/products/search?limit=60")
+      .then((r) => r.json())
+      .then((d) => setSearchResults(d.products ?? []))
+      .finally(() => setSearchLoading(false));
   }
 
   function addProductToEdit(p: ProductSearchResult) {
@@ -243,9 +258,6 @@ export default function AdminOrderClient({
         isNew: true,
       },
     ]);
-    setSearchQuery("");
-    setSearchResults([]);
-    setShowSearch(false);
   }
 
   function editQty(id: number, qty: number) {
@@ -712,66 +724,15 @@ export default function AdminOrderClient({
             </table>
           </div>
 
-          {/* Add product panel (edit mode only) */}
+          {/* Add product button (edit mode only) */}
           {editMode && (
             <div className="no-print mt-3">
-              {!showSearch ? (
-                <button
-                  onClick={() => setShowSearch(true)}
-                  className="flex items-center gap-2 rounded-xl border border-dashed border-blue-300 bg-blue-50 px-5 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-100 w-full justify-center"
-                >
-                  + Добавить товар из каталога
-                </button>
-              ) : (
-                <div className="rounded-xl border border-blue-200 bg-white p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="text-sm font-semibold text-slate-700">Поиск товара</span>
-                    <button
-                      onClick={() => { setShowSearch(false); setSearchQuery(""); setSearchResults([]); }}
-                      className="text-xs text-slate-400 hover:text-slate-600"
-                    >
-                      ✕ Закрыть
-                    </button>
-                  </div>
-                  <input
-                    autoFocus
-                    type="text"
-                    placeholder="Название, штрихкод или артикул..."
-                    value={searchQuery}
-                    onChange={(e) => handleSearchInput(e.target.value)}
-                    className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-300"
-                  />
-                  {searchLoading && (
-                    <p className="mt-2 text-center text-xs text-slate-400">Поиск...</p>
-                  )}
-                  {!searchLoading && searchResults.length === 0 && searchQuery.trim().length >= 2 && (
-                    <p className="mt-2 text-center text-xs text-slate-400">Ничего не найдено</p>
-                  )}
-                  {searchResults.length > 0 && (
-                    <div className="mt-2 max-h-64 overflow-y-auto flex flex-col gap-1">
-                      {searchResults.map((p) => (
-                        <button
-                          key={p.id}
-                          onClick={() => addProductToEdit(p)}
-                          className="flex items-center gap-3 rounded-xl p-3 text-left hover:bg-blue-50 border border-transparent hover:border-blue-200"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-slate-800 truncate">{p.name}</p>
-                            <p className="text-xs text-slate-400">
-                              {p.barcode && <span className="mr-2">{p.barcode}</span>}
-                              {p.stock != null && <span className="text-slate-500">На складе: {p.stock} шт.</span>}
-                            </p>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="text-sm font-bold text-slate-700">{Math.round(p.price).toLocaleString("ru-RU")} ₽</p>
-                            <p className="text-xs text-blue-600">+ Добавить</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              <button
+                onClick={openCatalog}
+                className="flex items-center gap-2 rounded-xl border border-dashed border-blue-300 bg-blue-50 px-5 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-100 w-full justify-center"
+              >
+                + Добавить товар из каталога
+              </button>
             </div>
           )}
 
@@ -861,6 +822,147 @@ export default function AdminOrderClient({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Mini Catalog Modal ── */}
+      {showSearch && (
+        <div className="no-print fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
+          <div className="flex flex-col bg-white w-full sm:max-w-3xl rounded-t-3xl sm:rounded-2xl shadow-2xl" style={{ maxHeight: "90vh" }}>
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b">
+              <h2 className="text-lg font-black">Добавить товар</h2>
+              <button
+                onClick={closeCatalog}
+                className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-100 text-slate-500 text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Search input */}
+            <div className="px-5 py-3 border-b">
+              <input
+                autoFocus
+                type="text"
+                placeholder="🔍 Название, штрихкод или артикул..."
+                value={searchQuery}
+                onChange={(e) => handleSearchInput(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+
+            {/* Added items summary */}
+            {editItems.filter((i) => i.isNew && !i.removed).length > 0 && (
+              <div className="px-5 py-2 bg-blue-50 border-b flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-semibold text-blue-700">Добавлено:</span>
+                {editItems.filter((i) => i.isNew && !i.removed).map((i) => (
+                  <span key={i.id} className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800">
+                    {i.productName.slice(0, 30)}{i.productName.length > 30 ? "…" : ""}
+                    <button
+                      onClick={() => setEditItems((prev) => prev.map((x) => x.id === i.id ? { ...x, removed: true } : x))}
+                      className="ml-0.5 text-blue-400 hover:text-blue-700"
+                    >×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Product grid */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {searchLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                  <div className="mb-3 text-3xl animate-spin">⏳</div>
+                  <p className="text-sm">Загружаю каталог...</p>
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                  <div className="mb-3 text-3xl">🔍</div>
+                  <p className="text-sm">Ничего не найдено</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {searchResults.map((p) => {
+                    const alreadyAdded = editItems.some((i) => i.productId === p.id && !i.removed);
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => !alreadyAdded && addProductToEdit(p)}
+                        className={`flex flex-col rounded-2xl border text-left transition-all ${
+                          alreadyAdded
+                            ? "border-blue-300 bg-blue-50 ring-2 ring-blue-200"
+                            : "border-slate-200 bg-white hover:border-blue-300 hover:shadow-md"
+                        }`}
+                      >
+                        {/* Image */}
+                        <div className="relative w-full aspect-square rounded-t-2xl overflow-hidden bg-slate-100 flex items-center justify-center">
+                          {p.imagePath ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={p.imagePath.startsWith("http") ? p.imagePath : `https://kosmetichka-opt.ru/api/1c/${p.imagePath}`}
+                              alt={p.name}
+                              className="h-full w-full object-cover"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            />
+                          ) : (
+                            <span className="text-3xl">🧴</span>
+                          )}
+                          {alreadyAdded && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-blue-600/20">
+                              <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">✓ Добавлен</span>
+                            </div>
+                          )}
+                          {p.stock !== null && p.stock <= 0 && (
+                            <div className="absolute bottom-1 left-1 rounded-full bg-red-500 px-1.5 py-0.5 text-xs font-bold text-white">
+                              Нет
+                            </div>
+                          )}
+                          {p.stock !== null && p.stock > 0 && (
+                            <div className="absolute bottom-1 left-1 rounded-full bg-green-500 px-1.5 py-0.5 text-xs font-bold text-white">
+                              {p.stock} шт
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex flex-col flex-1 p-2.5 gap-1">
+                          <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-tight">
+                            {p.name}
+                          </p>
+                          {p.barcode && (
+                            <p className="text-xs text-slate-400 truncate">{p.barcode}</p>
+                          )}
+                          <div className="mt-auto pt-1 flex items-center justify-between">
+                            <span className="text-sm font-black text-slate-800">
+                              {Math.round(p.price).toLocaleString("ru-RU")} ₽
+                            </span>
+                            {!alreadyAdded && (
+                              <span className="text-xs text-blue-600 font-semibold">+ Добавить</span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between border-t px-5 py-3">
+              <span className="text-sm text-slate-500">
+                {editItems.filter((i) => i.isNew && !i.removed).length > 0
+                  ? `${editItems.filter((i) => i.isNew && !i.removed).length} товаров добавлено`
+                  : "Нажмите на карточку, чтобы добавить"}
+              </span>
+              <button
+                onClick={closeCatalog}
+                className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                Готово
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

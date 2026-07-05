@@ -21,26 +21,27 @@ async function getUser() {
   }
 }
 
-// GET /api/admin/products/search?q=текст&limit=10
+// GET /api/admin/products/search?q=текст&limit=40
+// q is optional — empty returns first products alphabetically
 export async function GET(request: NextRequest) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
 
   const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
-  const limit = Math.min(Number(request.nextUrl.searchParams.get("limit") ?? "10"), 30);
+  const limit = Math.min(Number(request.nextUrl.searchParams.get("limit") ?? "40"), 100);
 
-  if (q.length < 2) {
-    return NextResponse.json({ products: [] });
-  }
+  const where = q.length >= 2
+    ? {
+        OR: [
+          { name: { contains: q, mode: "insensitive" as const } },
+          { barcode: { contains: q, mode: "insensitive" as const } },
+          { article: { contains: q, mode: "insensitive" as const } },
+        ],
+      }
+    : {};
 
   const products = await prisma.product.findMany({
-    where: {
-      OR: [
-        { name: { contains: q, mode: "insensitive" } },
-        { barcode: { contains: q, mode: "insensitive" } },
-        { article: { contains: q, mode: "insensitive" } },
-      ],
-    },
+    where,
     take: limit,
     orderBy: { name: "asc" },
     select: {
