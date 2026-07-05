@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 function getSecret() {
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
 
   const categoryGuid = request.nextUrl.searchParams.get("categoryGuid") ?? "";
 
-  const where: Record<string, unknown> = {};
+  const where: Prisma.ProductWhereInput = {};
 
   if (q.length >= 2) {
     where.OR = [
