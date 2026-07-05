@@ -958,7 +958,11 @@ export default function AdminOrderClient({
                     const children = categories.filter((c) => c.parentGuid === cat.guid);
                     const isExpanded = expandedCategoryGuids.has(cat.guid);
                     const isSelected = selectedCategoryGuid === cat.guid;
-                    const childSelected = children.some((c) => c.guid === selectedCategoryGuid);
+                    const allDescendants = categories.filter((c) => {
+                      const parent = categories.find((p) => p.guid === c.parentGuid);
+                      return c.parentGuid === cat.guid || parent?.parentGuid === cat.guid;
+                    });
+                    const childSelected = allDescendants.some((c) => c.guid === selectedCategoryGuid);
                     return (
                       <div key={cat.guid}>
                         <div className={`flex items-center border-t border-slate-200 ${
@@ -983,20 +987,53 @@ export default function AdminOrderClient({
                             </button>
                           )}
                         </div>
-                        {/* Children */}
-                        {isExpanded && children.map((child) => (
-                          <button
-                            key={child.guid}
-                            onClick={() => selectCategory(child.guid)}
-                            className={`block w-full pl-7 pr-4 py-1.5 text-left text-xs transition-colors truncate ${
-                              selectedCategoryGuid === child.guid
-                                ? "bg-blue-100 font-bold text-blue-700"
-                                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-                            }`}
-                          >
-                            {child.name}
-                          </button>
-                        ))}
+                        {/* Level 2 children */}
+                        {isExpanded && children.map((child) => {
+                          const grandchildren = categories.filter((c) => c.parentGuid === child.guid);
+                          const childExpanded = expandedCategoryGuids.has(child.guid);
+                          const childIsSelected = selectedCategoryGuid === child.guid;
+                          const grandchildSelected = grandchildren.some((c) => c.guid === selectedCategoryGuid);
+                          return (
+                            <div key={child.guid}>
+                              <div className={`flex items-center ${
+                                childIsSelected || grandchildSelected ? "bg-blue-50" : ""
+                              }`}>
+                                <button
+                                  onClick={() => selectCategory(child.guid)}
+                                  className={`flex-1 pl-6 pr-2 py-1.5 text-left text-xs transition-colors truncate ${
+                                    childIsSelected
+                                      ? "font-bold text-blue-700"
+                                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
+                                  }`}
+                                >
+                                  {child.name}
+                                </button>
+                                {grandchildren.length > 0 && (
+                                  <button
+                                    onClick={() => toggleExpand(child.guid)}
+                                    className="px-2 py-1.5 text-slate-400 hover:text-slate-600 text-xs shrink-0"
+                                  >
+                                    {childExpanded ? "▲" : "▼"}
+                                  </button>
+                                )}
+                              </div>
+                              {/* Level 3 grandchildren */}
+                              {childExpanded && grandchildren.map((grand) => (
+                                <button
+                                  key={grand.guid}
+                                  onClick={() => selectCategory(grand.guid)}
+                                  className={`block w-full pl-10 pr-4 py-1 text-left text-xs transition-colors truncate ${
+                                    selectedCategoryGuid === grand.guid
+                                      ? "bg-blue-100 font-bold text-blue-700"
+                                      : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                  }`}
+                                >
+                                  {grand.name}
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })}
