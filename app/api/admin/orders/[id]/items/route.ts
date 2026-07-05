@@ -24,7 +24,11 @@ async function getUser() {
 type Props = { params: Promise<{ id: string }> };
 
 // PUT /api/admin/orders/[id]/items
-// Body: { items: [{ id, quantity, price }], removeIds: number[] }
+// Body: {
+//   items: [{ id, quantity, price }],   -- update existing
+//   removeIds: number[],                -- delete existing
+//   newItems: [{ productId, productName, barcode, quantity, price }]  -- add new
+// }
 export async function PUT(request: NextRequest, { params }: Props) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
@@ -49,8 +53,10 @@ export async function PUT(request: NextRequest, { params }: Props) {
   const body = await request.json();
   const updates: { id: number; quantity: number; price: number }[] = body.items ?? [];
   const removeIds: number[] = body.removeIds ?? [];
+  const newItems: { productId: number; productName: string; barcode?: string | null; quantity: number; price: number }[] =
+    body.newItems ?? [];
 
-  // Validate all item IDs belong to this order
+  // Validate all existing item IDs belong to this order
   const orderItemIds = new Set(order.items.map((i) => i.id));
   for (const u of updates) {
     if (!orderItemIds.has(u.id)) {
@@ -66,14 +72,27 @@ export async function PUT(request: NextRequest, { params }: Props) {
     await prisma.orderItem.deleteMany({ where: { id: { in: validRemoveIds } } });
   }
 
-  // Update remaining items
+  // Update remaining existing items
   for (const u of updates) {
     if (removeIds.includes(u.id)) continue;
     const qty = Math.max(1, Math.round(u.quantity));
     const price = Math.max(0, Math.round(u.price));
     await prisma.orderItem.update({
       where: { id: u.id },
+      data: { quantity: qty, price, total: qty * price },
+    });
+  }
+
+  // Create new items
+  for (const ni of newItems) {
+    const qty = Math.max(1, Math.round(ni.quantity));
+    const price = Math.max(0, Math.round(ni.price));
+    await prisma.orderItem.create({
       data: {
+        orderId,
+        productId: ni.productId,
+        productName: ni.productName,
+        barcode: ni.barcode ?? null,
         quantity: qty,
         price,
         total: qty * price,

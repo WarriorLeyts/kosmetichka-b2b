@@ -127,12 +127,24 @@ function formatDate(str: string) {
 
 // ── Edit items state ──────────────────────────────────────────────────────────
 type EditableItem = {
-  id: number;
+  id: number;          // positive = existing DB id; negative = temp id for new item
+  productId: number;
   productName: string;
   barcode: string | null;
   quantity: number;
   price: number;
   removed: boolean;
+  isNew: boolean;      // true = not yet in DB
+};
+
+type ProductSearchResult = {
+  id: number;
+  name: string;
+  barcode: string | null;
+  article: string | null;
+  stock: number | null;
+  price: number;
+  imagePath: string | null;
 };
 
 export default function AdminOrderClient({
@@ -156,6 +168,14 @@ export default function AdminOrderClient({
   const [editMode, setEditMode] = useState(false);
   const [editItems, setEditItems] = useState<EditableItem[]>([]);
   const [saving, setSaving] = useState(false);
+  const nextTempId = useRef(-1); // negative = not yet saved
+
+  // Product search (inside edit mode)
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<ProductSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Assign picker
   const [assigningPicker, setAssigningPicker] = useState(false);
@@ -164,19 +184,68 @@ export default function AdminOrderClient({
     setEditItems(
       order.items.map((i) => ({
         id: i.id,
+        productId: i.productId,
         productName: i.productName,
         barcode: i.barcode,
         quantity: i.quantity,
         price: i.price,
         removed: false,
+        isNew: false,
       }))
     );
     setEditMode(true);
+    setShowSearch(false);
+    setSearchQuery("");
+    setSearchResults([]);
   }
 
   function cancelEdit() {
     setEditMode(false);
     setEditItems([]);
+    setShowSearch(false);
+    setSearchQuery("");
+    setSearchResults([]);
+  }
+
+  function handleSearchInput(q: string) {
+    setSearchQuery(q);
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    if (q.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    searchDebounce.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await fetch(`/api/admin/products/search?q=${encodeURIComponent(q.trim())}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.products ?? []);
+        }
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  }
+
+  function addProductToEdit(p: ProductSearchResult) {
+    const tempId = nextTempId.current--;
+    setEditItems((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        productId: p.id,
+        productName: p.name,
+        barcode: p.barcode,
+        quantity: 1,
+        price: Math.round(p.price),
+        removed: false,
+        isNew: true,
+      },
+    ]);
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSearch(false);
   }
 
   function editQty(id: number, qty: number) {
@@ -204,16 +273,25 @@ export default function AdminOrderClient({
   async function saveItems() {
     setSaving(true);
     try {
+      const existing = editItems.filter((i) => !i.isNew);
+      const newOnes = editItems.filter((i) => i.isNew && !i.removed);
       const res = await fetch(`/api/admin/orders/${order.id}/items`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: editItems.filter((i) => !i.removed).map((i) => ({
+          items: existing.filter((i) => !i.removed).map((i) => ({
             id: i.id,
             quantity: i.quantity,
             price: i.price,
           })),
-          removeIds: editItems.filter((i) => i.removed).map((i) => i.id),
+          removeIds: existing.filter((i) => i.removed).map((i) => i.id),
+          newItems: newOnes.map((i) => ({
+            productId: i.productId,
+            productName: i.productName,
+            barcode: i.barcode,
+            quantity: i.quantity,
+            price: i.price,
+          })),
         }),
       });
       if (res.ok) {
@@ -633,6 +711,69 @@ export default function AdminOrderClient({
               </tfoot>
             </table>
           </div>
+
+          {/* Add product panel (edit mode only) */}
+          {editMode && (
+            <div className="no-print mt-3">
+              {!showSearch ? (
+                <button
+                  onClick={() => setShowSearch(true)}
+                  className="flex items-center gap-2 rounded-xl border border-dashed border-blue-300 bg-blue-50 px-5 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-100 w-full justify-center"
+                >
+                  + Добавить товар из каталога
+                </button>
+              ) : (
+                <div className="rounded-xl border border-blue-200 bg-white p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-sm font-semibold text-slate-700">Поиск товара</span>
+                    <button
+                      onClick={() => { setShowSearch(false); setSearchQuery(""); setSearchResults([]); }}
+                      className="text-xs text-slate-400 hover:text-slate-600"
+                    >
+                      ✕ Закрыть
+                    </button>
+                  </div>
+                  <input
+                    autoFocus
+                    type="text"
+                    placeholder="Название, штрихкод или артикул..."
+                    value={searchQuery}
+                    onChange={(e) => handleSearchInput(e.target.value)}
+                    className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-300"
+                  />
+                  {searchLoading && (
+                    <p className="mt-2 text-center text-xs text-slate-400">Поиск...</p>
+                  )}
+                  {!searchLoading && searchResults.length === 0 && searchQuery.trim().length >= 2 && (
+                    <p className="mt-2 text-center text-xs text-slate-400">Ничего не найдено</p>
+                  )}
+                  {searchResults.length > 0 && (
+                    <div className="mt-2 max-h-64 overflow-y-auto flex flex-col gap-1">
+                      {searchResults.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => addProductToEdit(p)}
+                          className="flex items-center gap-3 rounded-xl p-3 text-left hover:bg-blue-50 border border-transparent hover:border-blue-200"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-800 truncate">{p.name}</p>
+                            <p className="text-xs text-slate-400">
+                              {p.barcode && <span className="mr-2">{p.barcode}</span>}
+                              {p.stock != null && <span className="text-slate-500">На складе: {p.stock} шт.</span>}
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-sm font-bold text-slate-700">{Math.round(p.price).toLocaleString("ru-RU")} ₽</p>
+                            <p className="text-xs text-blue-600">+ Добавить</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {order.comment && (
             <div className="mt-3 rounded-xl border bg-white p-3 text-sm text-slate-600">
