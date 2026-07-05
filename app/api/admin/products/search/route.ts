@@ -74,7 +74,6 @@ export async function GET(request: NextRequest) {
       stock: true,
       prices: {
         select: { priceType: true, price: true },
-        orderBy: { price: "asc" },
       },
       images: {
         take: 1,
@@ -89,8 +88,13 @@ export async function GET(request: NextRequest) {
     barcode: p.barcode ?? null,
     article: p.article ?? null,
     stock: p.stock ?? null,
-    // Return lowest price as default, manager can edit
-    price: p.prices[0]?.price ?? 0,
+    // Prefer wholesale → big_wholesale → retail → first available
+    price: (
+      p.prices.find((pr) => pr.priceType === "wholesale") ??
+      p.prices.find((pr) => pr.priceType === "big_wholesale") ??
+      p.prices.find((pr) => pr.priceType === "retail") ??
+      p.prices[0]
+    )?.price ?? 0,
     prices: p.prices,
     imagePath: p.images[0]?.path ?? null,
   }));

@@ -1097,10 +1097,20 @@ export default function AdminOrderClient({
                       return (
                         <button
                           key={p.id}
-                          onClick={() => !alreadyAdded && addProductToEdit(p)}
+                          onClick={() => {
+                            if (alreadyAdded) {
+                              setEditItems((prev) =>
+                                prev.map((i) =>
+                                  i.productId === p.id && !i.removed ? { ...i, removed: true } : i
+                                )
+                              );
+                            } else {
+                              addProductToEdit(p);
+                            }
+                          }}
                           className={`flex flex-col rounded-2xl border text-left transition-all ${
                             alreadyAdded
-                              ? "border-blue-300 bg-blue-50 ring-2 ring-blue-200"
+                              ? "border-blue-300 bg-blue-50 ring-2 ring-blue-200 hover:border-red-300 hover:bg-red-50"
                               : "border-slate-200 bg-white hover:border-blue-300 hover:shadow-md active:scale-95"
                           }`}
                         >
@@ -1118,8 +1128,9 @@ export default function AdminOrderClient({
                               <span className="text-4xl">🧴</span>
                             )}
                             {alreadyAdded && (
-                              <div className="absolute inset-0 flex items-center justify-center bg-blue-600/25">
-                                <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white shadow">✓ Добавлен</span>
+                              <div className="group/card absolute inset-0 flex items-center justify-center bg-blue-600/20 hover:bg-red-500/30">
+                                <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white shadow group-hover/card:hidden">✓ Добавлен</span>
+                                <span className="hidden rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white shadow group-hover/card:inline">✕ Убрать</span>
                               </div>
                             )}
                             {p.stock !== null && (
