@@ -41,5 +41,17 @@ export default async function PickerOrderPage({
     );
   }
 
-  return <PickerOrderClient order={order} />;
+  // Fetch product images by productId
+  const productIds = order.items.map((i) => i.productId);
+  const products = await prisma.product.findMany({
+    where: { id: { in: productIds } },
+    include: { images: { take: 1 } },
+  });
+
+  const imageMap: Record<number, string | null> = {};
+  for (const p of products) {
+    imageMap[p.id] = p.images[0]?.path ?? null;
+  }
+
+  return <PickerOrderClient order={order} imageMap={imageMap} />;
 }

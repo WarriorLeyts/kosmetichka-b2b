@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 type CheckStatus =
   | "ok"
@@ -19,6 +20,7 @@ type ItemState = {
 
 type OrderItem = {
   id: number;
+  productId: number;
   productName: string;
   barcode: string | null;
   quantity: number;
@@ -41,32 +43,41 @@ type Order = {
   items: OrderItem[];
 };
 
-const CHECK_OPTIONS: { value: CheckStatus; label: string; color: string }[] = [
+const CHECK_OPTIONS: {
+  value: CheckStatus;
+  label: string;
+  active: string;
+  inactive: string;
+}[] = [
   {
     value: "ok",
     label: "✓ ОК",
-    color:
-      "border-green-500 bg-green-500 text-white",
+    active: "border-green-500 bg-green-500 text-white",
+    inactive: "border-slate-200 text-slate-600 hover:border-green-400 hover:text-green-600",
   },
   {
     value: "out_of_stock",
     label: "✗ Нет в наличии",
-    color: "border-red-500 bg-red-500 text-white",
+    active: "border-red-500 bg-red-500 text-white",
+    inactive: "border-slate-200 text-slate-600 hover:border-red-400 hover:text-red-600",
   },
   {
     value: "expired",
     label: "⏰ Просрочен",
-    color: "border-orange-500 bg-orange-500 text-white",
+    active: "border-orange-500 bg-orange-500 text-white",
+    inactive: "border-slate-200 text-slate-600 hover:border-orange-400 hover:text-orange-600",
   },
   {
     value: "bad_condition",
     label: "👎 Плохой вид",
-    color: "border-yellow-500 bg-yellow-500 text-white",
+    active: "border-yellow-500 bg-yellow-500 text-white",
+    inactive: "border-slate-200 text-slate-600 hover:border-yellow-400 hover:text-yellow-600",
   },
   {
     value: "insufficient_qty",
     label: "⬇ Не хватает кол-во",
-    color: "border-blue-500 bg-blue-500 text-white",
+    active: "border-blue-500 bg-blue-500 text-white",
+    inactive: "border-slate-200 text-slate-600 hover:border-blue-400 hover:text-blue-600",
   },
 ];
 
@@ -81,7 +92,13 @@ function getInitialState(item: OrderItem): ItemState {
   return { status: null, availableQty: "", note: "" };
 }
 
-export default function PickerOrderClient({ order }: { order: Order }) {
+export default function PickerOrderClient({
+  order,
+  imageMap,
+}: {
+  order: Order;
+  imageMap: Record<number, string | null>;
+}) {
   const router = useRouter();
   const [items, setItems] = useState<Record<number, ItemState>>(
     Object.fromEntries(order.items.map((i) => [i.id, getInitialState(i)]))
@@ -110,7 +127,10 @@ export default function PickerOrderClient({ order }: { order: Order }) {
     }));
   }
 
-  const allChecked = order.items.every((i) => items[i.id]?.status !== null);
+  const checkedCount = order.items.filter(
+    (i) => items[i.id]?.status !== null
+  ).length;
+  const allChecked = checkedCount === order.items.length;
 
   async function handleSubmit() {
     if (!allChecked) {
@@ -159,10 +179,11 @@ export default function PickerOrderClient({ order }: { order: Order }) {
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-3">
+      {/* Header */}
+      <div className="mb-5 flex items-center gap-3">
         <a
           href="/picker"
-          className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-slate-100"
+          className="flex h-10 w-10 items-center justify-center rounded-xl border text-lg font-bold hover:bg-slate-100"
         >
           ←
         </a>
@@ -176,88 +197,126 @@ export default function PickerOrderClient({ order }: { order: Order }) {
         </div>
       </div>
 
-      <div className="space-y-3">
+      {/* Items */}
+      <div className="space-y-4">
         {order.items.map((item) => {
           const state = items[item.id];
           const currentStatus = state?.status ?? null;
+          const imageUrl = imageMap[item.productId] ?? null;
+
+          const borderColor =
+            currentStatus === null
+              ? "border-slate-200"
+              : currentStatus === "ok"
+              ? "border-green-400"
+              : "border-orange-400";
 
           return (
             <div
               key={item.id}
-              className={`rounded-2xl border bg-white p-4 ${
-                currentStatus === null
-                  ? "border-slate-200"
-                  : currentStatus === "ok"
-                  ? "border-green-300"
-                  : "border-orange-300"
-              }`}
+              className={`overflow-hidden rounded-2xl border-2 bg-white transition-colors ${borderColor}`}
             >
-              <div className="mb-3 flex items-start justify-between">
-                <div>
-                  <div className="font-bold">{item.productName}</div>
-                  {item.barcode && (
-                    <div className="text-xs text-slate-400">
-                      Штрихкод: {item.barcode}
+              {/* Product image + info */}
+              <div className="flex gap-0">
+                {/* Image */}
+                {imageUrl ? (
+                  <div className="relative h-40 w-40 flex-shrink-0 bg-slate-100 sm:h-48 sm:w-48">
+                    <img
+                      src={imageUrl}
+                      alt={item.productName}
+                      className="h-full w-full object-contain p-2"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-40 w-40 flex-shrink-0 items-center justify-center bg-slate-100 text-4xl sm:h-48 sm:w-48">
+                    📦
+                  </div>
+                )}
+
+                {/* Info */}
+                <div className="flex flex-1 flex-col justify-between p-4">
+                  <div>
+                    <div className="text-base font-bold leading-snug">
+                      {item.productName}
                     </div>
-                  )}
-                </div>
-                <div className="text-right">
-                  <div className="font-bold">{item.quantity} шт.</div>
-                  <div className="text-sm text-slate-500">{item.price} ₽</div>
+                    {item.barcode && (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Штрихкод: {item.barcode}
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-3 flex items-end justify-between">
+                    <div>
+                      <div className="text-2xl font-black">{item.quantity}</div>
+                      <div className="text-xs text-slate-400">шт.</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold">{item.price} ₽</div>
+                      <div className="text-xs text-slate-400">за штуку</div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {CHECK_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setItemStatus(item.id, opt.value)}
-                    className={`rounded-xl border-2 px-3 py-2 text-sm font-bold transition-all ${
-                      currentStatus === opt.value
-                        ? opt.color
-                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-400"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-
-              {currentStatus === "insufficient_qty" && (
-                <div className="mt-3">
-                  <label className="mb-1 block text-sm font-semibold text-blue-700">
-                    Доступное количество:
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max={item.quantity - 1}
-                    value={state.availableQty}
-                    onChange={(e) => setItemQty(item.id, e.target.value)}
-                    placeholder={`Из ${item.quantity} шт.`}
-                    className="w-32 rounded-xl border-2 border-blue-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+              {/* Check buttons */}
+              <div className="border-t p-4">
+                <div className="flex flex-wrap gap-2">
+                  {CHECK_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setItemStatus(item.id, opt.value)}
+                      className={`rounded-xl border-2 px-4 py-2 text-sm font-bold transition-all ${
+                        currentStatus === opt.value
+                          ? opt.active
+                          : `bg-white ${opt.inactive}`
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
-              )}
 
-              {currentStatus !== null && currentStatus !== "ok" && (
-                <div className="mt-3">
+                {/* Qty input for insufficient */}
+                {currentStatus === "insufficient_qty" && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <label className="text-sm font-bold text-blue-700">
+                      Есть в наличии:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max={item.quantity - 1}
+                      value={state.availableQty}
+                      onChange={(e) => setItemQty(item.id, e.target.value)}
+                      placeholder={`из ${item.quantity} шт.`}
+                      className="w-28 rounded-xl border-2 border-blue-300 px-3 py-2 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-slate-500">шт.</span>
+                  </div>
+                )}
+
+                {/* Note */}
+                {currentStatus !== null && currentStatus !== "ok" && (
                   <input
                     type="text"
                     value={state.note}
                     onChange={(e) => setItemNote(item.id, e.target.value)}
                     placeholder="Комментарий (необязательно)"
-                    className="w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                    className="mt-3 w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
                   />
-                </div>
-              )}
+                )}
+              </div>
             </div>
           );
         })}
       </div>
 
-      <div className="mt-6">
+      {/* Submit */}
+      <div className="sticky bottom-4 mt-6">
         {error && (
           <div className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-600">
             {error}
@@ -268,19 +327,17 @@ export default function PickerOrderClient({ order }: { order: Order }) {
           type="button"
           onClick={handleSubmit}
           disabled={submitting || !allChecked}
-          className={`w-full rounded-2xl py-4 text-lg font-black text-white transition-all ${
+          className={`w-full rounded-2xl py-5 text-xl font-black text-white shadow-lg transition-all ${
             allChecked
-              ? "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+              ? "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:scale-95"
               : "bg-slate-300"
           } disabled:opacity-50`}
         >
           {submitting
             ? "Отправка..."
             : allChecked
-            ? "Завершить проверку"
-            : `Проверено ${
-                order.items.filter((i) => items[i.id]?.status !== null).length
-              } из ${order.items.length}`}
+            ? "✓ Завершить проверку"
+            : `Проверено ${checkedCount} из ${order.items.length}`}
         </button>
       </div>
     </div>
