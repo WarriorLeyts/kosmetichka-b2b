@@ -44,7 +44,20 @@ export async function GET(request: NextRequest) {
   }
 
   if (categoryGuid) {
-    where.categoryGuid = categoryGuid;
+    // Include products from all descendant categories too
+    const allCats = await prisma.category.findMany({ select: { guid: true, parentGuid: true } });
+    const guids = new Set<string>([categoryGuid]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const c of allCats) {
+        if (c.parentGuid && guids.has(c.parentGuid) && !guids.has(c.guid)) {
+          guids.add(c.guid);
+          changed = true;
+        }
+      }
+    }
+    where.categoryGuid = { in: Array.from(guids) };
   }
 
   const products = await prisma.product.findMany({
