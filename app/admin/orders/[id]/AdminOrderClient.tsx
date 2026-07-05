@@ -295,7 +295,13 @@ export default function AdminOrderClient({
     // Load categories + products in parallel
     fetch("/api/admin/categories")
       .then((r) => r.json())
-      .then((d) => setCategories(d.categories ?? []));
+      .then((d) => {
+        const cats: CatalogCategory[] = d.categories ?? [];
+        setCategories(cats);
+        // Auto-expand all top-level categories
+        const topGuids = cats.filter((c) => !c.parentGuid).map((c) => c.guid);
+        setExpandedCategoryGuids(new Set(topGuids));
+      });
     fetchProducts("", "");
   }
 
