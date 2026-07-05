@@ -15,6 +15,8 @@ model ProductImage {
 
   productId Int
   product   Product @relation(fields: [productId], references: [id])
+
+  variants ProductVariant[]
 }
 
 model Category {
@@ -59,10 +61,21 @@ model Product {
   categoryGuid String?
   category     Category? @relation(fields: [categoryGuid], references: [guid])
 
-  images ProductImage[]
+  images   ProductImage[]
+  variants ProductVariant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ProductVariant {
+  id        Int          @id @default(autoincrement())
+  productId Int
+  product   Product      @relation(fields: [productId], references: [id])
+  imageId   Int
+  image     ProductImage @relation(fields: [imageId], references: [id])
+  name      String
+  sortOrder Int          @default(0)
 }
 
 model ProductPrice {
@@ -162,6 +175,9 @@ model OrderItem {
   quantity    Int
   price       Int
   total       Int
+
+  variantName     String?
+  variantImageUrl String?
 
   check  OrderItemCheck?
   photos OrderItemPhoto[]

@@ -25,9 +25,9 @@ type Props = { params: Promise<{ id: string }> };
 
 // PUT /api/admin/orders/[id]/items
 // Body: {
-//   items: [{ id, quantity, price }],   -- update existing
-//   removeIds: number[],                -- delete existing
-//   newItems: [{ productId, productName, barcode, quantity, price }]  -- add new
+//   items: [{ id, quantity, price }],
+//   removeIds: number[],
+//   newItems: [{ productId, productName, barcode, quantity, price, variantName?, variantImageUrl? }]
 // }
 export async function PUT(request: NextRequest, { params }: Props) {
   const user = await getUser();
@@ -42,7 +42,6 @@ export async function PUT(request: NextRequest, { params }: Props) {
   });
   if (!order) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
-  // Allow editing during consultation (or assembly)
   if (!["consultation", "assembly"].includes(order.status)) {
     return NextResponse.json(
       { error: "Редактирование доступно только во время консультации или сборки" },
@@ -53,10 +52,16 @@ export async function PUT(request: NextRequest, { params }: Props) {
   const body = await request.json();
   const updates: { id: number; quantity: number; price: number }[] = body.items ?? [];
   const removeIds: number[] = body.removeIds ?? [];
-  const newItems: { productId: number; productName: string; barcode?: string | null; quantity: number; price: number }[] =
-    body.newItems ?? [];
+  const newItems: {
+    productId: number;
+    productName: string;
+    barcode?: string | null;
+    quantity: number;
+    price: number;
+    variantName?: string | null;
+    variantImageUrl?: string | null;
+  }[] = body.newItems ?? [];
 
-  // Validate all existing item IDs belong to this order
   const orderItemIds = new Set(order.items.map((i) => i.id));
   for (const u of updates) {
     if (!orderItemIds.has(u.id)) {
@@ -64,7 +69,6 @@ export async function PUT(request: NextRequest, { params }: Props) {
     }
   }
 
-  // Delete removed items (and their checks/photos)
   if (removeIds.length > 0) {
     const validRemoveIds = removeIds.filter((rid) => orderItemIds.has(rid));
     await prisma.orderItemCheck.deleteMany({ where: { orderItemId: { in: validRemoveIds } } });
@@ -72,7 +76,6 @@ export async function PUT(request: NextRequest, { params }: Props) {
     await prisma.orderItem.deleteMany({ where: { id: { in: validRemoveIds } } });
   }
 
-  // Update remaining existing items
   for (const u of updates) {
     if (removeIds.includes(u.id)) continue;
     const qty = Math.max(1, Math.round(u.quantity));
@@ -83,7 +86,6 @@ export async function PUT(request: NextRequest, { params }: Props) {
     });
   }
 
-  // Create new items
   for (const ni of newItems) {
     const qty = Math.max(1, Math.round(ni.quantity));
     const price = Math.max(0, Math.round(ni.price));
@@ -96,11 +98,12 @@ export async function PUT(request: NextRequest, { params }: Props) {
         quantity: qty,
         price,
         total: qty * price,
+        variantName: ni.variantName ?? null,
+        variantImageUrl: ni.variantImageUrl ?? null,
       },
     });
   }
 
-  // Recalculate order total and reset customer confirmation
   const remaining = await prisma.orderItem.findMany({ where: { orderId } });
   const newTotal = remaining.reduce((s, i) => s + i.total, 0);
   await prisma.order.update({
@@ -108,11 +111,15 @@ export async function PUT(request: NextRequest, { params }: Props) {
     data: { total: newTotal, customerConfirmed: false },
   });
 
-  // Fetch updated order with items
   const updated = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
-      items: { include: { check: { include: { picker: { select: { name: true } } } }, photos: true } },
+      items: {
+        include: {
+          check: { include: { picker: { select: { name: true } } } },
+          photos: true,
+        },
+      },
     },
   });
 

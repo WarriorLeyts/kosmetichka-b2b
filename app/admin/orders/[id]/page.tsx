@@ -82,6 +82,8 @@ export default async function AdminOrderPage({
           }
         : null,
       photos: item.photos.map((p) => ({ id: p.id, url: p.url })),
+      variantName: item.variantName ?? null,
+      variantImageUrl: item.variantImageUrl ?? null,
     })),
     messages: order.messages.map((m) => ({
       id: m.id,

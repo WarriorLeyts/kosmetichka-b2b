@@ -27,6 +27,8 @@ type OrderItem = {
   total: number;
   check: ItemCheck | null;
   photos: Photo[];
+  variantName: string | null;
+  variantImageUrl: string | null;
 };
 
 type Message = {
@@ -83,6 +85,15 @@ type EditItem = {
   price: number;
   removed?: boolean;
   isNew?: boolean;
+  variantName?: string | null;
+  variantImageUrl?: string | null;
+};
+
+type CatalogProductVariant = {
+  id: number;
+  imageId: number;
+  imageUrl: string;
+  name: string;
 };
 
 type CatalogProduct = {
@@ -94,6 +105,7 @@ type CatalogProduct = {
   price: number;
   prices: { priceType: string; price: number }[];
   imagePath: string | null;
+  hasVariants: boolean;
 };
 
 type CatalogCategory = {
@@ -270,6 +282,11 @@ export default function AdminOrderClient({
 
   // ── Image upload ──
   const [uploadingImg, setUploadingImg] = useState<"picker" | "customer" | null>(null);
+
+  // ── Variant picker ──
+  const [variantPickerProduct, setVariantPickerProduct] = useState<CatalogProduct | null>(null);
+  const [variantPickerList, setVariantPickerList] = useState<CatalogProductVariant[]>([]);
+  const [loadingVariants, setLoadingVariants] = useState(false);
 
   // ── Picker chat: assign picker dropdown ──
   const [assigningPicker, setAssigningPicker] = useState(false);
@@ -465,38 +482,52 @@ export default function AdminOrderClient({
     fetchProducts(q, selectedCatGuid);
   }
 
-  function handleProductSelect(p: CatalogProduct) {
+  function addProductToEdit(p: CatalogProduct, variant?: CatalogProductVariant) {
+    setEditItems((prev) => {
+      const idx = prev.findIndex((i) => i.productId === p.id && !i.isNew);
+      if (idx >= 0) {
+        return prev.map((i, n) => n === idx ? { ...i, removed: !i.removed } : i);
+      }
+      const existingNew = prev.find((i) => i.productId === p.id && i.isNew && !i.removed);
+      if (existingNew) {
+        return prev.map((i) => i.productId === p.id && i.isNew ? { ...i, removed: !i.removed } : i);
+      }
+      return [
+        ...prev,
+        {
+          id: null,
+          productId: p.id,
+          productName: p.name,
+          barcode: p.barcode,
+          quantity: 1,
+          price: p.price,
+          isNew: true,
+          removed: false,
+          variantName: variant?.name ?? null,
+          variantImageUrl: variant?.imageUrl ?? null,
+        },
+      ];
+    });
+  }
+
+  async function handleProductSelect(p: CatalogProduct) {
     if (catalogMode === "order") {
-      // Add/remove from order edit
-      setEditItems((prev) => {
-        const idx = prev.findIndex((i) => i.productId === p.id && !i.isNew);
-        if (idx >= 0) {
-          // Toggle removed
-          return prev.map((i, n) =>
-            n === idx ? { ...i, removed: !i.removed } : i
-          );
+      if (p.hasVariants) {
+        // Fetch variants and show picker
+        setVariantPickerProduct(p);
+        setLoadingVariants(true);
+        try {
+          const res = await fetch(`/api/admin/products/${p.id}/variants`);
+          if (res.ok) {
+            const data = await res.json();
+            setVariantPickerList(data.variants ?? []);
+          }
+        } finally {
+          setLoadingVariants(false);
         }
-        // Check if new item already added
-        const existingNew = prev.find((i) => i.productId === p.id && i.isNew && !i.removed);
-        if (existingNew) {
-          return prev.map((i) =>
-            i.productId === p.id && i.isNew ? { ...i, removed: !i.removed } : i
-          );
-        }
-        return [
-          ...prev,
-          {
-            id: null,
-            productId: p.id,
-            productName: p.name,
-            barcode: p.barcode,
-            quantity: 1,
-            price: p.price,
-            isNew: true,
-            removed: false,
-          },
-        ];
-      });
+        return;
+      }
+      addProductToEdit(p);
     } else {
       // Send product card in chat
       const msgJson = JSON.stringify({
@@ -560,6 +591,8 @@ export default function AdminOrderClient({
           barcode: i.barcode,
           quantity: i.quantity,
           price: i.price,
+          variantName: i.variantName ?? null,
+          variantImageUrl: i.variantImageUrl ?? null,
         })),
       }),
     });
@@ -946,6 +979,21 @@ export default function AdminOrderClient({
                   <tr key={item.id} className="border-t hover:bg-slate-50">
                     <td className="p-3">
                       <div className="font-medium">{item.productName}</div>
+                      {item.variantName && (
+                        <div className="mt-1 flex items-center gap-1.5">
+                          {item.variantImageUrl && (
+                            <img
+                              src={item.variantImageUrl}
+                              alt={item.variantName}
+                              className="h-8 w-8 rounded-lg object-contain border bg-slate-50"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            />
+                          )}
+                          <span className="text-xs font-semibold text-blue-700 bg-blue-50 rounded-full px-2 py-0.5">
+                            {item.variantName}
+                          </span>
+                        </div>
+                      )}
                       {item.barcode && <div className="text-xs text-slate-400">{item.barcode}</div>}
                       {item.photos.length > 0 && (
                         <div className="mt-1 flex gap-1">
@@ -1199,6 +1247,63 @@ export default function AdminOrderClient({
         </div>
       )}
 
+      {/* ── VARIANT PICKER MODAL ── */}
+      {variantPickerProduct && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 no-print">
+          <div className="w-full max-w-lg mx-4 bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center gap-3 border-b px-5 py-4">
+              <button
+                onClick={() => { setVariantPickerProduct(null); setVariantPickerList([]); }}
+                className="flex h-8 w-8 items-center justify-center rounded-xl border hover:bg-slate-100"
+              >
+                ✕
+              </button>
+              <div>
+                <h2 className="font-bold">Выберите вариант</h2>
+                <p className="text-xs text-slate-400 truncate max-w-xs">{variantPickerProduct.name}</p>
+              </div>
+            </div>
+            <div className="p-5">
+              {loadingVariants ? (
+                <div className="text-center text-slate-400 py-8">Загрузка вариантов...</div>
+              ) : variantPickerList.length === 0 ? (
+                <div className="text-center text-slate-400 py-8">Варианты не найдены</div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {variantPickerList.map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => {
+                        addProductToEdit(variantPickerProduct, v);
+                        setVariantPickerProduct(null);
+                        setVariantPickerList([]);
+                        setShowCatalog(false);
+                      }}
+                      className="group flex flex-col rounded-2xl border-2 border-slate-200 overflow-hidden hover:border-blue-500 hover:shadow-md transition-all text-left"
+                    >
+                      <div className="aspect-square bg-slate-50 relative">
+                        <img
+                          src={v.imageUrl}
+                          alt={v.name}
+                          className="h-full w-full object-contain p-2"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                        <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-blue-600/80 text-white text-xs font-bold">
+                          Выбрать
+                        </div>
+                      </div>
+                      <div className="p-2">
+                        <p className="text-xs font-semibold text-center">{v.name}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── CATALOG MODAL ── */}
       {showCatalog && (
         <div className="fixed inset-0 z-50 flex items-stretch justify-end bg-black/40 no-print">
@@ -1299,6 +1404,9 @@ export default function AdminOrderClient({
                         {/* Info */}
                         <div className="p-2 flex-1">
                           <p className="text-xs font-semibold leading-snug line-clamp-2">{p.name}</p>
+                          {p.hasVariants && (
+                            <p className="text-xs text-blue-600 mt-0.5 font-semibold">🎨 Есть варианты</p>
+                          )}
                           {p.stock !== null && (
                             <p className={`text-xs mt-0.5 ${p.stock > 0 ? "text-green-600" : "text-red-500"}`}>
                               {p.stock > 0 ? `${p.stock} шт.` : "Нет в наличии"}
