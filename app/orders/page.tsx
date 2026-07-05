@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
-import { OrdersClient } from "@/components/orders/OrdersClient";
+import OrdersPageClient from "./OrdersPageClient";
 
 export const dynamic = "force-dynamic";
 
@@ -41,9 +41,9 @@ export default async function OrdersPage() {
     }
   }
 
-  // Stats: only confirmed orders (approved / exported)
+  // Stats: only completed orders (payment / exported)
   const confirmedOrders = orders.filter(
-    (o) => o.status === "approved" || o.status === "exported"
+    (o) => o.status === "payment" || o.status === "exported"
   );
 
   const totalOrders = confirmedOrders.length;
@@ -62,11 +62,19 @@ export default async function OrdersPage() {
   }
 
   const serialized = orders.map((o) => ({
-    ...o,
+    id: o.id,
+    status: o.status,
+    total: o.total,
+    comment: o.comment,
     createdAt: o.createdAt.toISOString(),
-    updatedAt: undefined,
     items: o.items.map((item) => ({
-      ...item,
+      id: item.id,
+      productId: item.productId,
+      productName: item.productName,
+      barcode: item.barcode,
+      quantity: item.quantity,
+      price: item.price,
+      total: item.total,
       imagePath: imageByProductId.get(item.productId) ?? null,
     })),
   }));
@@ -80,8 +88,8 @@ export default async function OrdersPage() {
 
       <h1 className="orders-title">{"Мои заказы"}</h1>
 
-      <OrdersClient
-        orders={serialized as any}
+      <OrdersPageClient
+        orders={serialized}
         stats={{ totalOrders, totalSum, topProduct, topProductQty }}
       />
     </main>

@@ -119,8 +119,8 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  checks   OrderItemCheck[]
-  messages OrderMessage[]
+  messages   OrderMessage[]
+  statusLogs OrderStatusLog[]
 }
 
 model Order {
@@ -132,12 +132,13 @@ model Order {
   total   Int     @default(0)
   comment String? @db.Text
 
-  items      OrderItem[]
+  items OrderItem[]
+
+  oneCExportedAt DateTime?
+  bitrixDealId   Int?
+
   messages   OrderMessage[]
   statusLogs OrderStatusLog[]
-
-  bitrixDealId   Int?
-  oneCExportedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -164,41 +165,50 @@ model OrderItemCheck {
   id          Int       @id @default(autoincrement())
   orderItemId Int       @unique
   orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
-  status      String
-  availableQty Int?
-  note        String?
-  pickerId    Int?
-  picker      User?     @relation(fields: [pickerId], references: [id])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+
+  status  String  @default("ok") // "ok" | "issue"
+  comment String? @db.Text
+
+  checkedAt DateTime @default(now())
 }
 
 model OrderItemPhoto {
   id          Int       @id @default(autoincrement())
   orderItemId Int
   orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
-  url         String
-  createdAt   DateTime  @default(now())
+
+  url       String
+  createdAt DateTime @default(now())
 }
 
 model OrderMessage {
-  id           Int      @id @default(autoincrement())
-  orderId      Int
-  order        Order    @relation(fields: [orderId], references: [id])
-  userId       Int?
-  user         User?    @relation(fields: [userId], references: [id])
-  text         String   @db.Text
-  isFromPicker Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  id      Int   @id @default(autoincrement())
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id])
+  userId  Int?
+  user    User? @relation(fields: [userId], references: [id])
+
+  text         String  @db.Text
+  isFromPicker Boolean @default(false)
+  // "customer" = customer↔manager chat; "picker" = picker↔manager chat
+  source       String  @default("customer")
+
+  // Dedup key for Bitrix webhook-pushed manager replies (customer chat only)
+  bitrixCommentId String? @unique
+
+  createdAt DateTime @default(now())
 }
 
 model OrderStatusLog {
-  id        Int      @id @default(autoincrement())
-  orderId   Int
-  order     Order    @relation(fields: [orderId], references: [id])
+  id      Int   @id @default(autoincrement())
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id])
+  userId  Int?
+  user    User? @relation(fields: [userId], references: [id])
+
   fromStatus String?
-  toStatus  String
-  userId    Int?
+  toStatus   String
+
   createdAt DateTime @default(now())
 }
 

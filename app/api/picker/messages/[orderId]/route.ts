@@ -32,7 +32,7 @@ export async function GET(
   const { orderId } = await params;
 
   const messages = await prisma.orderMessage.findMany({
-    where: { orderId: Number(orderId) },
+    where: { orderId: Number(orderId), source: "picker" },
     include: { user: { select: { name: true, role: true } } },
     orderBy: { createdAt: "asc" },
   });
@@ -61,6 +61,7 @@ export async function POST(
       userId: user.id,
       text: text.trim(),
       isFromPicker: user.role === "picker",
+      source: "picker",
     },
     include: { user: { select: { name: true, role: true } } },
   });

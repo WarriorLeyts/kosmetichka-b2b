@@ -28,7 +28,6 @@ async function bitrixPost(webhookUrl: string, method: string, body: object): Pro
 function parseBracketParams(params: URLSearchParams): Record<string, any> {
   const result: Record<string, any> = {};
   for (const [rawKey, value] of params.entries()) {
-    // Split "data[FIELDS][ID]" into ["data", "FIELDS", "ID"]
     const keys = rawKey.split(/[\[\]]+/).filter(Boolean);
     let cursor: Record<string, any> = result;
     for (let i = 0; i < keys.length - 1; i++) {
@@ -57,13 +56,12 @@ export async function POST(request: NextRequest) {
 
     const fields: Record<string, string> = parsed.data?.FIELDS || {};
     const commentId = String(fields.ID || "");
-    const entityId = Number(fields.ENTITY_ID) || null;   // Bitrix deal ID
+    const entityId = Number(fields.ENTITY_ID) || null;
     const entityTypeId = Number(fields.ENTITY_TYPE_ID) || 0;
     let commentText = String(fields.COMMENT || "").trim();
 
     console.log(`[Comment webhook] commentId=${commentId} entityId=${entityId} typeId=${entityTypeId} textLen=${commentText.length}`);
 
-    // Only process deal (entityTypeId=2) comments
     if (entityTypeId !== 2) {
       return NextResponse.json({ ok: true, skip: "not a deal" });
     }
@@ -71,7 +69,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, skip: "no entity_id" });
     }
 
-    // If Bitrix didn't include the text in the event, try fetching it by ID
+    // If Bitrix didn't include the text in the event, fetch it
     if (!commentText && commentId) {
       const webhookUrl = process.env.BITRIX_WEBHOOK_URL;
       if (webhookUrl) {
@@ -104,20 +102,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, skip: "no matching order" });
     }
 
-    // Save manager message (isFromPicker=false means it's from the manager/Bitrix side)
-    await prisma.orderMessage.create({
-      data: {
-        orderId: order.id,
-        text: commentText,
-        isFromPicker: false,
-      },
-    });
-    console.log(`[Comment webhook] ✓ Saved manager message order=${order.id} comment=${commentId}`);
+    // Save manager message (bitrixCommentId unique prevents duplicates)
+    try {
+      await prisma.orderMessage.create({
+        data: {
+          orderId: order.id,
+          text: commentText,
+          isFromPicker: true, // true = "from manager" in customer chat context
+          source: "customer",
+          bitrixCommentId: commentId || null,
+        },
+      });
+      console.log(`[Comment webhook] ✓ Saved manager message order=${order.id} comment=${commentId}`);
+    } catch {
+      console.log(`[Comment webhook] Duplicate comment ${commentId}, skipped`);
+    }
 
-    // Always respond 200 to Bitrix (otherwise it retries)
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[Comment webhook] Unhandled error:", err);
-    return NextResponse.json({ ok: true }); // Still 200 — Bitrix must not retry endlessly
+    return NextResponse.json({ ok: true });
   }
 }

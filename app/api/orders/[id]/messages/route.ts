@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 
+// Prefix we put on customer messages when posting to Bitrix timeline.
 const CUSTOMER_MARKER = "[🛒 Сообщение покупателя]\n";
 const CUSTOMER_MARKER_BITRIX = "[:f09f9b92: Сообщение покупателя]";
 
@@ -15,12 +16,14 @@ async function bitrixPost(webhookUrl: string, method: string, body: object): Pro
   return res.json();
 }
 
+/** Look up the Bitrix deal ID for an order: first by stored bitrixDealId, then by XML_ID search. */
 async function resolveBitrixDealId(
   orderId: number,
   storedDealId: number | null,
   webhookUrl: string
 ): Promise<number | null> {
   if (storedDealId) return storedDealId;
+
   try {
     const r = await bitrixPost(webhookUrl, "crm.deal.list", {
       filter: { XML_ID: String(orderId) },
@@ -32,11 +35,15 @@ async function resolveBitrixDealId(
       await prisma.order.update({ where: { id: orderId }, data: { bitrixDealId: dealId } });
       return dealId;
     }
-  } catch {}
+  } catch {
+    // Bitrix unavailable
+  }
   return null;
 }
 
 type Props = { params: Promise<{ id: string }> };
+
+// ── GET /api/orders/[id]/messages ──────────────────────────────────────────
 
 export async function GET(_request: NextRequest, { params }: Props) {
   const cookieStore = await cookies();
@@ -54,32 +61,48 @@ export async function GET(_request: NextRequest, { params }: Props) {
     return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
   }
 
+  // ── Sync manager replies from Bitrix ─────────────────────────────────────
   const webhookUrl = process.env.BITRIX_WEBHOOK_URL;
   if (webhookUrl) {
     const dealId = await resolveBitrixDealId(orderId, order.bitrixDealId, webhookUrl);
     if (dealId) {
       try {
         const r = await bitrixPost(webhookUrl, "crm.timeline.comment.list", {
-          filter: { ENTITY_TYPE: "deal", ENTITY_ID: String(dealId) },
+          filter: {
+            ENTITY_TYPE: "deal",
+            ENTITY_ID: String(dealId),
+          },
         });
         const comments: any[] = r.result || [];
+
         for (const c of comments) {
           const text: string = String(c.COMMENT || "").trim();
+          const commentId = String(c.ID);
+
+          // Skip customer messages we posted ourselves
           if (
             text.startsWith(CUSTOMER_MARKER.trim()) ||
             text.startsWith(CUSTOMER_MARKER_BITRIX) ||
             text.startsWith("[🛒") ||
             text.startsWith("[:f09f9b92:")
-          ) continue;
+          ) {
+            continue;
+          }
           if (!text) continue;
-          // isFromPicker=true used here to mean "from manager" (customer chat context)
-          const existing = await prisma.orderMessage.findFirst({
-            where: { orderId, text, isFromPicker: true },
-          });
-          if (!existing) {
+
+          // Save new manager message; bitrixCommentId unique constraint prevents duplicates
+          try {
             await prisma.orderMessage.create({
-              data: { orderId, text, isFromPicker: true },
+              data: {
+                orderId,
+                text,
+                isFromPicker: true, // "from manager" in customer chat (isFromPicker=true means "from the other side")
+                source: "customer",
+                bitrixCommentId: commentId,
+              },
             });
+          } catch {
+            // Duplicate — already saved
           }
         }
       } catch (err) {
@@ -89,20 +112,23 @@ export async function GET(_request: NextRequest, { params }: Props) {
   }
 
   const messages = await prisma.orderMessage.findMany({
-    where: { orderId },
+    where: { orderId, source: "customer" },
     orderBy: { createdAt: "asc" },
     select: { id: true, text: true, isFromPicker: true, createdAt: true },
   });
 
-  return NextResponse.json({
-    messages: messages.map((m) => ({
-      id: m.id,
-      text: m.text,
-      isFromManager: m.isFromPicker,
-      createdAt: m.createdAt,
-    })),
-  });
+  // Map isFromPicker → isFromManager for backward compatibility with the customer UI
+  const mapped = messages.map((m) => ({
+    id: m.id,
+    text: m.text,
+    isFromManager: m.isFromPicker,
+    createdAt: m.createdAt,
+  }));
+
+  return NextResponse.json({ messages: mapped });
 }
+
+// ── POST /api/orders/[id]/messages ────────────────────────────────────────
 
 export async function POST(request: NextRequest, { params }: Props) {
   const cookieStore = await cookies();
@@ -125,11 +151,13 @@ export async function POST(request: NextRequest, { params }: Props) {
   if (!text) return NextResponse.json({ error: "Сообщение пустое" }, { status: 400 });
   if (text.length > 2000) return NextResponse.json({ error: "Слишком длинное сообщение" }, { status: 400 });
 
+  // Save customer message (isFromPicker=false = from customer)
   const message = await prisma.orderMessage.create({
-    data: { orderId, text, isFromPicker: false },
+    data: { orderId, text, isFromPicker: false, source: "customer" },
     select: { id: true, text: true, isFromPicker: true, createdAt: true },
   });
 
+  // Post to Bitrix timeline (fire & forget)
   const webhookUrl = process.env.BITRIX_WEBHOOK_URL;
   if (webhookUrl) {
     resolveBitrixDealId(orderId, order.bitrixDealId, webhookUrl)

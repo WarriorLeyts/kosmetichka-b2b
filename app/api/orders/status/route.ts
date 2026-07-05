@@ -20,7 +20,7 @@ export async function GET() {
         id: true,
         status: true,
         messages: {
-          where: { isFromPicker: true },
+          where: { isFromPicker: true, source: "customer" },
           orderBy: { createdAt: "desc" },
           take: 1,
           select: { createdAt: true, text: true },
