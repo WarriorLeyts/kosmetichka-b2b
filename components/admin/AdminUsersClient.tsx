@@ -107,6 +107,7 @@ export function AdminUsersClient({ users }: { users: any[] }) {
         >
           <option value="admin">admin</option>
           <option value="manager">manager</option>
+          <option value="picker">picker (сборщик)</option>
           <option value="content">content</option>
         </select>
 
@@ -193,6 +194,7 @@ function UserRow({
         >
           <option value="admin">admin</option>
           <option value="manager">manager</option>
+          <option value="picker">picker (сборщик)</option>
           <option value="content">content</option>
         </select>
       </td>
