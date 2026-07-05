@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+// ── Types ──────────────────────────────────────────────────────────────────────
+
 type CheckStatus = "ok" | "out_of_stock" | "expired" | "bad_condition" | "insufficient_qty";
 
 type Photo = { id: number; url: string };
@@ -38,7 +40,7 @@ type Message = {
 type CustomerMessage = {
   id: number;
   text: string;
-  isFromPicker: boolean;
+  isFromPicker: boolean; // true = admin sent, false = customer sent
   createdAt: string;
 };
 
@@ -48,8 +50,6 @@ type StatusLog = {
   toStatus: string;
   createdAt: string;
 };
-
-type PickerUser = { id: number; name: string };
 
 type Order = {
   id: number;
@@ -71,6 +71,39 @@ type Order = {
   statusLogs: StatusLog[];
   createdAt: string;
 };
+
+type PickerUser = { id: number; name: string };
+
+type EditItem = {
+  id: number | null; // null = new
+  productId: number;
+  productName: string;
+  barcode: string | null;
+  quantity: number;
+  price: number;
+  removed?: boolean;
+  isNew?: boolean;
+};
+
+type CatalogProduct = {
+  id: number;
+  name: string;
+  barcode: string | null;
+  article: string | null;
+  stock: number | null;
+  price: number;
+  prices: { priceType: string; price: number }[];
+  imagePath: string | null;
+};
+
+type CatalogCategory = {
+  id: number;
+  guid: string;
+  name: string;
+  parentGuid: string | null;
+};
+
+// ── Constants ──────────────────────────────────────────────────────────────────
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Ожидание",
@@ -126,40 +159,65 @@ const TRANSITIONS: Record<string, { label: string; to: string; style: string }[]
   ],
 };
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
 function formatDate(str: string) {
   return new Date(str).toLocaleString("ru-RU", {
-    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
-// ── Edit items state ──────────────────────────────────────────────────────────
-type EditableItem = {
-  id: number;          // positive = existing DB id; negative = temp id for new item
-  productId: number;
-  productName: string;
-  barcode: string | null;
-  quantity: number;
-  price: number;
-  removed: boolean;
-  isNew: boolean;      // true = not yet in DB
-};
+function getProductImageUrl(imagePath: string | null): string | null {
+  if (!imagePath) return null;
+  if (imagePath.startsWith("http")) return imagePath;
+  return `https://kosmetichka-opt.ru/api/1c/${imagePath}`;
+}
 
-type ProductSearchResult = {
-  id: number;
-  name: string;
-  barcode: string | null;
-  article: string | null;
-  stock: number | null;
-  price: number;
-  imagePath: string | null;
-};
+function renderMsgContent(text: string) {
+  try {
+    const obj = JSON.parse(text);
+    if (obj?._t === "img" && obj.url) {
+      return (
+        <a href={obj.url} target="_blank" rel="noreferrer">
+          <img
+            src={obj.url}
+            alt="фото"
+            className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer hover:opacity-90"
+          />
+        </a>
+      );
+    }
+    if (obj?._t === "product") {
+      const imgUrl = getProductImageUrl(obj.imagePath ?? null);
+      return (
+        <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-52 shadow-sm">
+          {imgUrl && (
+            <img
+              src={imgUrl}
+              alt={obj.name}
+              className="w-full h-24 object-contain bg-slate-50 p-1"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          )}
+          <div className="p-2">
+            <p className="font-semibold text-sm leading-snug">{obj.name}</p>
+            {obj.price > 0 && (
+              <p className="text-xs text-slate-500 mt-0.5">
+                {Number(obj.price).toLocaleString("ru-RU")} ₽
+              </p>
+            )}
+          </div>
+        </div>
+      );
+    }
+  } catch {}
+  return <span style={{ whiteSpace: "pre-wrap" }}>{text}</span>;
+}
 
-type CatalogCategory = {
-  id: number;
-  guid: string;
-  name: string;
-  parentGuid: string | null;
-};
+// ── Main component ─────────────────────────────────────────────────────────────
 
 export default function AdminOrderClient({
   order: initialOrder,
@@ -172,44 +230,290 @@ export default function AdminOrderClient({
 }) {
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
+
+  // ── Picker chat ──
   const [messages, setMessages] = useState<Message[]>(initialOrder.messages);
-  const [customerMessages, setCustomerMessages] = useState<CustomerMessage[]>(initialCustomerMessages);
   const [msgText, setMsgText] = useState("");
   const [sendingMsg, setSendingMsg] = useState(false);
+
+  // ── Customer chat ──
+  const [customerMessages, setCustomerMessages] = useState<CustomerMessage[]>(initialCustomerMessages);
   const [customerMsgText, setCustomerMsgText] = useState("");
   const [sendingCustomerMsg, setSendingCustomerMsg] = useState(false);
+
+  // ── UI state ──
   const [changingStatus, setChangingStatus] = useState(false);
   const [activeTab, setActiveTab] = useState<"items" | "chat" | "history">("items");
   const [chatSubTab, setChatSubTab] = useState<"customer" | "picker">("customer");
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const pickerChatEndRef = useRef<HTMLDivElement>(null);
+  const customerChatEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Edit mode
+  // ── Order edit ──
   const [editMode, setEditMode] = useState(false);
-  const [editItems, setEditItems] = useState<EditableItem[]>([]);
+  const [editItems, setEditItems] = useState<EditItem[]>([]);
+  const [editError, setEditError] = useState("");
   const [saving, setSaving] = useState(false);
-  const nextTempId = useRef(-1); // negative = not yet saved
 
-  // Product search / catalog modal
+  // ── Catalog modal ──
+  // mode: "order" = add to order, "chat-picker" | "chat-customer" = send product card in chat
+  const [catalogMode, setCatalogMode] = useState<"order" | "chat-picker" | "chat-customer">("order");
+  const [showCatalog, setShowCatalog] = useState(false);
+  const [categories, setCategories] = useState<CatalogCategory[]>([]);
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
+  const [selectedCatGuid, setSelectedCatGuid] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<ProductSearchResult[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [showSearch, setShowSearch] = useState(false);
+  const [searchResults, setSearchResults] = useState<CatalogProduct[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const paginationRef = useRef({ offset: 0, hasMore: false, loading: false });
-  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Categories for modal sidebar
-  const [categories, setCategories] = useState<CatalogCategory[]>([]);
-  const [selectedCategoryGuid, setSelectedCategoryGuid] = useState<string>("");
-  const [expandedCategoryGuids, setExpandedCategoryGuids] = useState<Set<string>>(new Set());
+  // ── Image upload ──
+  const [uploadingImg, setUploadingImg] = useState<"picker" | "customer" | null>(null);
 
-  // Assign picker
+  // ── Picker chat: assign picker dropdown ──
   const [assigningPicker, setAssigningPicker] = useState(false);
+  const [selectedPickerId, setSelectedPickerId] = useState<number | "">(order.pickerId ?? "");
 
-  function enterEditMode() {
+  // ── Effects ──
+
+  useEffect(() => {
+    if (activeTab !== "chat") {
+      if (pollRef.current) clearInterval(pollRef.current);
+      return;
+    }
+    const fetchPicker = async () => {
+      const res = await fetch(`/api/picker/messages/${order.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(data.messages);
+      }
+    };
+    const fetchCustomer = async () => {
+      const res = await fetch(`/api/admin/orders/${order.id}/customer-messages`);
+      if (res.ok) {
+        const data = await res.json();
+        setCustomerMessages(data.messages ?? []);
+      }
+    };
+
+    const poll = async () => {
+      await Promise.all([fetchPicker(), fetchCustomer()]);
+    };
+    poll();
+    pollRef.current = setInterval(poll, 5000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [activeTab, order.id]);
+
+  useEffect(() => {
+    if (activeTab === "chat") {
+      if (chatSubTab === "picker") pickerChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      if (chatSubTab === "customer") customerChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, customerMessages, activeTab, chatSubTab]);
+
+  // ── Status change ──
+  async function changeStatus(toStatus: string) {
+    setChangingStatus(true);
+    const res = await fetch(`/api/admin/orders/${order.id}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: toStatus }),
+    });
+    if (res.ok) {
+      router.refresh();
+      window.location.reload();
+    } else {
+      const data = await res.json();
+      alert(data.error || "Ошибка смены статуса");
+    }
+    setChangingStatus(false);
+  }
+
+  // ── Picker chat ──
+  async function sendPickerMessage(text?: string) {
+    const t = (text ?? msgText).trim();
+    if (!t) return;
+    setSendingMsg(true);
+    const res = await fetch(`/api/picker/messages/${order.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: t }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setMessages((prev) => [...prev, data.message]);
+      if (!text) setMsgText("");
+    }
+    setSendingMsg(false);
+  }
+
+  // ── Customer chat ──
+  async function sendCustomerMessage(text?: string) {
+    const t = (text ?? customerMsgText).trim();
+    if (!t) return;
+    setSendingCustomerMsg(true);
+    const res = await fetch(`/api/admin/orders/${order.id}/customer-messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: t }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setCustomerMessages((prev) => [...prev, data.message]);
+      if (!text) setCustomerMsgText("");
+    }
+    setSendingCustomerMsg(false);
+  }
+
+  // ── Image upload for chat ──
+  async function uploadChatImage(file: File, target: "picker" | "customer") {
+    setUploadingImg(target);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/uploads/chat", { method: "POST", body: formData });
+      if (res.ok) {
+        const data = await res.json();
+        const msgJson = JSON.stringify({ _t: "img", url: data.url });
+        if (target === "picker") await sendPickerMessage(msgJson);
+        else await sendCustomerMessage(msgJson);
+      }
+    } finally {
+      setUploadingImg(null);
+    }
+  }
+
+  // ── Catalog ──
+  function buildSearchUrl(q: string, catGuid: string, offset: number) {
+    const params = new URLSearchParams({ limit: "40", offset: String(offset) });
+    if (q.length >= 2) params.set("q", q);
+    if (catGuid) params.set("categoryGuid", catGuid);
+    return `/api/admin/products/search?${params}`;
+  }
+
+  async function fetchProducts(q: string, catGuid: string) {
+    paginationRef.current = { offset: 0, hasMore: false, loading: false };
+    setSearchResults([]);
+    setHasMore(false);
+    const res = await fetch(buildSearchUrl(q, catGuid, 0));
+    if (res.ok) {
+      const data = await res.json();
+      const products = data.products ?? [];
+      const more = data.hasMore ?? false;
+      setSearchResults(products);
+      paginationRef.current = { offset: products.length, hasMore: more, loading: false };
+      setHasMore(more);
+    }
+  }
+
+  async function loadMore(q: string, catGuid: string) {
+    const p = paginationRef.current;
+    if (!p.hasMore || p.loading) return;
+    p.loading = true;
+    setLoadingMore(true);
+    try {
+      const res = await fetch(buildSearchUrl(q, catGuid, p.offset));
+      if (res.ok) {
+        const data = await res.json();
+        const products = data.products ?? [];
+        const more = data.hasMore ?? false;
+        setSearchResults((prev) => [...prev, ...products]);
+        p.offset += products.length;
+        p.hasMore = more;
+        setHasMore(more);
+      }
+    } finally {
+      p.loading = false;
+      setLoadingMore(false);
+    }
+  }
+
+  function openCatalog(mode: "order" | "chat-picker" | "chat-customer") {
+    setCatalogMode(mode);
+    setSearchQuery("");
+    setSelectedCatGuid("");
+    setShowCatalog(true);
+    fetch("/api/admin/categories")
+      .then((r) => r.json())
+      .then((d) => {
+        const cats: CatalogCategory[] = d.categories ?? [];
+        setCategories(cats);
+        const topGuids = cats.filter((c) => !c.parentGuid).map((c) => c.guid);
+        setExpandedCats(new Set(topGuids));
+      });
+    fetchProducts("", "");
+  }
+
+  function toggleCat(guid: string) {
+    setExpandedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(guid)) next.delete(guid);
+      else next.add(guid);
+      return next;
+    });
+  }
+
+  function selectCat(guid: string) {
+    const newGuid = guid === selectedCatGuid ? "" : guid;
+    setSelectedCatGuid(newGuid);
+    fetchProducts(searchQuery, newGuid);
+  }
+
+  function handleCatalogSearch(q: string) {
+    setSearchQuery(q);
+    fetchProducts(q, selectedCatGuid);
+  }
+
+  function handleProductSelect(p: CatalogProduct) {
+    if (catalogMode === "order") {
+      // Add/remove from order edit
+      setEditItems((prev) => {
+        const idx = prev.findIndex((i) => i.productId === p.id && !i.isNew);
+        if (idx >= 0) {
+          // Toggle removed
+          return prev.map((i, n) =>
+            n === idx ? { ...i, removed: !i.removed } : i
+          );
+        }
+        // Check if new item already added
+        const existingNew = prev.find((i) => i.productId === p.id && i.isNew && !i.removed);
+        if (existingNew) {
+          return prev.map((i) =>
+            i.productId === p.id && i.isNew ? { ...i, removed: !i.removed } : i
+          );
+        }
+        return [
+          ...prev,
+          {
+            id: null,
+            productId: p.id,
+            productName: p.name,
+            barcode: p.barcode,
+            quantity: 1,
+            price: p.price,
+            isNew: true,
+            removed: false,
+          },
+        ];
+      });
+    } else {
+      // Send product card in chat
+      const msgJson = JSON.stringify({
+        _t: "product",
+        id: p.id,
+        name: p.name,
+        price: p.price,
+        imagePath: p.imagePath,
+      });
+      if (catalogMode === "chat-picker") sendPickerMessage(msgJson);
+      else sendCustomerMessage(msgJson);
+      setShowCatalog(false);
+    }
+  }
+
+  // ── Order edit ──
+  function startEdit() {
     setEditItems(
       order.items.map((i) => ({
         id: i.id,
@@ -223,329 +527,162 @@ export default function AdminOrderClient({
       }))
     );
     setEditMode(true);
-    setShowSearch(false);
-    setSearchQuery("");
-    setSearchResults([]);
+    setEditError("");
   }
 
   function cancelEdit() {
     setEditMode(false);
     setEditItems([]);
-    setShowSearch(false);
-    setSearchQuery("");
-    setSearchResults([]);
+    setEditError("");
   }
 
-  function closeCatalog() {
-    setShowSearch(false);
-    setSearchQuery("");
-    setSearchResults([]);
-    setSelectedCategoryGuid("");
-    setHasMore(false);
-    paginationRef.current = { offset: 0, hasMore: false, loading: false };
-  }
-
-  function buildSearchUrl(q: string, categoryGuid: string, offset = 0) {
-    const params = new URLSearchParams({ limit: "40" });
-    if (q.trim().length >= 2) params.set("q", q.trim());
-    if (categoryGuid) params.set("categoryGuid", categoryGuid);
-    if (offset > 0) params.set("offset", String(offset));
-    return `/api/admin/products/search?${params.toString()}`;
-  }
-
-  function handleSearchInput(q: string) {
-    setSearchQuery(q);
-    if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    searchDebounce.current = setTimeout(() => {
-      fetchProducts(q, selectedCategoryGuid);
-    }, 250);
-  }
-
-  async function fetchProducts(q: string, categoryGuid: string) {
-    setSearchLoading(true);
-    setSearchError(null);
-    setHasMore(false);
-    paginationRef.current = { offset: 0, hasMore: false, loading: false };
-    try {
-      const res = await fetch(buildSearchUrl(q, categoryGuid, 0));
-      if (res.ok) {
-        const data = await res.json();
-        const products = data.products ?? [];
-        setSearchResults(products);
-        const more = data.hasMore ?? false;
-        setHasMore(more);
-        paginationRef.current = { offset: products.length, hasMore: more, loading: false };
-      } else {
-        const text = await res.text();
-        setSearchError(`HTTP ${res.status}: ${text.slice(0, 200)}`);
-        setSearchResults([]);
-      }
-    } catch (e) {
-      setSearchError(String(e));
-      setSearchResults([]);
-    } finally {
-      setSearchLoading(false);
-    }
-  }
-
-  async function loadMore(q: string, categoryGuid: string) {
-    const p = paginationRef.current;
-    if (!p.hasMore || p.loading) return;
-    p.loading = true;
-    setLoadingMore(true);
-    try {
-      const res = await fetch(buildSearchUrl(q, categoryGuid, p.offset));
-      if (res.ok) {
-        const data = await res.json();
-        const products = data.products ?? [];
-        setSearchResults((prev) => [...prev, ...products]);
-        const more = data.hasMore ?? false;
-        p.offset += products.length;
-        p.hasMore = more;
-        setHasMore(more);
-      }
-    } finally {
-      p.loading = false;
-      setLoadingMore(false);
-    }
-  }
-
-  function selectCategory(guid: string) {
-    const next = selectedCategoryGuid === guid ? "" : guid;
-    setSelectedCategoryGuid(next);
-    fetchProducts(searchQuery, next);
-  }
-
-  function toggleExpand(guid: string) {
-    setExpandedCategoryGuids((prev) => {
-      const next = new Set(prev);
-      if (next.has(guid)) next.delete(guid);
-      else next.add(guid);
-      return next;
-    });
-  }
-
-  function openCatalog() {
-    setShowSearch(true);
-    setSearchQuery("");
-    setSelectedCategoryGuid("");
-    // Load categories + products in parallel
-    fetch("/api/admin/categories")
-      .then((r) => r.json())
-      .then((d) => {
-        const cats: CatalogCategory[] = d.categories ?? [];
-        setCategories(cats);
-        // Auto-expand all top-level categories
-        const topGuids = cats.filter((c) => !c.parentGuid).map((c) => c.guid);
-        setExpandedCategoryGuids(new Set(topGuids));
-      });
-    fetchProducts("", "");
-  }
-
-  function addProductToEdit(p: ProductSearchResult) {
-    const tempId = nextTempId.current--;
-    setEditItems((prev) => [
-      ...prev,
-      {
-        id: tempId,
-        productId: p.id,
-        productName: p.name,
-        barcode: p.barcode,
-        quantity: 1,
-        price: Math.round(p.price),
-        removed: false,
-        isNew: true,
-      },
-    ]);
-  }
-
-  function editQty(id: number, qty: number) {
-    setEditItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, quantity: Math.max(1, qty) } : i))
-    );
-  }
-
-  function editPrice(id: number, price: number) {
-    setEditItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, price: Math.max(0, price) } : i))
-    );
-  }
-
-  function toggleRemove(id: number) {
-    setEditItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, removed: !i.removed } : i))
-    );
-  }
-
-  const editTotal = editItems
-    .filter((i) => !i.removed)
-    .reduce((s, i) => s + i.quantity * i.price, 0);
-
-  async function saveItems() {
+  async function saveEdit() {
     setSaving(true);
-    try {
-      const existing = editItems.filter((i) => !i.isNew);
-      const newOnes = editItems.filter((i) => i.isNew && !i.removed);
-      const res = await fetch(`/api/admin/orders/${order.id}/items`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: existing.filter((i) => !i.removed).map((i) => ({
-            id: i.id,
-            quantity: i.quantity,
-            price: i.price,
-          })),
-          removeIds: existing.filter((i) => i.removed).map((i) => i.id),
-          newItems: newOnes.map((i) => ({
-            productId: i.productId,
-            productName: i.productName,
-            barcode: i.barcode,
-            quantity: i.quantity,
-            price: i.price,
-          })),
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        // Update items and total in local state
-        setOrder((prev) => ({
-          ...prev,
-          total: data.order.total,
-          items: data.order.items.map((i: any) => ({
-            ...i,
-            check: i.check
-              ? {
-                  ...i.check,
-                  updatedAt: i.check.checkedAt ?? i.check.updatedAt,
-                }
-              : null,
-          })),
-        }));
-        setEditMode(false);
-      } else {
-        const d = await res.json();
-        alert(d.error || "Ошибка сохранения");
-      }
-    } finally {
-      setSaving(false);
-    }
-  }
+    setEditError("");
+    const existing = editItems.filter((i) => i.id !== null && !i.isNew);
+    const newItems = editItems.filter((i) => i.isNew && !i.removed);
+    const removeIds = editItems.filter((i) => i.id !== null && !i.isNew && i.removed).map((i) => i.id as number);
+    const updates = existing.filter((i) => !i.removed).map((i) => ({
+      id: i.id as number,
+      quantity: i.quantity,
+      price: i.price,
+    }));
 
-  // Assign picker
-  async function assignPicker(pickerId: number | null) {
-    setAssigningPicker(true);
-    try {
-      const res = await fetch(`/api/admin/orders/${order.id}/assign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pickerId }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setOrder((prev) => ({
-          ...prev,
-          pickerId: data.order.pickerId,
-          picker: data.order.picker,
-        }));
-      }
-    } finally {
-      setAssigningPicker(false);
-    }
-  }
+    const res = await fetch(`/api/admin/orders/${order.id}/items`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: updates,
+        removeIds,
+        newItems: newItems.map((i) => ({
+          productId: i.productId,
+          productName: i.productName,
+          barcode: i.barcode,
+          quantity: i.quantity,
+          price: i.price,
+        })),
+      }),
+    });
 
-  // Poll messages
-  useEffect(() => {
-    if (activeTab !== "chat") {
-      if (pollRef.current) clearInterval(pollRef.current);
-      return;
-    }
-
-    if (chatSubTab === "picker") {
-      const fetchMsgs = async () => {
-        const res = await fetch(`/api/picker/messages/${order.id}`);
-        if (res.ok) {
-          const data = await res.json();
-          setMessages(data.messages);
-        }
-      };
-      fetchMsgs();
-      pollRef.current = setInterval(fetchMsgs, 5000);
+    if (res.ok) {
+      const data = await res.json();
+      setOrder(data.order);
+      setEditMode(false);
+      setEditItems([]);
     } else {
-      // customer sub-tab
-      const fetchCustomerMsgs = async () => {
-        const res = await fetch(`/api/admin/orders/${order.id}/customer-messages`);
-        if (res.ok) {
-          const data = await res.json();
-          setCustomerMessages(data.messages);
-        }
-      };
-      fetchCustomerMsgs();
-      pollRef.current = setInterval(fetchCustomerMsgs, 5000);
+      const data = await res.json();
+      setEditError(data.error || "Ошибка сохранения");
     }
+    setSaving(false);
+  }
 
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [activeTab, chatSubTab, order.id]);
-
-  useEffect(() => {
-    if (activeTab === "chat") {
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, customerMessages, activeTab, chatSubTab]);
-
-  async function changeStatus(toStatus: string) {
-    setChangingStatus(true);
-    const res = await fetch(`/api/admin/orders/${order.id}/status`, {
+  // ── Assign picker ──
+  async function assignPicker() {
+    if (!selectedPickerId) return;
+    setAssigningPicker(true);
+    const res = await fetch(`/api/admin/orders/${order.id}/assign`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: toStatus }),
+      body: JSON.stringify({ pickerId: selectedPickerId }),
     });
     if (res.ok) {
+      router.refresh();
       window.location.reload();
     } else {
       const data = await res.json();
-      alert(data.error || "Ошибка смены статуса");
+      alert(data.error || "Ошибка назначения");
     }
-    setChangingStatus(false);
+    setAssigningPicker(false);
   }
 
-  async function sendMessage() {
-    if (!msgText.trim()) return;
-    setSendingMsg(true);
-    const res = await fetch(`/api/picker/messages/${order.id}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: msgText }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setMessages((prev) => [...prev, data.message]);
-      setMsgText("");
-    }
-    setSendingMsg(false);
-  }
-
-  async function sendCustomerMessage() {
-    if (!customerMsgText.trim()) return;
-    setSendingCustomerMsg(true);
-    const res = await fetch(`/api/admin/orders/${order.id}/customer-messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: customerMsgText }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setCustomerMessages((prev) => [...prev, data.message]);
-      setCustomerMsgText("");
-    }
-    setSendingCustomerMsg(false);
-  }
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   const transitions = TRANSITIONS[order.status] || [];
   const pipelineIndex = PIPELINE.indexOf(order.status);
-  const canEdit = ["consultation", "assembly"].includes(order.status);
-  const showInvoice = ["payment", "exported"].includes(order.status);
+
+  // Category tree rendering
+  const topCats = categories.filter((c) => !c.parentGuid);
+  function renderCatTree() {
+    return topCats.map((top) => {
+      const children = categories.filter((c) => c.parentGuid === top.guid);
+      const isTopExpanded = expandedCats.has(top.guid);
+      const isTopSelected = selectedCatGuid === top.guid;
+      return (
+        <div key={top.guid}>
+          <div className="flex items-center gap-1">
+            {children.length > 0 ? (
+              <button
+                onClick={() => toggleCat(top.guid)}
+                className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-700 text-xs"
+              >
+                {isTopExpanded ? "▼" : "▶"}
+              </button>
+            ) : (
+              <span className="w-5" />
+            )}
+            <button
+              onClick={() => selectCat(top.guid)}
+              className={`flex-1 text-left px-2 py-1 rounded text-sm ${
+                isTopSelected
+                  ? "bg-blue-100 text-blue-700 font-semibold"
+                  : "hover:bg-slate-100 text-slate-700"
+              }`}
+            >
+              {top.name}
+            </button>
+          </div>
+          {isTopExpanded && children.map((child) => {
+            const grandchildren = categories.filter((c) => c.parentGuid === child.guid);
+            const isChildExpanded = expandedCats.has(child.guid);
+            const isChildSelected = selectedCatGuid === child.guid;
+            return (
+              <div key={child.guid} className="ml-5">
+                <div className="flex items-center gap-1">
+                  {grandchildren.length > 0 ? (
+                    <button
+                      onClick={() => toggleCat(child.guid)}
+                      className="w-4 h-4 flex items-center justify-center text-slate-400 hover:text-slate-700 text-xs"
+                    >
+                      {isChildExpanded ? "▼" : "▶"}
+                    </button>
+                  ) : (
+                    <span className="w-4" />
+                  )}
+                  <button
+                    onClick={() => selectCat(child.guid)}
+                    className={`flex-1 text-left px-2 py-1 rounded text-sm ${
+                      isChildSelected
+                        ? "bg-blue-100 text-blue-700 font-semibold"
+                        : "hover:bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {child.name}
+                  </button>
+                </div>
+                {isChildExpanded && grandchildren.map((grand) => {
+                  const isGrandSelected = selectedCatGuid === grand.guid;
+                  return (
+                    <div key={grand.guid} className="ml-4">
+                      <button
+                        onClick={() => selectCat(grand.guid)}
+                        className={`w-full text-left px-2 py-1 rounded text-sm ${
+                          isGrandSelected
+                            ? "bg-blue-100 text-blue-700 font-semibold"
+                            : "hover:bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {grand.name}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      );
+    });
+  }
 
   return (
     <div className="p-4 md:p-6 print:p-0">
@@ -562,16 +699,16 @@ export default function AdminOrderClient({
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <a href="/admin/orders" className="no-print flex h-9 w-9 items-center justify-center rounded-xl border hover:bg-slate-50">←</a>
+            <a
+              href="/admin/orders"
+              className="no-print flex h-9 w-9 items-center justify-center rounded-xl border hover:bg-slate-50"
+            >
+              ←
+            </a>
             <h1 className="text-2xl font-black">Заказ №{order.id}</h1>
             <span className={`rounded-full border px-3 py-1 text-sm font-bold ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-700 border-gray-200"}`}>
               {STATUS_LABELS[order.status] || order.status}
             </span>
-            {order.customerConfirmed && (
-              <span className="rounded-full bg-emerald-100 border border-emerald-300 px-3 py-1 text-sm font-bold text-emerald-700">
-                ✓ Покупатель подтвердил
-              </span>
-            )}
           </div>
           <div className="mt-2 ml-12 text-sm text-slate-500">
             <div>{order.customer.companyName || order.customer.name} · {order.customer.phone}</div>
@@ -579,24 +716,19 @@ export default function AdminOrderClient({
             <div className="text-xs">{formatDate(order.createdAt)}</div>
           </div>
         </div>
-
-        <div className="flex items-center gap-2 no-print flex-wrap">
-          {showInvoice && (
-            <a
-              href={`/admin/orders/${order.id}/invoice`}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
-            >
-              📄 Счёт PDF
-            </a>
-          )}
+        <div className="flex items-center gap-2 no-print">
           <button
             onClick={() => window.print()}
             className="flex items-center gap-2 rounded-xl border px-4 py-2 text-sm hover:bg-slate-50"
           >
             🖨️ Печать
           </button>
+          <a
+            href={`/admin/orders/${order.id}/invoice`}
+            className="flex items-center gap-2 rounded-xl border px-4 py-2 text-sm hover:bg-slate-50"
+          >
+            📄 Счёт
+          </a>
           <div className="text-right">
             <div className="text-2xl font-black">{order.total.toLocaleString("ru-RU")} ₽</div>
             <div className="text-xs text-slate-400">{order.items.length} позиций</div>
@@ -604,72 +736,87 @@ export default function AdminOrderClient({
         </div>
       </div>
 
+      {/* Customer confirmed badge */}
+      {order.customerConfirmed && (
+        <div className="no-print mb-4 rounded-xl bg-green-50 border border-green-200 p-3 text-sm text-green-700 flex items-center gap-2">
+          ✅ Клиент подтвердил замены
+        </div>
+      )}
+      {!order.customerConfirmed && order.status === "consultation" && (
+        <div className="no-print mb-4 rounded-xl bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-700 flex items-center gap-2">
+          ⏳ Ожидание подтверждения клиента
+        </div>
+      )}
+
       {/* Status Pipeline */}
-      <div className="no-print mb-4 overflow-x-auto rounded-2xl border bg-white p-4">
-        <div className="flex min-w-max items-center gap-0">
-          {PIPELINE.filter((s) => s !== "cancelled").map((s, idx) => {
-            const isDone = pipelineIndex > idx;
-            const isCurrent = pipelineIndex === idx;
-            return (
+      {order.status !== "cancelled" && (
+        <div className="no-print mb-6 overflow-x-auto">
+          <div className="flex min-w-max items-center gap-0">
+            {PIPELINE.map((s, i) => (
               <div key={s} className="flex items-center">
-                <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition-all ${
-                  isCurrent ? STATUS_COLORS[s] + " border" :
-                  isDone ? "bg-slate-100 text-slate-400" : "text-slate-300"
+                <div className={`flex flex-col items-center px-3 py-2 rounded-xl transition-all ${
+                  i < pipelineIndex
+                    ? "text-green-600"
+                    : i === pipelineIndex
+                    ? "bg-blue-50 text-blue-700 font-bold"
+                    : "text-slate-300"
                 }`}>
-                  {isDone && <span>✓</span>}
-                  {STATUS_LABELS[s]}
+                  <div className={`h-3 w-3 rounded-full mb-1 ${
+                    i < pipelineIndex ? "bg-green-500" : i === pipelineIndex ? "bg-blue-500" : "bg-slate-200"
+                  }`} />
+                  <span className="text-xs whitespace-nowrap">{STATUS_LABELS[s]}</span>
                 </div>
-                {idx < PIPELINE.filter((s) => s !== "cancelled").length - 1 && (
-                  <div className={`mx-1 text-lg ${isDone ? "text-slate-400" : "text-slate-200"}`}>›</div>
+                {i < PIPELINE.length - 1 && (
+                  <div className={`h-0.5 w-8 ${i < pipelineIndex ? "bg-green-300" : "bg-slate-200"}`} />
                 )}
               </div>
-            );
-          })}
-          {order.status === "cancelled" && (
-            <div className="ml-4 rounded-xl bg-red-100 px-3 py-2 text-sm font-bold text-red-700 border border-red-300">✕ Отменён</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Picker assignment */}
+      {(order.status === "assembly" || order.status === "consultation") && pickers.length > 0 && (
+        <div className="no-print mb-4 flex items-center gap-3">
+          <span className="text-sm text-slate-500">Сборщик:</span>
+          <select
+            value={selectedPickerId}
+            onChange={(e) => setSelectedPickerId(Number(e.target.value) || "")}
+            className="rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+          >
+            <option value="">— не назначен —</option>
+            {pickers.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={assignPicker}
+            disabled={assigningPicker || !selectedPickerId}
+            className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {assigningPicker ? "..." : "Назначить"}
+          </button>
+          {order.picker && (
+            <span className="text-sm text-slate-500">Текущий: {order.picker.name}</span>
           )}
         </div>
-      </div>
+      )}
 
-      {/* Action buttons + Assign Picker */}
-      <div className="no-print mb-6 flex flex-wrap items-center gap-3">
-        {transitions.map((t) => (
-          <button
-            key={t.to}
-            onClick={() => changeStatus(t.to)}
-            disabled={changingStatus}
-            className={`rounded-xl px-5 py-2.5 font-bold transition-all disabled:opacity-50 ${t.style}`}
-          >
-            {changingStatus ? "..." : t.label}
-          </button>
-        ))}
-
-        {/* Assign picker */}
-        {["pending", "assembly", "approved"].includes(order.status) && (
-          <div className="ml-auto flex items-center gap-2">
-            <span className="text-sm text-slate-500">Сборщик:</span>
-            <select
-              className="rounded-xl border px-3 py-2 text-sm"
-              value={order.pickerId ?? ""}
-              disabled={assigningPicker}
-              onChange={(e) => assignPicker(e.target.value ? Number(e.target.value) : null)}
+      {/* Status action buttons */}
+      {transitions.length > 0 && (
+        <div className="no-print mb-6 flex flex-wrap gap-3">
+          {transitions.map((t) => (
+            <button
+              key={t.to}
+              onClick={() => changeStatus(t.to)}
+              disabled={changingStatus}
+              className={`rounded-xl px-5 py-2.5 text-sm font-bold transition-all disabled:opacity-50 ${t.style}`}
             >
-              <option value="">— Не назначен —</option>
-              {pickers.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            {assigningPicker && <span className="text-xs text-slate-400">Сохраняю...</span>}
-          </div>
-        )}
-      </div>
-
-      {/* Print header */}
-      <div className="print-only mb-4">
-        <h2 className="text-xl font-bold">Лист сборки — Заказ №{order.id}</h2>
-        <p>{order.customer.companyName || order.customer.name} · {order.customer.phone}</p>
-        <p>Дата: {formatDate(order.createdAt)}</p>
-      </div>
+              {changingStatus ? "..." : t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="no-print mb-4 flex gap-1 rounded-xl bg-slate-100 p-1">
@@ -681,190 +828,170 @@ export default function AdminOrderClient({
               activeTab === tab ? "bg-white shadow" : "text-slate-500 hover:text-slate-700"
             }`}
           >
-            {tab === "items" ? `📦 Позиции (${order.items.length})` :
-             tab === "chat" ? `💬 Чат (${messages.length + customerMessages.length})` :
-             `📋 История (${order.statusLogs.length})`}
+            {tab === "items"
+              ? `📦 Позиции (${order.items.length})`
+              : tab === "chat"
+              ? `💬 Чат (${messages.length + customerMessages.length})`
+              : `📋 История (${order.statusLogs.length})`}
           </button>
         ))}
       </div>
 
-      {/* ── Items tab ── */}
-      {(activeTab === "items" || true) && (
-        <div className={activeTab === "items" ? "" : "hidden print:block"}>
-          {/* Edit mode toggle */}
-          {canEdit && !editMode && (
-            <div className="no-print mb-3 flex items-center gap-3">
-              <button
-                onClick={enterEditMode}
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50"
-              >
-                ✏️ Редактировать позиции
-              </button>
-              {order.status === "consultation" && !order.customerConfirmed && (
-                <span className="text-sm text-orange-600">
-                  ⏳ Ожидаем подтверждения от покупателя
-                </span>
+      {/* ── ITEMS TAB ── */}
+      {activeTab === "items" && (
+        <div>
+          {/* Edit mode bar */}
+          {!editMode ? (
+            <div className="no-print mb-4 flex gap-2">
+              {["consultation", "assembly"].includes(order.status) && (
+                <button
+                  onClick={startEdit}
+                  className="rounded-xl border px-4 py-2 text-sm font-bold hover:bg-slate-50"
+                >
+                  ✏️ Редактировать позиции
+                </button>
               )}
             </div>
-          )}
-
-          {/* Edit mode toolbar */}
-          {editMode && (
-            <div className="no-print mb-3 flex items-center gap-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-              <span className="text-sm font-semibold text-amber-800">Режим редактирования</span>
-              <span className="text-sm text-amber-700">
-                Итого: <strong>{editTotal.toLocaleString("ru-RU")} ₽</strong>
-              </span>
-              <div className="ml-auto flex gap-2">
-                <button
-                  onClick={cancelEdit}
-                  className="rounded-xl border px-4 py-1.5 text-sm font-semibold hover:bg-white"
-                >
-                  Отмена
-                </button>
-                <button
-                  onClick={saveItems}
-                  disabled={saving || editItems.filter((i) => !i.removed).length === 0}
-                  className="rounded-xl bg-blue-600 px-4 py-1.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {saving ? "Сохраняю..." : "💾 Сохранить"}
-                </button>
+          ) : (
+            <div className="no-print mb-4 rounded-xl border bg-amber-50 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="font-bold text-amber-800">Режим редактирования</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={cancelEdit}
+                    className="rounded-xl border px-4 py-2 text-sm hover:bg-amber-100"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    onClick={() => openCatalog("order")}
+                    className="rounded-xl border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100"
+                  >
+                    + Добавить из каталога
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={saving}
+                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {saving ? "Сохранение..." : "✓ Сохранить"}
+                  </button>
+                </div>
+              </div>
+              {editError && (
+                <div className="mb-3 rounded-xl bg-red-50 px-4 py-2 text-sm text-red-600">{editError}</div>
+              )}
+              <div className="space-y-2">
+                {editItems.map((item, idx) => {
+                  if (item.removed) {
+                    return (
+                      <div key={idx} className="flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 opacity-60">
+                        <span className="flex-1 text-sm line-through text-red-600">{item.productName}</span>
+                        <button
+                          onClick={() => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, removed: false } : i))}
+                          className="text-xs text-red-600 hover:underline"
+                        >
+                          Восстановить
+                        </button>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={idx} className="flex items-center gap-2 rounded-xl border bg-white p-2">
+                      <span className="flex-1 text-sm font-medium">{item.productName}</span>
+                      {item.isNew && <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Новый</span>}
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, quantity: Math.max(1, Number(e.target.value)) } : i))}
+                        className="w-16 rounded-lg border px-2 py-1 text-center text-sm"
+                      />
+                      <span className="text-xs text-slate-400">шт.</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.price}
+                        onChange={(e) => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, price: Math.max(0, Number(e.target.value)) } : i))}
+                        className="w-24 rounded-lg border px-2 py-1 text-center text-sm"
+                      />
+                      <span className="text-xs text-slate-400">₽</span>
+                      <button
+                        onClick={() => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, removed: true } : i))}
+                        className="rounded-lg border px-2 py-1 text-xs text-red-500 hover:bg-red-50"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          <div className="overflow-hidden rounded-2xl border bg-white">
+          {/* Items list */}
+          <div className="overflow-hidden rounded-2xl border">
             <table className="w-full text-sm">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="p-3 text-left">Товар</th>
-                  <th className="p-3 text-left">Штрихкод</th>
-                  <th className="p-3 text-center">Кол-во</th>
-                  <th className="p-3 text-right">Цена</th>
-                  <th className="p-3 text-right">Сумма</th>
-                  {!editMode && <th className="p-3 text-center no-print">Проверка</th>}
-                  {editMode && <th className="p-3 text-center no-print">Удалить</th>}
-                  <th className="p-3 text-center print-only">✓</th>
+                  <th className="p-3 text-left font-semibold text-slate-600">Товар</th>
+                  <th className="p-3 text-center font-semibold text-slate-600">Кол-во</th>
+                  <th className="p-3 text-right font-semibold text-slate-600">Цена</th>
+                  <th className="p-3 text-right font-semibold text-slate-600">Сумма</th>
+                  <th className="p-3 text-center font-semibold text-slate-600">Статус</th>
                 </tr>
               </thead>
               <tbody>
-                {editMode
-                  ? editItems.map((item) => (
-                      <tr key={item.id} className={`border-t ${item.removed ? "opacity-40 line-through bg-red-50" : ""}`}>
-                        <td className="p-3">
-                          <div className="font-medium">{item.productName}</div>
-                        </td>
-                        <td className="p-3 text-slate-400">{item.barcode || "—"}</td>
-                        <td className="p-3 text-center">
-                          <input
-                            type="number"
-                            min={1}
-                            value={item.quantity}
-                            disabled={item.removed}
-                            onChange={(e) => editQty(item.id, Number(e.target.value))}
-                            className="w-16 rounded-lg border px-2 py-1 text-center text-sm"
-                          />
-                        </td>
-                        <td className="p-3 text-right">
-                          <input
-                            type="number"
-                            min={0}
-                            value={item.price}
-                            disabled={item.removed}
-                            onChange={(e) => editPrice(item.id, Number(e.target.value))}
-                            className="w-24 rounded-lg border px-2 py-1 text-right text-sm"
-                          />
-                        </td>
-                        <td className="p-3 text-right font-bold">
-                          {(item.quantity * item.price).toLocaleString("ru-RU")} ₽
-                        </td>
-                        <td className="p-3 text-center">
-                          <button
-                            onClick={() => toggleRemove(item.id)}
-                            className={`rounded-lg px-2 py-1 text-xs font-bold ${
-                              item.removed
-                                ? "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                                : "bg-red-100 text-red-600 hover:bg-red-200"
-                            }`}
-                          >
-                            {item.removed ? "↩ Вернуть" : "✕ Удалить"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  : order.items.map((item) => {
-                      const check = item.check;
-                      const checkInfo = check ? CHECK_LABELS[check.status] : null;
-                      return (
-                        <tr key={item.id} className="border-t">
-                          <td className="p-3">
-                            <div className="font-medium">{item.productName}</div>
-                            {check?.note && (
-                              <div className="mt-0.5 text-xs text-slate-400 no-print">{check.note}</div>
-                            )}
-                            {item.photos.length > 0 && (
-                              <div className="mt-1 flex gap-1 no-print">
-                                {item.photos.map((p) => (
-                                  <a key={p.id} href={p.url} target="_blank" rel="noreferrer">
-                                    <img src={p.url} alt="" className="h-10 w-10 rounded-lg object-cover border" />
-                                  </a>
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-3 text-slate-400">{item.barcode || "—"}</td>
-                          <td className="p-3 text-center font-bold">{item.quantity}</td>
-                          <td className="p-3 text-right">{item.price} ₽</td>
-                          <td className="p-3 text-right font-bold">{item.total} ₽</td>
-                          <td className="p-3 text-center no-print">
-                            {checkInfo ? (
-                              <div>
-                                <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${checkInfo.color}`}>
-                                  {checkInfo.label}
-                                </span>
-                                {check?.availableQty != null && (
-                                  <div className="mt-0.5 text-xs text-slate-500">Есть: {check.availableQty} шт.</div>
-                                )}
-                                {check?.picker && (
-                                  <div className="mt-0.5 text-xs text-slate-400">{check.picker.name}</div>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-slate-300 text-xs">—</span>
-                            )}
-                          </td>
-                          <td className="p-3 text-center print-only">
-                            <div className="inline-block h-5 w-5 rounded border border-slate-300"></div>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                {order.items.map((item) => (
+                  <tr key={item.id} className="border-t hover:bg-slate-50">
+                    <td className="p-3">
+                      <div className="font-medium">{item.productName}</div>
+                      {item.barcode && <div className="text-xs text-slate-400">{item.barcode}</div>}
+                      {item.photos.length > 0 && (
+                        <div className="mt-1 flex gap-1">
+                          {item.photos.map((ph) => (
+                            <a key={ph.id} href={ph.url} target="_blank" rel="noreferrer">
+                              <img src={ph.url} alt="" className="h-8 w-8 rounded object-cover border" />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                      {item.check?.note && (
+                        <div className="mt-1 text-xs text-slate-500 italic">{item.check.note}</div>
+                      )}
+                    </td>
+                    <td className="p-3 text-center font-bold">{item.quantity}</td>
+                    <td className="p-3 text-right">{item.price.toLocaleString("ru-RU")} ₽</td>
+                    <td className="p-3 text-right font-bold">{item.total.toLocaleString("ru-RU")} ₽</td>
+                    <td className="p-3 text-center">
+                      {item.check ? (
+                        <div>
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${CHECK_LABELS[item.check.status]?.color || "bg-slate-100"}`}>
+                            {CHECK_LABELS[item.check.status]?.label || item.check.status}
+                          </span>
+                          {item.check.availableQty !== null && (
+                            <div className="text-xs text-slate-400 mt-0.5">есть {item.check.availableQty}</div>
+                          )}
+                          {item.check.picker && (
+                            <div className="text-xs text-slate-400">{item.check.picker.name}</div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-300">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
-              <tfoot className="bg-slate-50">
+              <tfoot className="border-t bg-slate-50">
                 <tr>
-                  <td colSpan={editMode ? 4 : 4} className="p-3 text-right font-semibold">Итого:</td>
-                  <td className="p-3 text-right text-lg font-black">
-                    {editMode
-                      ? `${editTotal.toLocaleString("ru-RU")} ₽`
-                      : `${order.total.toLocaleString("ru-RU")} ₽`}
-                  </td>
-                  <td colSpan={1} />
+                  <td colSpan={3} className="p-3 font-bold text-right text-slate-600">Итого:</td>
+                  <td className="p-3 text-right font-black text-lg">{order.total.toLocaleString("ru-RU")} ₽</td>
+                  <td />
                 </tr>
               </tfoot>
             </table>
           </div>
-
-          {/* Add product button (edit mode only) */}
-          {editMode && (
-            <div className="no-print mt-3">
-              <button
-                onClick={openCatalog}
-                className="flex items-center gap-2 rounded-xl border border-dashed border-blue-300 bg-blue-50 px-5 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-100 w-full justify-center"
-              >
-                + Добавить товар из каталога
-              </button>
-            </div>
-          )}
 
           {order.comment && (
             <div className="mt-3 rounded-xl border bg-white p-3 text-sm text-slate-600">
@@ -874,36 +1001,36 @@ export default function AdminOrderClient({
         </div>
       )}
 
-      {/* ── Chat tab ── */}
+      {/* ── CHAT TAB ── */}
       {activeTab === "chat" && (
-        <div className="no-print flex flex-col rounded-2xl border bg-white overflow-hidden" style={{ height: 520 }}>
-          {/* Sub-tab buttons */}
-          <div className="flex gap-1 border-b p-2 bg-slate-50 shrink-0">
+        <div className="no-print flex flex-col rounded-2xl border bg-white overflow-hidden" style={{ height: "560px" }}>
+          {/* Sub-tabs */}
+          <div className="flex border-b bg-slate-50">
             <button
               onClick={() => setChatSubTab("customer")}
-              className={`flex-1 rounded-lg py-2 text-sm font-bold transition-all ${
-                chatSubTab === "customer" ? "bg-white shadow text-slate-800" : "text-slate-500 hover:text-slate-700"
+              className={`flex-1 py-3 text-sm font-bold transition-all ${
+                chatSubTab === "customer" ? "border-b-2 border-blue-500 text-blue-600 bg-white" : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              💬 Клиент {customerMessages.length > 0 && `(${customerMessages.length})`}
+              💬 Клиент ({customerMessages.length})
             </button>
             <button
               onClick={() => setChatSubTab("picker")}
-              className={`flex-1 rounded-lg py-2 text-sm font-bold transition-all ${
-                chatSubTab === "picker" ? "bg-white shadow text-slate-800" : "text-slate-500 hover:text-slate-700"
+              className={`flex-1 py-3 text-sm font-bold transition-all ${
+                chatSubTab === "picker" ? "border-b-2 border-blue-500 text-blue-600 bg-white" : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              🔧 Сборщик {messages.length > 0 && `(${messages.length})`}
+              🔧 Сборщик ({messages.length})
             </button>
           </div>
 
-          {/* Customer chat */}
+          {/* ── Customer sub-tab ── */}
           {chatSubTab === "customer" && (
             <>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {customerMessages.length === 0 && (
                   <div className="text-center text-slate-400 text-sm mt-8">
-                    Чат с клиентом пустой. Напишите первое сообщение.
+                    Нет сообщений с клиентом.
                   </div>
                 )}
                 {customerMessages.map((msg) => (
@@ -916,14 +1043,37 @@ export default function AdminOrderClient({
                       <div className="font-bold text-xs mb-0.5 opacity-70">
                         {msg.isFromPicker ? "Менеджер" : "Клиент"}
                       </div>
-                      <div>{msg.text}</div>
+                      <div>{renderMsgContent(msg.text)}</div>
                       <div className="text-xs mt-0.5 opacity-60">{formatDate(msg.createdAt)}</div>
                     </div>
                   </div>
                 ))}
-                <div ref={chatEndRef} />
+                <div ref={customerChatEndRef} />
               </div>
-              <div className="border-t p-3 flex gap-2">
+              <div className="border-t p-3 flex gap-2 items-center">
+                {/* Image upload */}
+                <label className="cursor-pointer rounded-xl border px-3 py-2 text-lg hover:bg-slate-50 shrink-0">
+                  {uploadingImg === "customer" ? "⏳" : "📷"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingImg !== null}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadChatImage(file, "customer");
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {/* Product card */}
+                <button
+                  onClick={() => openCatalog("chat-customer")}
+                  className="rounded-xl border px-3 py-2 text-lg hover:bg-slate-50 shrink-0"
+                  title="Отправить карточку товара"
+                >
+                  📦
+                </button>
                 <input
                   type="text"
                   value={customerMsgText}
@@ -933,9 +1083,9 @@ export default function AdminOrderClient({
                   className="flex-1 rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button
-                  onClick={sendCustomerMessage}
-                  disabled={sendingCustomerMsg || !customerMsgText.trim()}
-                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                  onClick={() => sendCustomerMessage()}
+                  disabled={sendingCustomerMsg || (!customerMsgText.trim() && uploadingImg === null)}
+                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50 shrink-0"
                 >
                   {sendingCustomerMsg ? "..." : "→"}
                 </button>
@@ -943,13 +1093,13 @@ export default function AdminOrderClient({
             </>
           )}
 
-          {/* Picker chat */}
+          {/* ── Picker sub-tab ── */}
           {chatSubTab === "picker" && (
             <>
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {messages.length === 0 && (
                   <div className="text-center text-slate-400 text-sm mt-8">
-                    Чат пустой. Напишите первое сообщение сборщику.
+                    Чат со сборщиком пустой.
                   </div>
                 )}
                 {messages.map((msg) => (
@@ -962,26 +1112,49 @@ export default function AdminOrderClient({
                       <div className="font-bold text-xs mb-0.5 opacity-70">
                         {msg.user?.name || (msg.isFromPicker ? "Сборщик" : "Менеджер")}
                       </div>
-                      <div>{msg.text}</div>
+                      <div>{renderMsgContent(msg.text)}</div>
                       <div className="text-xs mt-0.5 opacity-60">{formatDate(msg.createdAt)}</div>
                     </div>
                   </div>
                 ))}
-                <div ref={chatEndRef} />
+                <div ref={pickerChatEndRef} />
               </div>
-              <div className="border-t p-3 flex gap-2">
+              <div className="border-t p-3 flex gap-2 items-center">
+                {/* Image upload */}
+                <label className="cursor-pointer rounded-xl border px-3 py-2 text-lg hover:bg-slate-50 shrink-0">
+                  {uploadingImg === "picker" ? "⏳" : "📷"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingImg !== null}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadChatImage(file, "picker");
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {/* Product card */}
+                <button
+                  onClick={() => openCatalog("chat-picker")}
+                  className="rounded-xl border px-3 py-2 text-lg hover:bg-slate-50 shrink-0"
+                  title="Отправить карточку товара"
+                >
+                  📦
+                </button>
                 <input
                   type="text"
                   value={msgText}
                   onChange={(e) => setMsgText(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendPickerMessage()}
                   placeholder="Сообщение сборщику..."
                   className="flex-1 rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button
-                  onClick={sendMessage}
-                  disabled={sendingMsg || !msgText.trim()}
-                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                  onClick={() => sendPickerMessage()}
+                  disabled={sendingMsg || (!msgText.trim() && uploadingImg === null)}
+                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50 shrink-0"
                 >
                   {sendingMsg ? "..." : "→"}
                 </button>
@@ -991,7 +1164,7 @@ export default function AdminOrderClient({
         </div>
       )}
 
-      {/* ── History tab ── */}
+      {/* ── HISTORY TAB ── */}
       {activeTab === "history" && (
         <div className="no-print rounded-2xl border bg-white overflow-hidden">
           {order.statusLogs.length === 0 ? (
@@ -1009,12 +1182,12 @@ export default function AdminOrderClient({
                   </div>
                   <div className="flex-1">
                     <div className="text-sm font-semibold">
-                      {log.fromStatus ? (
+                      {log.fromStatus && (
                         <>
                           <span className="text-slate-400">{STATUS_LABELS[log.fromStatus] || log.fromStatus}</span>
                           <span className="mx-1 text-slate-300">→</span>
                         </>
-                      ) : null}
+                      )}
                       <span>{STATUS_LABELS[log.toStatus] || log.toStatus}</span>
                     </div>
                     <div className="text-xs text-slate-400">{formatDate(log.createdAt)}</div>
@@ -1026,288 +1199,124 @@ export default function AdminOrderClient({
         </div>
       )}
 
-      {/* ── Mini Catalog Modal ── */}
-      {showSearch && (
-        <div className="no-print fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4">
-          <div className="flex flex-col bg-white w-full sm:max-w-5xl rounded-t-3xl sm:rounded-2xl shadow-2xl" style={{ maxHeight: "92vh" }}>
-
-            {/* ── Header ── */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b shrink-0">
-              <h2 className="text-lg font-black flex-1">Добавить товар</h2>
-              {/* Added badge */}
-              {editItems.filter((i) => i.isNew && !i.removed).length > 0 && (
-                <span className="rounded-full bg-blue-600 px-3 py-1 text-xs font-bold text-white">
-                  +{editItems.filter((i) => i.isNew && !i.removed).length} добавлено
-                </span>
-              )}
+      {/* ── CATALOG MODAL ── */}
+      {showCatalog && (
+        <div className="fixed inset-0 z-50 flex items-stretch justify-end bg-black/40 no-print">
+          <div className="flex h-full w-full max-w-4xl flex-col bg-white shadow-2xl">
+            {/* Modal header */}
+            <div className="flex items-center gap-3 border-b px-4 py-3">
               <button
-                onClick={closeCatalog}
-                className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-slate-100 text-slate-500 text-lg shrink-0"
+                onClick={() => setShowCatalog(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-xl border hover:bg-slate-100"
               >
                 ✕
               </button>
+              <h2 className="font-bold text-lg">
+                {catalogMode === "order" ? "Добавить товар" :
+                 catalogMode === "chat-picker" ? "Отправить карточку → Сборщик" :
+                 "Отправить карточку → Клиент"}
+              </h2>
             </div>
 
-            {/* ── Search ── */}
-            <div className="px-5 py-3 border-b shrink-0">
+            {/* Search bar */}
+            <div className="border-b px-4 py-3">
               <input
-                autoFocus
                 type="text"
-                placeholder="🔍 Поиск по названию, штрихкоду или артикулу..."
                 value={searchQuery}
-                onChange={(e) => handleSearchInput(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+                onChange={(e) => handleCatalogSearch(e.target.value)}
+                placeholder="Поиск по названию или штрихкоду..."
+                className="w-full rounded-xl border px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                autoFocus
               />
             </div>
 
-            {/* ── Added strip ── */}
-            {editItems.filter((i) => i.isNew && !i.removed).length > 0 && (
-              <div className="px-5 py-2 bg-blue-50 border-b shrink-0 flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-semibold text-blue-700 shrink-0">Добавлено:</span>
-                {editItems.filter((i) => i.isNew && !i.removed).map((i) => (
-                  <span key={i.id} className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800">
-                    {i.productName.length > 28 ? i.productName.slice(0, 28) + "…" : i.productName}
-                    <button
-                      onClick={() => setEditItems((prev) => prev.map((x) => x.id === i.id ? { ...x, removed: true } : x))}
-                      className="text-blue-400 hover:text-blue-700 ml-0.5"
-                    >×</button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* ── Body: sidebar + grid ── */}
+            {/* Body: categories + products */}
             <div className="flex flex-1 overflow-hidden">
-
               {/* Categories sidebar */}
-              {categories.length > 0 && (
-                <div className="hidden sm:flex flex-col w-52 border-r shrink-0 overflow-y-auto bg-slate-50">
-                  <button
-                    onClick={() => selectCategory("")}
-                    className={`px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
-                      selectedCategoryGuid === ""
-                        ? "bg-blue-600 text-white"
-                        : "text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    Все товары
-                  </button>
-                  {/* Top-level categories */}
-                  {categories.filter((c) => !c.parentGuid).map((cat) => {
-                    const children = categories.filter((c) => c.parentGuid === cat.guid);
-                    const isExpanded = expandedCategoryGuids.has(cat.guid);
-                    const isSelected = selectedCategoryGuid === cat.guid;
-                    const allDescendants = categories.filter((c) => {
-                      const parent = categories.find((p) => p.guid === c.parentGuid);
-                      return c.parentGuid === cat.guid || parent?.parentGuid === cat.guid;
-                    });
-                    const childSelected = allDescendants.some((c) => c.guid === selectedCategoryGuid);
-                    return (
-                      <div key={cat.guid}>
-                        <div className={`flex items-center border-t border-slate-200 ${
-                          isSelected || childSelected ? "bg-blue-50" : ""
-                        }`}>
-                          <button
-                            onClick={() => selectCategory(cat.guid)}
-                            className={`flex-1 px-4 py-2 text-left text-sm transition-colors truncate ${
-                              isSelected
-                                ? "font-bold text-blue-700"
-                                : "text-slate-700 hover:text-blue-600"
-                            }`}
-                          >
-                            {cat.name}
-                          </button>
-                          {children.length > 0 && (
-                            <button
-                              onClick={() => toggleExpand(cat.guid)}
-                              className="px-2 py-2 text-slate-400 hover:text-slate-600 text-xs shrink-0"
-                            >
-                              {isExpanded ? "▲" : "▼"}
-                            </button>
-                          )}
-                        </div>
-                        {/* Level 2 children */}
-                        {isExpanded && children.map((child) => {
-                          const grandchildren = categories.filter((c) => c.parentGuid === child.guid);
-                          const childExpanded = expandedCategoryGuids.has(child.guid);
-                          const childIsSelected = selectedCategoryGuid === child.guid;
-                          const grandchildSelected = grandchildren.some((c) => c.guid === selectedCategoryGuid);
-                          return (
-                            <div key={child.guid}>
-                              <div className={`flex items-center ${
-                                childIsSelected || grandchildSelected ? "bg-blue-50" : ""
-                              }`}>
-                                <button
-                                  onClick={() => selectCategory(child.guid)}
-                                  className={`flex-1 pl-6 pr-2 py-1.5 text-left text-xs transition-colors truncate ${
-                                    childIsSelected
-                                      ? "font-bold text-blue-700"
-                                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-800"
-                                  }`}
-                                >
-                                  {child.name}
-                                </button>
-                                {grandchildren.length > 0 && (
-                                  <button
-                                    onClick={() => toggleExpand(child.guid)}
-                                    className="px-2 py-1.5 text-slate-400 hover:text-slate-600 text-xs shrink-0"
-                                  >
-                                    {childExpanded ? "▲" : "▼"}
-                                  </button>
-                                )}
-                              </div>
-                              {/* Level 3 grandchildren */}
-                              {childExpanded && grandchildren.map((grand) => (
-                                <button
-                                  key={grand.guid}
-                                  onClick={() => selectCategory(grand.guid)}
-                                  className={`block w-full pl-10 pr-4 py-1 text-left text-xs transition-colors truncate ${
-                                    selectedCategoryGuid === grand.guid
-                                      ? "bg-blue-100 font-bold text-blue-700"
-                                      : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                                  }`}
-                                >
-                                  {grand.name}
-                                </button>
-                              ))}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <div className="w-56 flex-shrink-0 overflow-y-auto border-r bg-slate-50 p-3">
+                <button
+                  onClick={() => selectCat("")}
+                  className={`mb-2 w-full rounded-lg px-2 py-1.5 text-left text-sm font-semibold ${
+                    !selectedCatGuid ? "bg-blue-100 text-blue-700" : "hover:bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  Все товары
+                </button>
+                <div className="space-y-0.5">{renderCatTree()}</div>
+              </div>
 
-              {/* Product grid */}
+              {/* Products grid */}
               <div
                 className="flex-1 overflow-y-auto p-4"
                 onScroll={(e) => {
                   const el = e.currentTarget;
                   if (el.scrollTop + el.clientHeight >= el.scrollHeight - 300) {
-                    loadMore(searchQuery, selectedCategoryGuid);
+                    loadMore(searchQuery, selectedCatGuid);
                   }
                 }}
               >
-                {searchLoading ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                    <div className="mb-3 h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500" />
-                    <p className="text-sm">Загружаю товары...</p>
-                  </div>
-                ) : searchError ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-red-400">
-                    <div className="mb-3 text-4xl">⚠️</div>
-                    <p className="text-sm font-semibold mb-1">Ошибка загрузки товаров</p>
-                    <p className="text-xs text-center max-w-xs break-all">{searchError}</p>
-                  </div>
-                ) : searchResults.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-                    <div className="mb-3 text-4xl">🔍</div>
-                    <p className="text-sm">Ничего не найдено</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {searchResults.map((p) => {
-                      const alreadyAdded = editItems.some((i) => i.productId === p.id && !i.removed);
-                      return (
-                        <button
-                          key={p.id}
-                          onClick={() => {
-                            if (alreadyAdded) {
-                              setEditItems((prev) =>
-                                prev.map((i) =>
-                                  i.productId === p.id && !i.removed ? { ...i, removed: true } : i
-                                )
-                              );
-                            } else {
-                              addProductToEdit(p);
-                            }
-                          }}
-                          className={`flex flex-col rounded-2xl border text-left transition-all ${
-                            alreadyAdded
-                              ? "border-blue-300 bg-blue-50 ring-2 ring-blue-200 hover:border-red-300 hover:bg-red-50"
-                              : "border-slate-200 bg-white hover:border-blue-300 hover:shadow-md active:scale-95"
-                          }`}
-                        >
-                          {/* Image */}
-                          <div className="relative w-full aspect-square rounded-t-2xl overflow-hidden bg-slate-100 flex items-center justify-center">
-                            {p.imagePath ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={p.imagePath.startsWith("http") ? p.imagePath : `https://kosmetichka-opt.ru/api/1c/${p.imagePath}`}
-                                alt={p.name}
-                                className="h-full w-full object-cover"
-                                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                              />
-                            ) : (
-                              <span className="text-4xl">🧴</span>
-                            )}
-                            {alreadyAdded && (
-                              <div className="group/card absolute inset-0 flex items-center justify-center bg-blue-600/20 hover:bg-red-500/30">
-                                <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white shadow group-hover/card:hidden">✓ Добавлен</span>
-                                <span className="hidden rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white shadow group-hover/card:inline">✕ Убрать</span>
-                              </div>
-                            )}
-                            {p.stock !== null && (
-                              <div className={`absolute bottom-1.5 left-1.5 rounded-full px-2 py-0.5 text-xs font-bold text-white shadow ${
-                                p.stock <= 0 ? "bg-red-500" : "bg-green-500"
-                              }`}>
-                                {p.stock <= 0 ? "Нет" : `${p.stock} шт`}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Info */}
-                          <div className="flex flex-col flex-1 p-2.5 gap-1">
-                            <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-tight min-h-[2.5rem]">
-                              {p.name}
-                            </p>
-                            {p.barcode && (
-                              <p className="text-xs text-slate-400 truncate">{p.barcode}</p>
-                            )}
-                            <div className="mt-auto pt-1 flex items-center justify-between gap-1">
-                              <span className="text-sm font-black text-slate-800">
-                                {Math.round(p.price).toLocaleString("ru-RU")} ₽
-                              </span>
-                              {!alreadyAdded ? (
-                                <span className="shrink-0 rounded-lg bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">
-                                  + Добавить
-                                </span>
-                              ) : (
-                                <span className="shrink-0 text-xs text-blue-600">✓</span>
-                              )}
+                {searchResults.length === 0 && !loadingMore && (
+                  <div className="text-center text-slate-400 py-12">Ничего не найдено</div>
+                )}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                  {searchResults.map((p) => {
+                    const editItem = editItems.find((i) => i.productId === p.id);
+                    const isAdded = editItem && !editItem.removed;
+                    const imgUrl = getProductImageUrl(p.imagePath);
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => handleProductSelect(p)}
+                        className={`group relative flex flex-col rounded-2xl border-2 overflow-hidden text-left transition-all hover:shadow-md ${
+                          isAdded && catalogMode === "order"
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-slate-200 bg-white hover:border-blue-300"
+                        }`}
+                      >
+                        {/* Image */}
+                        <div className="relative aspect-square bg-slate-100 w-full">
+                          {imgUrl ? (
+                            <img
+                              src={imgUrl}
+                              alt={p.name}
+                              className="h-full w-full object-contain p-2"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-3xl">🧴</div>
+                          )}
+                          {isAdded && catalogMode === "order" && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-blue-600/80 text-white font-bold text-sm">
+                              ✓ Добавлен
                             </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                {/* Load more indicator */}
+                          )}
+                          {catalogMode !== "order" && (
+                            <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-blue-600/80 text-white font-bold text-xs px-2 text-center">
+                              Отправить карточку
+                            </div>
+                          )}
+                        </div>
+                        {/* Info */}
+                        <div className="p-2 flex-1">
+                          <p className="text-xs font-semibold leading-snug line-clamp-2">{p.name}</p>
+                          {p.stock !== null && (
+                            <p className={`text-xs mt-0.5 ${p.stock > 0 ? "text-green-600" : "text-red-500"}`}>
+                              {p.stock > 0 ? `${p.stock} шт.` : "Нет в наличии"}
+                            </p>
+                          )}
+                          <p className="text-sm font-bold mt-1">{p.price.toLocaleString("ru-RU")} ₽</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
                 {loadingMore && (
-                  <div className="flex justify-center py-4">
-                    <div className="h-6 w-6 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500" />
-                  </div>
+                  <div className="py-6 text-center text-slate-400 text-sm">Загрузка...</div>
                 )}
-                {!hasMore && searchResults.length > 0 && !searchLoading && (
-                  <p className="py-4 text-center text-xs text-slate-300">Все товары загружены</p>
+                {hasMore && !loadingMore && (
+                  <div className="py-4 text-center text-xs text-slate-400">Прокрутите вниз для загрузки</div>
                 )}
               </div>
-            </div>
-
-            {/* ── Footer ── */}
-            <div className="flex items-center justify-between border-t px-5 py-3 shrink-0 bg-white">
-              <span className="text-sm text-slate-500">
-                {editItems.filter((i) => i.isNew && !i.removed).length > 0
-                  ? `${editItems.filter((i) => i.isNew && !i.removed).length} товаров добавлено в заказ`
-                  : "Нажмите на карточку, чтобы добавить"}
-              </span>
-              <button
-                onClick={closeCatalog}
-                className="rounded-xl bg-blue-600 px-6 py-2 text-sm font-bold text-white hover:bg-blue-700"
-              >
-                Готово
-              </button>
             </div>
           </div>
         </div>

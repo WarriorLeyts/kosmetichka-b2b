@@ -27,7 +27,7 @@ export default async function AdminOrderPage({
           orderBy: { id: "asc" },
         },
         messages: {
-          where: { source: "picker" },
+          where: { source: null },
           include: { user: { select: { name: true, role: true } } },
           orderBy: { createdAt: "asc" },
         },
@@ -104,6 +104,11 @@ export default async function AdminOrderPage({
     })),
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <AdminOrderClient order={serialized as any} pickers={pickers} customerMessages={serialized.customerMessages} />;
+  return (
+    <AdminOrderClient
+      order={serialized as any}
+      pickers={pickers}
+      customerMessages={serialized.customerMessages}
+    />
+  );
 }
