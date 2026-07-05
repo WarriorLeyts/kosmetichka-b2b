@@ -50,7 +50,12 @@ export default async function PickerOrderPage({
 
   const imageMap: Record<number, string | null> = {};
   for (const p of products) {
-    imageMap[p.id] = p.images[0]?.path ?? null;
+    const rawPath = p.images[0]?.path ?? null;
+    imageMap[p.id] = rawPath
+      ? rawPath.startsWith("http")
+        ? rawPath
+        : `https://kosmetichka-opt.ru/api/1c/${rawPath}`
+      : null;
   }
 
   return <PickerOrderClient order={order} imageMap={imageMap} />;
