@@ -18,11 +18,8 @@ export async function POST(request: Request, { params }: Props) {
 
   await prisma.order.update({
     where: { id: orderId },
-    data: { status: "approved" },
+    data: { status: "payment" },
   });
-
-  // Удаляем переписку — заказ подтверждён, чат больше не нужен
-  await prisma.orderMessage.deleteMany({ where: { orderId } }).catch(() => {});
 
   return NextResponse.json({ success: true });
 }
