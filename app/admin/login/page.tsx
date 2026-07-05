@@ -30,7 +30,12 @@ export default function AdminLoginPage() {
       return;
     }
 
-    router.push("/admin/customers");
+    // Redirect based on role
+    if (data.role === "picker") {
+      router.push("/picker");
+    } else {
+      router.push("/admin/customers");
+    }
     router.refresh();
   }
 
@@ -44,7 +49,7 @@ export default function AdminLoginPage() {
           <ShieldCheck className="mx-auto mb-3 h-10 w-10 text-pink-500" />
 
           <h1 className="bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-3xl font-black text-transparent">
-            Вход менеджера
+            Вход сотрудника
           </h1>
 
           <p className="mt-2 text-sm font-semibold text-slate-500">

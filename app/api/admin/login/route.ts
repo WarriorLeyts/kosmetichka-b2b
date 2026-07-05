@@ -43,5 +43,5 @@ export async function POST(request: Request) {
     maxAge: 60 * 60 * 24 * 30,
   });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, role: user.role });
 }
