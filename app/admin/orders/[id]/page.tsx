@@ -11,7 +11,7 @@ export default async function AdminOrderPage({
 }) {
   const { id } = await params;
 
-  const [order, pickers] = await Promise.all([
+  const [order, pickers, customerMessages] = await Promise.all([
     prisma.order.findUnique({
       where: { id: Number(id) },
       include: {
@@ -40,6 +40,11 @@ export default async function AdminOrderPage({
       where: { role: "picker" },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
+    }),
+    prisma.orderMessage.findMany({
+      where: { orderId: Number(id), source: "customer" },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, text: true, isFromPicker: true, createdAt: true },
     }),
   ]);
 
@@ -91,8 +96,14 @@ export default async function AdminOrderPage({
       toStatus: l.toStatus,
       createdAt: l.createdAt.toISOString(),
     })),
+    customerMessages: customerMessages.map((m) => ({
+      id: m.id,
+      text: m.text,
+      isFromPicker: m.isFromPicker,
+      createdAt: m.createdAt.toISOString(),
+    })),
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <AdminOrderClient order={serialized as any} pickers={pickers} />;
+  return <AdminOrderClient order={serialized as any} pickers={pickers} customerMessages={serialized.customerMessages} />;
 }

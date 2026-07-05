@@ -35,6 +35,13 @@ type Message = {
   user: { name: string; role: string } | null;
 };
 
+type CustomerMessage = {
+  id: number;
+  text: string;
+  isFromPicker: boolean;
+  createdAt: string;
+};
+
 type StatusLog = {
   id: number;
   fromStatus: string | null;
@@ -157,17 +164,23 @@ type CatalogCategory = {
 export default function AdminOrderClient({
   order: initialOrder,
   pickers,
+  customerMessages: initialCustomerMessages,
 }: {
   order: Order;
   pickers: PickerUser[];
+  customerMessages: CustomerMessage[];
 }) {
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
   const [messages, setMessages] = useState<Message[]>(initialOrder.messages);
+  const [customerMessages, setCustomerMessages] = useState<CustomerMessage[]>(initialCustomerMessages);
   const [msgText, setMsgText] = useState("");
   const [sendingMsg, setSendingMsg] = useState(false);
+  const [customerMsgText, setCustomerMsgText] = useState("");
+  const [sendingCustomerMsg, setSendingCustomerMsg] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
   const [activeTab, setActiveTab] = useState<"items" | "chat" | "history">("items");
+  const [chatSubTab, setChatSubTab] = useState<"customer" | "picker">("customer");
   const chatEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -446,25 +459,40 @@ export default function AdminOrderClient({
       if (pollRef.current) clearInterval(pollRef.current);
       return;
     }
-    const fetchMsgs = async () => {
-      const res = await fetch(`/api/picker/messages/${order.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setMessages(data.messages);
-      }
-    };
-    fetchMsgs();
-    pollRef.current = setInterval(fetchMsgs, 5000);
+
+    if (chatSubTab === "picker") {
+      const fetchMsgs = async () => {
+        const res = await fetch(`/api/picker/messages/${order.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setMessages(data.messages);
+        }
+      };
+      fetchMsgs();
+      pollRef.current = setInterval(fetchMsgs, 5000);
+    } else {
+      // customer sub-tab
+      const fetchCustomerMsgs = async () => {
+        const res = await fetch(`/api/admin/orders/${order.id}/customer-messages`);
+        if (res.ok) {
+          const data = await res.json();
+          setCustomerMessages(data.messages);
+        }
+      };
+      fetchCustomerMsgs();
+      pollRef.current = setInterval(fetchCustomerMsgs, 5000);
+    }
+
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [activeTab, order.id]);
+  }, [activeTab, chatSubTab, order.id]);
 
   useEffect(() => {
     if (activeTab === "chat") {
       chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, activeTab]);
+  }, [messages, customerMessages, activeTab, chatSubTab]);
 
   async function changeStatus(toStatus: string) {
     setChangingStatus(true);
@@ -496,6 +524,22 @@ export default function AdminOrderClient({
       setMsgText("");
     }
     setSendingMsg(false);
+  }
+
+  async function sendCustomerMessage() {
+    if (!customerMsgText.trim()) return;
+    setSendingCustomerMsg(true);
+    const res = await fetch(`/api/admin/orders/${order.id}/customer-messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: customerMsgText }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setCustomerMessages((prev) => [...prev, data.message]);
+      setCustomerMsgText("");
+    }
+    setSendingCustomerMsg(false);
   }
 
   const transitions = TRANSITIONS[order.status] || [];
@@ -638,7 +682,7 @@ export default function AdminOrderClient({
             }`}
           >
             {tab === "items" ? `📦 Позиции (${order.items.length})` :
-             tab === "chat" ? `💬 Чат (${messages.length})` :
+             tab === "chat" ? `💬 Чат (${messages.length + customerMessages.length})` :
              `📋 История (${order.statusLogs.length})`}
           </button>
         ))}
@@ -832,47 +876,118 @@ export default function AdminOrderClient({
 
       {/* ── Chat tab ── */}
       {activeTab === "chat" && (
-        <div className="no-print flex flex-col rounded-2xl border bg-white overflow-hidden" style={{ height: 480 }}>
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {messages.length === 0 && (
-              <div className="text-center text-slate-400 text-sm mt-8">
-                Чат пустой. Напишите первое сообщение сборщику.
-              </div>
-            )}
-            {messages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.isFromPicker ? "justify-start" : "justify-end"}`}>
-                <div className={`max-w-xs rounded-2xl px-4 py-2 text-sm ${
-                  msg.isFromPicker
-                    ? "bg-slate-100 text-slate-800 rounded-tl-sm"
-                    : "bg-blue-600 text-white rounded-tr-sm"
-                }`}>
-                  <div className="font-bold text-xs mb-0.5 opacity-70">
-                    {msg.user?.name || (msg.isFromPicker ? "Сборщик" : "Менеджер")}
-                  </div>
-                  <div>{msg.text}</div>
-                  <div className="text-xs mt-0.5 opacity-60">{formatDate(msg.createdAt)}</div>
-                </div>
-              </div>
-            ))}
-            <div ref={chatEndRef} />
-          </div>
-          <div className="border-t p-3 flex gap-2">
-            <input
-              type="text"
-              value={msgText}
-              onChange={(e) => setMsgText(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
-              placeholder="Сообщение сборщику..."
-              className="flex-1 rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+        <div className="no-print flex flex-col rounded-2xl border bg-white overflow-hidden" style={{ height: 520 }}>
+          {/* Sub-tab buttons */}
+          <div className="flex gap-1 border-b p-2 bg-slate-50 shrink-0">
             <button
-              onClick={sendMessage}
-              disabled={sendingMsg || !msgText.trim()}
-              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+              onClick={() => setChatSubTab("customer")}
+              className={`flex-1 rounded-lg py-2 text-sm font-bold transition-all ${
+                chatSubTab === "customer" ? "bg-white shadow text-slate-800" : "text-slate-500 hover:text-slate-700"
+              }`}
             >
-              {sendingMsg ? "..." : "→"}
+              💬 Клиент {customerMessages.length > 0 && `(${customerMessages.length})`}
+            </button>
+            <button
+              onClick={() => setChatSubTab("picker")}
+              className={`flex-1 rounded-lg py-2 text-sm font-bold transition-all ${
+                chatSubTab === "picker" ? "bg-white shadow text-slate-800" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              🔧 Сборщик {messages.length > 0 && `(${messages.length})`}
             </button>
           </div>
+
+          {/* Customer chat */}
+          {chatSubTab === "customer" && (
+            <>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {customerMessages.length === 0 && (
+                  <div className="text-center text-slate-400 text-sm mt-8">
+                    Чат с клиентом пустой. Напишите первое сообщение.
+                  </div>
+                )}
+                {customerMessages.map((msg) => (
+                  <div key={msg.id} className={`flex ${msg.isFromPicker ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-xs rounded-2xl px-4 py-2 text-sm ${
+                      msg.isFromPicker
+                        ? "bg-blue-600 text-white rounded-tr-sm"
+                        : "bg-slate-100 text-slate-800 rounded-tl-sm"
+                    }`}>
+                      <div className="font-bold text-xs mb-0.5 opacity-70">
+                        {msg.isFromPicker ? "Менеджер" : "Клиент"}
+                      </div>
+                      <div>{msg.text}</div>
+                      <div className="text-xs mt-0.5 opacity-60">{formatDate(msg.createdAt)}</div>
+                    </div>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+              <div className="border-t p-3 flex gap-2">
+                <input
+                  type="text"
+                  value={customerMsgText}
+                  onChange={(e) => setCustomerMsgText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendCustomerMessage()}
+                  placeholder="Сообщение клиенту..."
+                  className="flex-1 rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={sendCustomerMessage}
+                  disabled={sendingCustomerMsg || !customerMsgText.trim()}
+                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {sendingCustomerMsg ? "..." : "→"}
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Picker chat */}
+          {chatSubTab === "picker" && (
+            <>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {messages.length === 0 && (
+                  <div className="text-center text-slate-400 text-sm mt-8">
+                    Чат пустой. Напишите первое сообщение сборщику.
+                  </div>
+                )}
+                {messages.map((msg) => (
+                  <div key={msg.id} className={`flex ${msg.isFromPicker ? "justify-start" : "justify-end"}`}>
+                    <div className={`max-w-xs rounded-2xl px-4 py-2 text-sm ${
+                      msg.isFromPicker
+                        ? "bg-slate-100 text-slate-800 rounded-tl-sm"
+                        : "bg-blue-600 text-white rounded-tr-sm"
+                    }`}>
+                      <div className="font-bold text-xs mb-0.5 opacity-70">
+                        {msg.user?.name || (msg.isFromPicker ? "Сборщик" : "Менеджер")}
+                      </div>
+                      <div>{msg.text}</div>
+                      <div className="text-xs mt-0.5 opacity-60">{formatDate(msg.createdAt)}</div>
+                    </div>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+              <div className="border-t p-3 flex gap-2">
+                <input
+                  type="text"
+                  value={msgText}
+                  onChange={(e) => setMsgText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                  placeholder="Сообщение сборщику..."
+                  className="flex-1 rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={sendingMsg || !msgText.trim()}
+                  className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {sendingMsg ? "..." : "→"}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
