@@ -10,7 +10,6 @@ function resolveJwtSecret(): string {
     );
   }
 
-  // Dev convenience only — see lib/auth.ts for why this doesn't throw here.
   console.warn(
     "[middleware] JWT_SECRET is not set in .env — using a temporary random secret for this dev session."
   );
@@ -23,33 +22,42 @@ const secret = new TextEncoder().encode(resolveJwtSecret());
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  if (
-    pathname.startsWith("/admin") &&
-    pathname !== "/admin/login"
-  ) {
+  // --- Admin routes: require admin or manager role ---
+  if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
     const token = request.cookies.get("admin_token")?.value;
 
     if (!token) {
-      return NextResponse.redirect(
-        new URL("/admin/login", request.url)
-      );
+      return NextResponse.redirect(new URL("/admin/login", request.url));
     }
 
     try {
       const { payload } = await jwtVerify(token, secret);
 
-      if (
-        payload.role !== "admin" &&
-        payload.role !== "manager"
-      ) {
-        return NextResponse.redirect(
-          new URL("/admin/login", request.url)
-        );
+      if (payload.role !== "admin" && payload.role !== "manager") {
+        return NextResponse.redirect(new URL("/admin/login", request.url));
       }
     } catch {
-      return NextResponse.redirect(
-        new URL("/admin/login", request.url)
-      );
+      return NextResponse.redirect(new URL("/admin/login", request.url));
+    }
+  }
+
+  // --- Picker routes: require picker, manager, or admin role ---
+  if (pathname.startsWith("/picker") && pathname !== "/picker/login") {
+    const token = request.cookies.get("admin_token")?.value;
+
+    if (!token) {
+      return NextResponse.redirect(new URL("/picker/login", request.url));
+    }
+
+    try {
+      const { payload } = await jwtVerify(token, secret);
+      const role = payload.role as string;
+
+      if (!["admin", "manager", "picker"].includes(role)) {
+        return NextResponse.redirect(new URL("/picker/login", request.url));
+      }
+    } catch {
+      return NextResponse.redirect(new URL("/picker/login", request.url));
     }
   }
 
@@ -57,5 +65,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/picker/:path*"],
 };

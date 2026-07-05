@@ -116,6 +116,9 @@ model User {
   login     String   @unique
   password  String
   role      String   @default("manager")
+
+  checks OrderItemCheck[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -125,14 +128,19 @@ model Order {
   customerId Int
   customer   Customer @relation(fields: [customerId], references: [id])
 
+  // Statuses:
+  // pending     — Ожидание менеджера
+  // assembly    — Проверка/Сборка
+  // consultation — Консультация
+  // payment     — К оплате
+  // exported    — Выгружен в 1С
+  // cancelled   — Отменен
   status  String  @default("pending")
   total   Int     @default(0)
   comment String? @db.Text
 
-  items    OrderItem[]
-  messages OrderMessage[]
+  items OrderItem[]
 
-  bitrixDealId   Int?
   oneCExportedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -151,20 +159,25 @@ model OrderItem {
   quantity    Int
   price       Int
   total       Int
+
+  check OrderItemCheck?
 }
 
-model OrderMessage {
-  id      Int   @id @default(autoincrement())
-  orderId Int
-  order   Order @relation(fields: [orderId], references: [id])
+model OrderItemCheck {
+  id          Int       @id @default(autoincrement())
+  orderItemId Int       @unique
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id])
 
-  text          String  @db.Text
-  isFromManager Boolean @default(false)
+  // ok | out_of_stock | expired | bad_condition | insufficient_qty
+  status       String
+  availableQty Int?
+  note         String?
 
-  // Bitrix timeline comment ID — used to avoid saving duplicates
-  bitrixCommentId String? @unique
+  pickerId Int?
+  picker   User? @relation(fields: [pickerId], references: [id])
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model OneCCustomer {
