@@ -27,7 +27,7 @@ export default async function AdminOrderPage({
           orderBy: { id: "asc" },
         },
         messages: {
-          where: { source: { equals: null } },
+          where: { source: "picker" },
           include: { user: { select: { name: true, role: true } } },
           orderBy: { createdAt: "asc" },
         },
