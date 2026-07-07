@@ -120,12 +120,21 @@ export async function PUT(request: NextRequest, { params }: Props) {
   const updated = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
+      customer: {
+        select: { companyName: true, name: true, phone: true, city: true, inn: true },
+      },
+      picker: { select: { id: true, name: true } },
       items: {
         include: {
           check: { include: { picker: { select: { name: true } } } },
           photos: true,
         },
       },
+      messages: {
+        include: { user: { select: { name: true, role: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+      statusLogs: { orderBy: { createdAt: "asc" } },
     },
   });
 
