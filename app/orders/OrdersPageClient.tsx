@@ -69,6 +69,53 @@ function formatMoney(amount: number) {
   return amount.toLocaleString("ru-RU") + " ₽";
 }
 
+function getProductImageUrl(imagePath: string | null): string | null {
+  if (!imagePath) return null;
+  if (imagePath.startsWith("http")) return imagePath;
+  return `https://kosmetichka-opt.ru/api/1c/${imagePath}`;
+}
+
+function renderMsgContent(text: string) {
+  try {
+    const obj = JSON.parse(text);
+    if (obj?._t === "img" && obj.url) {
+      return (
+        <a href={obj.url} target="_blank" rel="noreferrer">
+          <img src={obj.url} alt="фото" className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer hover:opacity-90" />
+        </a>
+      );
+    }
+    if (obj?._t === "product") {
+      const imgUrl = getProductImageUrl(obj.imagePath ?? null);
+      return (
+        <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-52 shadow-sm">
+          {imgUrl && <img src={imgUrl} alt={obj.name} className="w-full h-24 object-contain bg-slate-50 p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />}
+          <div className="p-2">
+            <p className="font-semibold text-sm leading-snug">{obj.name}</p>
+            {obj.price > 0 && <p className="text-xs text-slate-500 mt-0.5">{Number(obj.price).toLocaleString("ru-RU")} ₽</p>}
+          </div>
+        </div>
+      );
+    }
+    if (obj?._t === "product-problem") {
+      const imgUrl = getProductImageUrl(obj.imagePath ?? null);
+      return (
+        <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-56 shadow-sm">
+          {imgUrl && <img src={imgUrl} alt={obj.name} className="w-full h-28 object-contain bg-slate-50 p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />}
+          <div className="p-2">
+            <p className="font-semibold text-sm leading-snug mb-1">{obj.name}</p>
+            {obj.price > 0 && <p className="text-xs text-slate-500 mb-2">{Number(obj.price).toLocaleString("ru-RU")} ₽</p>}
+            <div className="rounded-lg bg-orange-50 border border-orange-200 px-2 py-1.5">
+              <p className="text-xs font-semibold text-orange-700">⚠️ {obj.problem}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  } catch {}
+  return <span style={{ whiteSpace: "pre-wrap" }}>{text}</span>;
+}
+
 function OrderChat({ orderId }: { orderId: number }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
@@ -169,7 +216,7 @@ function OrderChat({ orderId }: { orderId: number }) {
                       {"Менеджер"}
                     </p>
                   )}
-                  <p style={{ whiteSpace: "pre-wrap" }}>{m.text}</p>
+                  {renderMsgContent(m.text)}
                   <p className={`text-xs mt-1 ${m.isFromManager ? "text-slate-400" : "text-indigo-200"}`}>
                     {new Date(m.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
                   </p>

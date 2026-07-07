@@ -225,6 +225,32 @@ function renderMsgContent(text: string) {
         </div>
       );
     }
+    if (obj?._t === "product-problem") {
+      const imgUrl = getProductImageUrl(obj.imagePath ?? null);
+      return (
+        <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-56 shadow-sm">
+          {imgUrl && (
+            <img
+              src={imgUrl}
+              alt={obj.name}
+              className="w-full h-28 object-contain bg-slate-50 p-1"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          )}
+          <div className="p-2">
+            <p className="font-semibold text-sm leading-snug mb-1">{obj.name}</p>
+            {obj.price > 0 && (
+              <p className="text-xs text-slate-500 mb-2">
+                {Number(obj.price).toLocaleString("ru-RU")} ₽
+              </p>
+            )}
+            <div className="rounded-lg bg-orange-50 border border-orange-200 px-2 py-1.5">
+              <p className="text-xs font-semibold text-orange-700">⚠️ {obj.problem}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
   } catch {}
   return <span style={{ whiteSpace: "pre-wrap" }}>{text}</span>;
 }
@@ -596,6 +622,49 @@ export default function AdminOrderClient({
     setEditError("");
   }
 
+  // ── Notify customer about problems ──
+  async function notifyClientAboutProblems() {
+    const CHECK_LABELS: Record<string, string> = {
+      out_of_stock: "Нет в наличии",
+      expired: "Истёк срок годности",
+      bad_condition: "Плохое состояние",
+      insufficient_qty: "Не хватает",
+    };
+
+    const problematic = order.items.filter(
+      (i) => i.check && i.check.status !== "ok"
+    );
+    if (problematic.length === 0) return;
+
+    // Intro message
+    await sendCustomerMessage(
+      `Здравствуйте! По вашему заказу №${order.id} возникли проблемы с некоторыми позициями:`
+    );
+
+    // Send product card for each problematic item
+    for (const item of problematic) {
+      const label = CHECK_LABELS[item.check!.status] ?? item.check!.status;
+      const extra =
+        item.check!.status === "insufficient_qty" && item.check!.availableQty !== null
+          ? ` (есть ${item.check!.availableQty} шт.)`
+          : "";
+      const note = item.check!.note ? ` — ${item.check!.note}` : "";
+
+      // Use picker photo if available, otherwise null
+      const imagePath = item.photos.length > 0 ? item.photos[0].url : null;
+
+      const msgJson = JSON.stringify({
+        _t: "product-problem",
+        id: item.productId,
+        name: item.productName,
+        price: item.price,
+        imagePath,
+        problem: `${label}${extra}${note}`,
+      });
+      await sendCustomerMessage(msgJson);
+    }
+  }
+
   async function saveEdit() {
     setSaving(true);
     setEditError("");
@@ -906,13 +975,22 @@ export default function AdminOrderClient({
         <div>
           {/* Edit mode bar */}
           {!editMode ? (
-            <div className="no-print mb-4 flex gap-2">
+            <div className="no-print mb-4 flex flex-wrap gap-2">
               {["consultation", "assembly"].includes(order.status) && (
                 <button
                   onClick={startEdit}
                   className="rounded-xl border px-4 py-2 text-sm font-bold hover:bg-slate-50"
                 >
                   ✏️ Редактировать позиции
+                </button>
+              )}
+              {order.items.some((i) => i.check && i.check.status !== "ok") && (
+                <button
+                  onClick={notifyClientAboutProblems}
+                  disabled={sendingCustomerMsg}
+                  className="rounded-xl border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-bold text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+                >
+                  📢 Сообщить клиенту о проблемах
                 </button>
               )}
             </div>
