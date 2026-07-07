@@ -23,12 +23,6 @@ async function getUser() {
 
 type Props = { params: Promise<{ id: string }> };
 
-// PUT /api/admin/orders/[id]/items
-// Body: {
-//   items: [{ id, quantity, price }],
-//   removeIds: number[],
-//   newItems: [{ productId, productName, barcode, quantity, price, variantName?, variantImageUrl? }]
-// }
 export async function PUT(request: NextRequest, { params }: Props) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
@@ -50,7 +44,13 @@ export async function PUT(request: NextRequest, { params }: Props) {
   }
 
   const body = await request.json();
-  const updates: { id: number; quantity: number; price: number }[] = body.items ?? [];
+  const updates: {
+    id: number;
+    quantity: number;
+    price: number;
+    variantName?: string | null;
+    variantImageUrl?: string | null;
+  }[] = body.items ?? [];
   const removeIds: number[] = body.removeIds ?? [];
   const newItems: {
     productId: number;
@@ -82,7 +82,13 @@ export async function PUT(request: NextRequest, { params }: Props) {
     const price = Math.max(0, Math.round(u.price));
     await prisma.orderItem.update({
       where: { id: u.id },
-      data: { quantity: qty, price, total: qty * price },
+      data: {
+        quantity: qty,
+        price,
+        total: qty * price,
+        ...(u.variantName !== undefined ? { variantName: u.variantName ?? null } : {}),
+        ...(u.variantImageUrl !== undefined ? { variantImageUrl: u.variantImageUrl ?? null } : {}),
+      },
     });
   }
 
