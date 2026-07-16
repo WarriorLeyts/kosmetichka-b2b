@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Диффузор Meromi — KosmetichkaShop</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent: #c0506e;
+      --accent-light: #f7e8ec;
+      --accent-hover: #a83d5a;
+      --text: #1a1a1a;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --bg: #f9f9f9;
+      --white: #fff;
+      --star: #f59e0b;
+      --radius: 12px;
+      --tag-bg: #f3f4f6;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    /* ─── Header ─── */
+    header {
+      background: var(--white);
+      border-bottom: 1px solid var(--border);
+      padding: 0 40px;
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      height: 60px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+      text-decoration: none;
+    }
+    .logo span { color: var(--text); }
+    .header-nav { display: flex; gap: 24px; flex: 1; }
+    .header-nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color .2s;
+    }
+    .header-nav a:hover { color: var(--accent); }
+    .header-actions { display: flex; gap: 16px; align-items: center; }
+    .cart-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ─── Breadcrumb ─── */
+    .breadcrumb {
+      max-width: 1280px;
+      margin: 16px auto 0;
+      padding: 0 40px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .breadcrumb a { color: var(--muted); text-decoration: none; }
+    .breadcrumb a:hover { color: var(--accent); }
+    .breadcrumb span { color: var(--text); font-weight: 500; }
+    .bc-sep { color: #d1d5db; }
+
+    /* ─── Main Product Layout ─── */
+    .product-wrap {
+      max-width: 1280px;
+      margin: 20px auto 0;
+      padding: 0 40px;
+      display: grid;
+      grid-template-columns: 72px 1fr 420px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* ─── Thumbnail Strip ─── */
+    .thumbs {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: sticky;
+      top: 80px;
+    }
+    .thumb {
+      width: 68px;
+      height: 68px;
+      border-radius: 8px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      overflow: hidden;
+      background: var(--white);
+      transition: border-color .2s;
+      flex-shrink: 0;
+    }
+    .thumb.active { border-color: var(--accent); }
+    .thumb:hover { border-color: #d1a0af; }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+    /* ─── Main Image ─── */
+    .main-image-wrap {
+      background: var(--white);
+      border-radius: var(--radius);
+      overflow: hidden;
+      position: relative;
+      aspect-ratio: 1 / 1.05;
+      max-height: 640px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      cursor: zoom-in;
+    }
+    .main-image-wrap img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      transition: transform .3s;
+    }
+    .main-image-wrap:hover img { transform: scale(1.04); }
+    .badge-hot {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      letter-spacing: .4px;
+    }
+    .image-actions {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .img-action-btn {
+      width: 36px;
+      height: 36px;
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 16px;
+      transition: all .2s;
+      text-decoration: none;
+    }
+    .img-action-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .all-photos-link {
+      position: absolute;
+      bottom: 14px;
+      right: 14px;
+      font-size: 12px;
+      color: var(--muted);
+      background: rgba(255,255,255,.9);
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .all-photos-link:hover { color: var(--accent); }
+
+    /* ─── Product Info Panel ─── */
+    .product-info {
+      background: var(--white);
+      border-radius: var(--radius);
+      padding: 28px;
+      border: 1px solid var(--border);
+      position: sticky;
+      top: 80px;
+    }
+
+    .brand-link {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      text-decoration: none;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+    }
+    .brand-link:hover { text-decoration: underline; }
+
+    .product-title {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.3;
+      margin: 8px 0 12px;
+      color: var(--text);
+    }
+
+    /* Rating row */
+    .rating-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .stars { display: flex; gap: 2px; }
+    .star { color: var(--star); font-size: 15px; }
+    .star.half { position: relative; display: inline-block; }
+    .rating-score {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .review-count {
+      font-size: 13px;
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: underline dotted;
+    }
+    .questions-count {
+      font-size: 13px;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .questions-count:hover { color: var(--accent); }
+    .buyer-choice {
+      font-size: 11px;
+      background: #fef3c7;
+      color: #92400e;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+
+    /* Tags */
+    .tag-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .tag {
+      font-size: 12px;
+      background: var(--tag-bg);
+      color: var(--muted);
+      padding: 4px 10px;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .tag:hover { background: var(--accent-light); color: var(--accent); }
+
+    /* Variants */
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      margin-bottom: 8px;
+    }
+    .variants {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .variant {
+      width: 52px;
+      height: 52px;
+      border-radius: 8px;
+      border: 2px solid transparent;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color .2s;
+      position: relative;
+    }
+    .variant.active { border-color: var(--accent); }
+    .variant:hover { border-color: #d1a0af; }
+    .variant img { width: 100%; height: 100%; object-fit: cover; }
+    .variant-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 3px;
+    }
+    .variant-group { text-align: center; }
+
+    /* Price block */
+    .price-block {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+    .price-current {
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .price-current span { font-size: 20px; }
+    .price-old {
+      font-size: 16px;
+      color: var(--muted);
+      text-decoration: line-through;
+    }
+    .discount-badge {
+      background: var(--accent-light);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .price-note {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+    .price-note strong { color: var(--accent); }
+
+    /* Buttons */
+    .btn-primary {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      transition: background .2s, transform .1s;
+      margin-bottom: 10px;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:active { transform: scale(.99); }
+    .btn-secondary {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      background: transparent;
+      color: var(--accent);
+      border: 2px solid var(--accent);
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      transition: all .2s;
+      margin-bottom: 20px;
+    }
+    .btn-secondary:hover { background: var(--accent-light); }
+
+    /* Delivery */
+    .delivery-block {
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .delivery-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+    }
+    .delivery-icon { font-size: 16px; flex-shrink: 0; }
+    .delivery-row strong { color: var(--text); }
+    .delivery-row span { color: var(--muted); }
+
+    /* Seller */
+    .seller-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      margin-top: 10px;
+    }
+    .seller-name {
+      font-weight: 600;
+      color: var(--accent);
+      cursor: pointer;
+    }
+    .seller-rating { display: flex; align-items: center; gap: 3px; }
+    .seller-star { color: var(--star); font-size: 12px; }
+
+    /* ─── Below fold ─── */
+    .below-fold {
+      max-width: 1280px;
+      margin: 24px auto;
+      padding: 0 40px;
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* Specs */
+    .specs-card, .reviews-card, .similar-card {
+      background: var(--white);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 28px;
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: var(--text);
+    }
+    .specs-table { width: 100%; border-collapse: collapse; }
+    .specs-table tr:not(:last-child) td { border-bottom: 1px solid var(--border); }
+    .specs-table td {
+      padding: 11px 0;
+      font-size: 14px;
+      vertical-align: top;
+    }
+    .specs-table td:first-child {
+      color: var(--muted);
+      width: 48%;
+      padding-right: 16px;
+    }
+    .specs-table td:last-child { font-weight: 500; color: var(--text); }
+
+    /* Description toggle */
+    .description-text {
+      font-size: 14px;
+      color: #4b5563;
+      line-height: 1.7;
+      overflow: hidden;
+      transition: max-height .3s;
+      max-height: 80px;
+    }
+    .description-text.expanded { max-height: 1000px; }
+    .toggle-desc {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      padding: 0;
+    }
+    .toggle-desc:hover { text-decoration: underline; }
+
+    /* ─── Reviews ─── */
+    .reviews-section {
+      max-width: 1280px;
+      margin: 0 auto 24px;
+      padding: 0 40px;
+    }
+    .reviews-top {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 32px;
+      align-items: start;
+      margin-bottom: 24px;
+    }
+    .rating-big {
+      text-align: center;
+    }
+    .rating-big-score {
+      font-size: 56px;
+      font-weight: 800;
+      color: var(--text);
+      line-height: 1;
+    }
+    .rating-big-stars { display: flex; justify-content: center; gap: 3px; margin: 6px 0; }
+    .rating-big-stars .star { font-size: 18px; }
+    .rating-big-count { font-size: 13px; color: var(--muted); }
+    .buyers-choice-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #fef9c3;
+      color: #854d0e;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-top: 8px;
+    }
+
+    .bars { display: flex; flex-direction: column; gap: 6px; }
+    .bar-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .bar-label { width: 16px; color: var(--muted); text-align: right; }
+    .bar-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .bar-fill { height: 100%; background: var(--star); border-radius: 3px; }
+    .bar-count { width: 30px; color: var(--muted); }
+
+    /* Review photo strip */
+    .review-photos {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      margin-bottom: 20px;
+      scrollbar-width: thin;
+    }
+    .review-photos::-webkit-scrollbar { height: 4px; }
+    .review-photos::-webkit-scrollbar-track { background: var(--border); border-radius: 2px; }
+    .review-photos::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+    .rev-photo {
+      width: 80px;
+      height: 80px;
+      border-radius: 8px;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 2px solid var(--border);
+      cursor: pointer;
+      transition: border-color .2s;
+    }
+    .rev-photo:hover { border-color: var(--accent); }
+    .rev-photo.video-thumb { position: relative; }
+
+    /* Review cards grid */
+    .reviews-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    .review-card {
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 18px;
+      border: 1px solid var(--border);
+    }
+    .rev-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .rev-author { font-size: 14px; font-weight: 600; }
+    .rev-verified {
+      font-size: 11px;
+      background: #d1fae5;
+      color: #065f46;
+      padding: 2px 7px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .rev-stars { display: flex; gap: 2px; margin-bottom: 8px; }
+    .rev-stars .star { font-size: 13px; }
+    .rev-pros { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+    .rev-pros strong { color: var(--text); }
+    .rev-text { font-size: 13px; color: #374151; line-height: 1.6; }
+    .rev-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+    .rev-tag {
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--accent-light);
+      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+    .rev-date { font-size: 11px; color: var(--muted); margin-top: 6px; }
+    .rev-image { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; float: right; margin-left: 10px; }
+
+    .show-all-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 20px;
+      padding: 11px 24px;
+      background: var(--white);
+      border: 2px solid var(--accent);
+      color: var(--accent);
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .show-all-btn:hover { background: var(--accent-light); }
+
+    /* ─── Similar Products ─── */
+    .similar-section {
+      max-width: 1280px;
+      margin: 0 auto 40px;
+      padding: 0 40px;
+    }
+    .similar-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+      margin-top: 16px;
+    }
+    .similar-card {
+      padding: 0;
+      overflow: hidden;
+      cursor: pointer;
+      transition: box-shadow .2s, transform .2s;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+    .similar-card:hover {
+      box-shadow: 0 4px 20px rgba(0,0,0,.08);
+      transform: translateY(-2px);
+    }
+    .similar-img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      background: var(--bg);
+      display: block;
+    }
+    .similar-info { padding: 12px; }
+    .similar-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 6px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .similar-brand { font-size: 11px; color: var(--muted); margin-bottom: 5px; }
+    .similar-rating { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+    .similar-rating .star { font-size: 11px; }
+    .similar-rating span { font-size: 11px; color: var(--muted); }
+    .similar-price {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .similar-price-old {
+      font-size: 12px;
+      color: var(--muted);
+      text-decoration: line-through;
+    }
+    .similar-availability {
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .availability-low { color: #ef4444; }
+    .availability-ok { color: #10b981; }
+    .similar-add-btn {
+      width: 100%;
+      padding: 8px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .similar-add-btn:hover { background: var(--accent-hover); }
+
+    /* Return banner */
+    .return-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 12px;
+      cursor: pointer;
+    }
+    .return-row:hover { color: var(--accent); }
+
+    /* ─── Footer ─── */
+    footer {
+      background: var(--white);
+      border-top: 1px solid var(--border);
+      padding: 24px 40px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 1100px) {
+      .product-wrap { grid-template-columns: 64px 1fr; }
+      .product-info { grid-column: 1 / -1; position: static; }
+      .below-fold { grid-template-columns: 1fr; }
+      .reviews-grid { grid-template-columns: repeat(2, 1fr); }
+      .similar-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 700px) {
+      header { padding: 0 16px; gap: 16px; }
+      header .header-nav { display: none; }
+      .breadcrumb, .product-wrap, .below-fold, .reviews-section, .similar-section { padding: 0 16px; }
+      .product-wrap { grid-template-columns: 1fr; }
+      .thumbs { flex-direction: row; }
+      .thumb { width: 58px; height: 58px; }
+      .reviews-top { grid-template-columns: 1fr; }
+      .reviews-grid { grid-template-columns: 1fr; }
+      .similar-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════ HEADER ══════════════ -->
+<header>
+  <a href="#" class="logo">Kosmetichka<span>Shop</span></a>
+  <nav class="header-nav">
+    <a href="#">Каталог</a>
+    <a href="#">Бренды</a>
+    <a href="#">Акции</a>
+    <a href="#">Новинки</a>
+  </nav>
+  <div class="header-actions">
+    <button class="cart-btn">🛒 Корзина</button>
+  </div>
+</header>
+
+<!-- ══════════════ BREADCRUMB ══════════════ -->
+<div class="breadcrumb">
+  <a href="#">Главная</a>
+  <span class="bc-sep">/</span>
+  <a href="#">Дом</a>
+  <span class="bc-sep">/</span>
+  <a href="#">Парфюмерия для дома</a>
+  <span class="bc-sep">/</span>
+  <a href="#">Meromi</a>
+  <span class="bc-sep">/</span>
+  <span>Диффузор с палочками</span>
+</div>
+
+<!-- ══════════════ PRODUCT BLOCK ══════════════ -->
+<div class="product-wrap">
+
+  <!-- Thumbnail strip -->
+  <div class="thumbs">
+    <div class="thumb active" onclick="switchImage(this, 'https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=800&q=80')">
+      <img src="https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=150&q=80" alt="" />
+    </div>
+    <div class="thumb" onclick="switchImage(this, 'https://images.unsplash.com/photo-1547719632-7bf97a5a49ad?w=800&q=80')">
+      <img src="https://images.unsplash.com/photo-1547719632-7bf97a5a49ad?w=150&q=80" alt="" />
+    </div>
+    <div class="thumb" onclick="switchImage(this, 'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=800&q=80')">
+      <img src="https://images.unsplash.com/photo-1603006905003-be475563bc59?w=150&q=80" alt="" />
+    </div>
+    <div class="thumb" onclick="switchImage(this, 'https://images.unsplash.com/photo-1585386959984-a4155224a1ad?w=800&q=80')">
+      <img src="https://images.unsplash.com/photo-1585386959984-a4155224a1ad?w=150&q=80" alt="" />
+    </div>
+    <div class="thumb" onclick="switchImage(this, 'https://images.unsplash.com/photo-1616401784845-180882ba9ba8?w=800&q=80')">
+      <img src="https://images.unsplash.com/photo-1616401784845-180882ba9ba8?w=150&q=80" alt="" />
+    </div>
+    <div class="thumb" onclick="switchImage(this, 'https://images.unsplash.com/photo-1549439602-43ebca2327af?w=800&q=80')">
+      <img src="https://images.unsplash.com/photo-1549439602-43ebca2327af?w=150&q=80" alt="" />
+    </div>
+  </div>
+
+  <!-- Main image -->
+  <div class="main-image-wrap">
+    <span class="badge-hot">−90%</span>
+    <div class="image-actions">
+      <a class="img-action-btn" title="В избранное">♡</a>
+      <a class="img-action-btn" title="Поделиться">↗</a>
+    </div>
+    <img id="mainImg" src="https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=800&q=80" alt="Диффузор Meromi" />
+    <span class="all-photos-link" onclick="alert('Открыть галерею')">Смотреть все фото →</span>
+  </div>
+
+  <!-- Info panel -->
+  <div class="product-info">
+    <a href="#" class="brand-link">Meromi</a>
+
+    <h1 class="product-title">Диффузор для дома с палочками — ароматизатор набор 3 штуки</h1>
+
+    <!-- Rating -->
+    <div class="rating-row">
+      <div class="stars">
+        <span class="star">★</span><span class="star">★</span><span class="star">★</span>
+        <span class="star">★</span><span class="star">★</span>
+      </div>
+      <span class="rating-score">4.8</span>
+      <a href="#reviews" class="review-count">2 355 оценок</a>
+      <span class="questions-count">159 вопросов</span>
+      <span class="buyer-choice">🏆 Выбор покупателей</span>
+    </div>
+
+    <!-- Tags -->
+    <div class="tag-row">
+      <span class="tag">хлопок</span>
+      <span class="tag">дыня</span>
+      <span class="tag">клубника</span>
+      <span class="tag">фруктовый аромат</span>
+    </div>
+
+    <!-- Variants -->
+    <div class="section-label">Аромат</div>
+    <div class="variants">
+      <div class="variant-group">
+        <div class="variant active">
+          <img src="https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=100&q=80" alt="набор" />
+        </div>
+        <div class="variant-label">Набор</div>
+      </div>
+      <div class="variant-group">
+        <div class="variant" onclick="this.parentElement.parentElement.querySelectorAll('.variant').forEach(v=>v.classList.remove('active'));this.classList.add('active')">
+          <img src="https://images.unsplash.com/photo-1547719632-7bf97a5a49ad?w=100&q=80" alt="хлопок" />
+        </div>
+        <div class="variant-label">Хлопок</div>
+      </div>
+      <div class="variant-group">
+        <div class="variant" onclick="this.parentElement.parentElement.querySelectorAll('.variant').forEach(v=>v.classList.remove('active'));this.classList.add('active')">
+          <img src="https://images.unsplash.com/photo-1603006905003-be475563bc59?w=100&q=80" alt="дыня" />
+        </div>
+        <div class="variant-label">Дыня</div>
+      </div>
+      <div class="variant-group">
+        <div class="variant" onclick="this.parentElement.parentElement.querySelectorAll('.variant').forEach(v=>v.classList.remove('active'));this.classList.add('active')">
+          <img src="https://images.unsplash.com/photo-1585386959984-a4155224a1ad?w=100&q=80" alt="клубника" />
+        </div>
+        <div class="variant-label">Клубника</div>
+      </div>
+    </div>
+
+    <!-- Price -->
+    <div class="price-block">
+      <div class="price-current">293 <span>₽</span></div>
+      <div class="price-old">3 000 ₽</div>
+      <div class="discount-badge">−90%</div>
+    </div>
+    <div class="price-note">С картой <strong>Kosmetichka</strong> скидка −5% дополнительно</div>
+
+    <!-- Buttons -->
+    <button class="btn-primary" onclick="addToCart(this)">🛒 Добавить в корзину</button>
+    <button class="btn-secondary">Купить сейчас</button>
+
+    <!-- Delivery -->
+    <div class="delivery-block">
+      <div class="delivery-row">
+        <span class="delivery-icon">🚚</span>
+        <div><strong>Завтра, 17 июля</strong> <span>— склад продавца</span></div>
+      </div>
+      <div class="delivery-row">
+        <span class="delivery-icon">📦</span>
+        <div><span>Бесплатная доставка от</span> <strong>1 500 ₽</strong></div>
+      </div>
+      <div class="return-row">
+        <span>↩</span>
+        <span>Возврат через заявку</span>
+      </div>
+    </div>
+
+    <!-- Seller -->
+    <div class="seller-row">
+      <span style="color:var(--muted);font-size:13px">Продавец:</span>
+      <span class="seller-name">Meromi</span>
+      <div class="seller-rating">
+        <span class="seller-star">★</span>
+        <span style="font-size:13px;font-weight:600">4.7</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ BELOW FOLD ══════════════ -->
+<div class="below-fold">
+
+  <!-- Left: Specs + Description -->
+  <div>
+    <div class="specs-card" style="margin-bottom:16px">
+      <div class="card-title">Характеристики</div>
+      <table class="specs-table">
+        <tr><td>Артикул</td><td>892598456</td></tr>
+        <tr><td>Объём товара</td><td>150 мл</td></tr>
+        <tr><td>Срок годности</td><td>60 месяцев</td></tr>
+        <tr><td>Группа аромата</td><td>Фруктовый аромат</td></tr>
+        <tr><td>Аромат</td><td>Хлопок; дыня; клубника</td></tr>
+        <tr><td>Страна производства</td><td>Беларусь</td></tr>
+        <tr><td>Комплектация</td><td>Диффузор для дома — 3 шт; фибровые палочки — 15 шт; подарочная коробка — 3 шт</td></tr>
+      </table>
+    </div>
+
+    <div class="specs-card">
+      <div class="card-title">Описание</div>
+      <p class="description-text" id="descText">
+        Набор из 3 ароматических диффузоров Meromi с фибровыми палочками — идеальное решение для создания уютной атмосферы в любой комнате. Каждый флакон объёмом 150 мл наполнит ваш дом нежными натуральными ароматами: свежим хлопком, сладкой дыней и сочной клубникой. Фибровые палочки равномерно впитывают и рассеивают аромат — без резких запахов, без химии. Стильная подарочная упаковка делает набор отличным подарком на любой праздник. Производство — Беларусь, натуральные компоненты, срок службы до 60 месяцев.
+      </p>
+      <button class="toggle-desc" onclick="toggleDesc()">Читать полностью ↓</button>
+    </div>
+  </div>
+
+  <!-- Right: In-panel mini rating repeat for quick view -->
+  <div class="specs-card">
+    <div class="card-title">Быстрая оценка</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div class="bar-row">
+        <span class="bar-label" style="width:20px;font-size:13px">5★</span>
+        <div class="bar-track"><div class="bar-fill" style="width:82%"></div></div>
+        <span class="bar-count">1932</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="width:20px;font-size:13px">4★</span>
+        <div class="bar-track"><div class="bar-fill" style="width:11%;background:#fbbf24"></div></div>
+        <span class="bar-count">260</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="width:20px;font-size:13px">3★</span>
+        <div class="bar-track"><div class="bar-fill" style="width:4%;background:#f97316"></div></div>
+        <span class="bar-count">94</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="width:20px;font-size:13px">2★</span>
+        <div class="bar-track"><div class="bar-fill" style="width:2%;background:#ef4444"></div></div>
+        <span class="bar-count">47</span>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="width:20px;font-size:13px">1★</span>
+        <div class="bar-track"><div class="bar-fill" style="width:1%;background:#dc2626"></div></div>
+        <span class="bar-count">22</span>
+      </div>
+    </div>
+    <div style="margin-top:16px;font-size:13px;color:var(--muted)">
+      Покупатели отмечают: <strong style="color:var(--text)">приятный запах</strong>, <strong style="color:var(--text)">красивую упаковку</strong> и <strong style="color:var(--text)">долгий аромат</strong>.
+    </div>
+    <button class="show-all-btn" style="width:100%;justify-content:center;margin-top:16px" onclick="document.getElementById('reviews').scrollIntoView({behavior:'smooth'})">
+      Читать все отзывы
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════ REVIEWS SECTION ══════════════ -->
+<div class="reviews-section" id="reviews">
+  <div class="reviews-card">
+    <div class="card-title">Отзывы покупателей</div>
+
+    <!-- Top rating block -->
+    <div class="reviews-top">
+      <div class="rating-big">
+        <div class="rating-big-score">4.8</div>
+        <div class="rating-big-stars">
+          <span class="star">★</span><span class="star">★</span><span class="star">★</span>
+          <span class="star">★</span><span class="star">★</span>
+        </div>
+        <div class="rating-big-count">2 355 оценок</div>
+        <div class="buyers-choice-badge">🏆 Выбор покупателей</div>
+      </div>
+      <div class="bars">
+        <div class="bar-row">
+          <span class="bar-label">5</span>
+          <div class="bar-track"><div class="bar-fill" style="width:82%"></div></div>
+          <span class="bar-count">1 932</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">4</span>
+          <div class="bar-track"><div class="bar-fill" style="width:11%;background:#fbbf24"></div></div>
+          <span class="bar-count">260</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">3</span>
+          <div class="bar-track"><div class="bar-fill" style="width:4%;background:#f97316"></div></div>
+          <span class="bar-count">94</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">2</span>
+          <div class="bar-track"><div class="bar-fill" style="width:2%;background:#ef4444"></div></div>
+          <span class="bar-count">47</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label">1</span>
+          <div class="bar-track"><div class="bar-fill" style="width:1%;background:#dc2626"></div></div>
+          <span class="bar-count">22</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Photo strip from buyers -->
+    <div class="review-photos">
+      <img class="rev-photo" src="https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=200&q=80" alt="" />
+      <img class="rev-photo" src="https://images.unsplash.com/photo-1547719632-7bf97a5a49ad?w=200&q=80" alt="" />
+      <img class="rev-photo" src="https://images.unsplash.com/photo-1603006905003-be475563bc59?w=200&q=80" alt="" />
+      <img class="rev-photo" src="https://images.unsplash.com/photo-1585386959984-a4155224a1ad?w=200&q=80" alt="" />
+      <img class="rev-photo" src="https://images.unsplash.com/photo-1616401784845-180882ba9ba8?w=200&q=80" alt="" />
+      <img class="rev-photo" src="https://images.unsplash.com/photo-1549439602-43ebca2327af?w=200&q=80" alt="" />
+      <img class="rev-photo" src="https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=200&q=80" alt="" />
+      <img class="rev-photo" src="https://images.unsplash.com/photo-1547719632-7bf97a5a49ad?w=200&q=80" alt="" />
+    </div>
+
+    <!-- Review cards -->
+    <div class="reviews-grid">
+
+      <div class="review-card">
+        <div class="rev-header">
+          <span class="rev-author">Мария</span>
+          <span class="rev-verified">✓ Закреплён</span>
+        </div>
+        <div class="rev-stars">
+          <span class="star">★</span><span class="star">★</span><span class="star">★</span>
+          <span class="star">★</span><span class="star" style="color:#d1d5db">★</span>
+        </div>
+        <img class="rev-image" src="https://images.unsplash.com/photo-1547719632-7bf97a5a49ad?w=120&q=80" alt="" />
+        <div class="rev-pros"><strong>Достоинства:</strong> Упаковка 👍</div>
+        <div class="rev-text">Качество и исполнение хорошее. Аромат держится долго, очень доволен покупкой.</div>
+        <div class="rev-date">15 июля 2026</div>
+      </div>
+
+      <div class="review-card">
+        <div class="rev-header">
+          <span class="rev-author">Оксана</span>
+          <span class="rev-verified">✓ Закреплён</span>
+        </div>
+        <div class="rev-stars">
+          <span class="star">★</span><span class="star">★</span><span class="star">★</span>
+          <span class="star">★</span><span class="star">★</span>
+        </div>
+        <div class="rev-pros"><strong>Достоинства:</strong> Аромат на всю комнату</div>
+        <div class="rev-text">Приятный, не химозный запах. Отдельное спасибо за упаковку. Даже на подарок не стыдно — выглядит дорого!</div>
+        <div class="rev-date">12 июля 2026</div>
+      </div>
+
+      <div class="review-card">
+        <div class="rev-header">
+          <span class="rev-author">Покупатель</span>
+          <span style="font-size:11px;color:var(--muted)">16 июля</span>
+        </div>
+        <div class="rev-stars">
+          <span class="star">★</span><span class="star">★</span><span class="star">★</span>
+          <span class="star">★</span><span class="star" style="color:#d1d5db">★</span>
+        </div>
+        <div class="rev-text">Плюсы товара хорошо заметны с первого дня. Запах держится примерно 2–3 недели при постоянном использовании.</div>
+        <div class="rev-tags">
+          <span class="rev-tag">ХОРОШИЙ ЭФФЕКТ</span>
+          <span class="rev-tag">УДОБСТВО</span>
+          <span class="rev-tag">ЗАПАХ</span>
+        </div>
+        <div class="rev-date">16 июля 2026</div>
+      </div>
+
+    </div>
+
+    <button class="show-all-btn">Смотреть все отзывы (2 355)</button>
+  </div>
+</div>
+
+<!-- ══════════════ SIMILAR PRODUCTS ══════════════ -->
+<div class="similar-section">
+  <div class="card-title" style="font-size:22px;font-weight:800;margin-bottom:0">Похожие товары</div>
+  <div class="similar-grid">
+
+    <a class="similar-card" href="#">
+      <img class="similar-img" src="https://images.unsplash.com/photo-1549439602-43ebca2327af?w=400&q=80" alt="" />
+      <div class="similar-info">
+        <div class="similar-brand">TAFT</div>
+        <div class="similar-name">Пена для укладки волос Ультимейт Экстремальная Фиксация 150мл</div>
+        <div class="similar-rating">
+          <span class="star">★</span><span class="star">★</span><span class="star">★</span>
+          <span class="star">★</span><span class="star">★</span>
+          <span>(312)</span>
+        </div>
+        <div class="similar-price">355 ₽</div>
+        <div class="similar-availability availability-low">Осталось мало</div>
+      </div>
+      <button class="similar-add-btn">В корзину</button>
+    </a>
+
+    <a class="similar-card" href="#">
+      <img class="similar-img" src="https://images.unsplash.com/photo-1585386959984-a4155224a1ad?w=400&q=80" alt="" />
+      <div class="similar-info">
+        <div class="similar-brand">TAFT</div>
+        <div class="similar-name">Лак для волос Power Кашмир Мегафикс 250мл</div>
+        <div class="similar-rating">
+          <span class="star">★</span><span class="star">★</span><span class="star">★</span>
+          <span class="star">★</span><span class="star" style="color:#d1d5db">★</span>
+          <span>(87)</span>
+        </div>
+        <div class="similar-price">355 ₽</div>
+        <div class="similar-availability availability-low">Осталось мало</div>
+      </div>
+      <button class="similar-add-btn">В корзину</button>
+    </a>
+
+    <a class="similar-card" href="#">
+      <img class="similar-img" src="https://images.unsplash.com/photo-1616401784845-180882ba9ba8?w=400&q=80" alt="" />
+      <div class="similar-info">
+        <div class="similar-brand">TAFT</div>
+        <div class="similar-name">Гель для волос Power Невидимая Мегафиксация 150мл</div>
+        <div class="similar-rating">
+          <span class="star">★</span><span class="star">★</span><span class="star">★</span>
+          <span class="star">★</span><span class="star">★</span>
+          <span>(204)</span>
+        </div>
+        <div class="similar-price">315 ₽</div>
+        <div class="similar-availability availability-low">Осталось мало</div>
+      </div>
+      <button class="similar-add-btn">В корзину</button>
+    </a>
+
+    <a class="similar-card" href="#">
+      <img class="similar-img" src="https://images.unsplash.com/photo-1603006905003-be475563bc59?w=400&q=80" alt="" />
+      <div class="similar-info">
+        <div class="similar-brand">TAFT</div>
+        <div class="similar-name">Лак для волос Объём сверхсильной фиксации 250мл</div>
+        <div class="similar-rating">
+          <span class="star">★</span><span class="star">★</span><span class="star">★</span>
+          <span class="star">★</span><span class="star" style="color:#d1d5db">★</span>
+          <span>(56)</span>
+        </div>
+        <div class="similar-price">355 ₽</div>
+        <div class="similar-availability availability-ok">Более 10 шт.</div>
+      </div>
+      <button class="similar-add-btn">В корзину</button>
+    </a>
+
+    <a class="similar-card" href="#">
+      <img class="similar-img" src="https://images.unsplash.com/photo-1547719632-7bf97a5a49ad?w=400&q=80" alt="" />
+      <div class="similar-info">
+        <div class="similar-brand">TAFT</div>
+        <div class="similar-name">Воск для укладки Блеск 75мл</div>
+        <div class="similar-rating">
+          <span class="star">★</span><span class="star">★</span><span class="star">★</span>
+          <span class="star">★</span><span class="star">★</span>
+          <span>(143)</span>
+        </div>
+        <div class="similar-price">355 ₽</div>
+        <div class="similar-availability availability-ok">Более 10 шт.</div>
+      </div>
+      <button class="similar-add-btn">В корзину</button>
+    </a>
+
+  </div>
+</div>
+
+<!-- ══════════════ FOOTER ══════════════ -->
+<footer>
+  © 2026 KosmetichkaShop — интернет-магазин косметики и товаров для дома
+</footer>
+
+<script>
+  // Switch main image
+  function switchImage(el, src) {
+    document.getElementById('mainImg').src = src;
+    document.querySelectorAll('.thumb').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  // Expand description
+  function toggleDesc() {
+    const el = document.getElementById('descText');
+    const btn = event.target;
+    if (el.classList.contains('expanded')) {
+      el.classList.remove('expanded');
+      btn.textContent = 'Читать полностью ↓';
+    } else {
+      el.classList.add('expanded');
+      btn.textContent = 'Свернуть ↑';
+    }
+  }
+
+  // Add to cart
+  function addToCart(btn) {
+    btn.textContent = '✓ Добавлено в корзину';
+    btn.style.background = '#10b981';
+    setTimeout(() => {
+      btn.textContent = '🛒 Добавить в корзину';
+      btn.style.background = '';
+    }, 2000);
+  }
+
+  // Variant click — shared handler
+  document.querySelectorAll('.variant').forEach(v => {
+    v.addEventListener('click', function() {
+      document.querySelectorAll('.variant').forEach(x => x.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>
