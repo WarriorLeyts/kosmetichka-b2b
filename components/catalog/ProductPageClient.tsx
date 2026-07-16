@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Heart, ShoppingCart, Package, Tag } from "lucide-react";
+import { Heart, ShoppingCart, Package, Tag } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
 import { useFavoriteStore } from "@/store/favoriteStore";
 import { useAuthStore } from "@/store/authStore";
 import { ProductGallery } from "./ProductGallery";
 import { ProductCard } from "./ProductCard";
+import { TopBar } from "./TopBar";
 import { getStockLabel } from "@/lib/utils";
 import { resolveCustomerPriceType, priceFor, priceTypeLabel } from "@/lib/pricing";
 import { useState } from "react";
@@ -35,6 +36,7 @@ export function ProductPageClient({
   const mainLabel = priceTypeLabel(priceType);
 
   // Variant picker state
+  const [search, setSearch] = useState("");
   const [variants, setVariants] = useState<Variant[] | null>(null);
   const [loadingVariants, setLoadingVariants] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
@@ -88,6 +90,7 @@ export function ProductPageClient({
 
   return (
     <main className="min-h-screen bg-slate-50">
+      <TopBar search={search} setSearch={setSearch} />
       <div className="mx-auto max-w-[1400px] px-3 py-4 md:px-6 md:py-6">
 
         {/* Breadcrumb */}
