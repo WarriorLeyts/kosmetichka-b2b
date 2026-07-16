@@ -91,7 +91,7 @@ export function ProductPageClient({
   return (
     <main className="catalog-page">
       <TopBar search={search} setSearch={setSearch} />
-      <div className="mx-auto max-w-[1400px]">
+      <div className="mx-auto max-w-[1400px] mt-5">
 
         {/* Breadcrumb */}
         <div className="mb-4 flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
