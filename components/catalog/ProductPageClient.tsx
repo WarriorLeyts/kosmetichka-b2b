@@ -89,9 +89,9 @@ export function ProductPageClient({
   const totalSelected = Object.values(variantQtys).reduce((s, n) => s + n, 0);
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="catalog-page">
       <TopBar search={search} setSearch={setSearch} />
-      <div className="mx-auto max-w-[1400px] px-3 py-4 md:px-6 md:py-6">
+      <div className="mx-auto max-w-[1400px]">
 
         {/* Breadcrumb */}
         <div className="mb-4 flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
