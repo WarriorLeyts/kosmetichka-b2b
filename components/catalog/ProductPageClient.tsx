@@ -30,6 +30,9 @@ export function ProductPageClient({
 
   const [selectedVariant, setSelectedVariant] = useState<any | null>(null);
   const [variantError, setVariantError] = useState(false);
+  const [showAllVariants, setShowAllVariants] = useState(false);
+
+  const VARIANTS_INITIAL = 8;
 
   const stock = getStockLabel(product.stock);
   const priceType = resolveCustomerPriceType(customer);
@@ -127,9 +130,17 @@ export function ProductPageClient({
             <div className="mb-4">
               <p className="mb-2 text-sm font-bold text-slate-700">
                 Вариант товара <span className="text-pink-500">*</span>
+                {product.variants.length > VARIANTS_INITIAL && (
+                  <span className="ml-2 text-xs font-semibold text-slate-400">
+                    ({product.variants.length} шт.)
+                  </span>
+                )}
               </p>
               <div className="flex flex-wrap gap-2">
-                {product.variants.map((variant: any) => {
+                {(showAllVariants
+                  ? product.variants
+                  : product.variants.slice(0, VARIANTS_INITIAL)
+                ).map((variant: any) => {
                   const src = variant.image?.path
                     ? resolveImageUrl(variant.image.path)
                     : null;
@@ -170,7 +181,36 @@ export function ProductPageClient({
                     </button>
                   );
                 })}
+
+                {/* Кнопка «Показать все» */}
+                {!showAllVariants && product.variants.length > VARIANTS_INITIAL && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllVariants(true)}
+                    className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-1.5 text-slate-500 transition hover:border-pink-300 hover:bg-pink-50 hover:text-pink-500"
+                    style={{ width: 70, minHeight: 72 }}
+                  >
+                    <span className="text-lg font-black leading-none">
+                      +{product.variants.length - VARIANTS_INITIAL}
+                    </span>
+                    <span className="text-[10px] font-semibold leading-tight text-center">
+                      ещё
+                    </span>
+                  </button>
+                )}
               </div>
+
+              {/* Свернуть */}
+              {showAllVariants && product.variants.length > VARIANTS_INITIAL && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllVariants(false)}
+                  className="mt-2 w-full cursor-pointer rounded-xl border border-slate-200 py-1.5 text-xs font-semibold text-slate-500 hover:border-pink-200 hover:text-pink-500"
+                >
+                  Свернуть
+                </button>
+              )}
+
               {variantError && (
                 <p className="mt-2 text-xs font-bold text-red-500" style={{ animation: "shake 0.4s ease" }}>
                   Выберите вариант товара
