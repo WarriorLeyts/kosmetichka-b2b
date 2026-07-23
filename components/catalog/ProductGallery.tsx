@@ -25,10 +25,13 @@ export function ProductGallery({ images, productName }: Props) {
 
   return (
     <>
-      <div className="flex gap-3">
+      <div className="flex gap-2 md:gap-3">
         {/* Вертикальная полоса миниатюр */}
         {safeImages.length > 1 && (
-          <div className="flex w-[68px] shrink-0 flex-col gap-2 overflow-y-auto" style={{ maxHeight: 520 }}>
+          <div
+            className="flex shrink-0 flex-col gap-1.5 overflow-y-auto scrollbar-thin"
+            style={{ width: 84, maxHeight: 500 }}
+          >
             {safeImages.map((image, index) => {
               const src = resolveImageUrl(image.path) ?? "";
               const isActive = index === activeIndex;
@@ -37,16 +40,17 @@ export function ProductGallery({ images, productName }: Props) {
                   key={image.id}
                   type="button"
                   onClick={() => setActiveIndex(index)}
-                  className={`flex h-[68px] w-[68px] shrink-0 cursor-pointer items-center justify-center rounded-xl border-2 bg-white p-1 transition ${
+                  className={`flex shrink-0 cursor-pointer items-center justify-center rounded-lg border-2 bg-white transition ${
                     isActive
                       ? "border-pink-400 ring-2 ring-pink-100"
                       : "border-slate-200 hover:border-pink-300"
                   }`}
+                  style={{ width: 80, height: 80, padding: 4 }}
                 >
                   <img
                     src={src}
                     alt={`${productName} ${index + 1}`}
-                    className="max-h-14 max-w-full object-contain"
+                    className="h-full w-full object-contain"
                     loading="lazy"
                   />
                 </button>
