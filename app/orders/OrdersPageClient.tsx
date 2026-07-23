@@ -30,7 +30,9 @@ type OrderItem = {
   quantity: number;
   price: number;
   total: number;
-  imagePath?: string | null;
+  imagePath?: string | null;      // raw product image path (no /1c/ prefix)
+  variantImageUrl?: string | null; // full path /1c/... or http... — use directly in <img>
+  variantName?: string | null;
 };
 
 type Order = {
@@ -320,14 +322,26 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
       {expanded && (
         <div className="border-t px-5 py-4">
           <div className="flex flex-col gap-3">
-            {order.items.map((item) => (
+            {order.items.map((item) => {
+              // variantImageUrl already has /1c/ prefix — use directly
+              // imagePath is a raw path — needs /api/1c/ prepended
+              const imgSrc = item.variantImageUrl
+                ? (item.variantImageUrl.startsWith("http")
+                    ? item.variantImageUrl
+                    : `https://kosmetichka-opt.ru${item.variantImageUrl}`)
+                : item.imagePath
+                ? (item.imagePath.startsWith("http")
+                    ? item.imagePath
+                    : `https://kosmetichka-opt.ru/api/1c/${item.imagePath}`)
+                : null;
+              return (
               <div key={item.id} className="flex items-center gap-3">
-                {item.imagePath ? (
+                {imgSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={item.imagePath.startsWith("http") ? item.imagePath : `https://kosmetichka-opt.ru/api/1c/${item.imagePath}`}
+                    src={imgSrc}
                     alt={item.productName}
-                    className="h-12 w-12 rounded-lg object-cover border"
+                    className="h-12 w-12 rounded-lg object-contain border bg-white p-0.5"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                   />
                 ) : (
@@ -335,6 +349,9 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm text-slate-800 truncate">{item.productName}</p>
+                  {item.variantName && (
+                    <p className="text-xs font-semibold text-purple-600">🎨 {item.variantName}</p>
+                  )}
                   {item.barcode && <p className="text-xs text-slate-400">{item.barcode}</p>}
                 </div>
                 <div className="text-right text-sm text-slate-700 shrink-0">
@@ -342,7 +359,8 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
                   <p className="text-slate-500">{formatMoney(item.total)}</p>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {order.comment && (
