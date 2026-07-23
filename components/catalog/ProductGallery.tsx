@@ -88,14 +88,20 @@ export function ProductGallery({ images, productName }: Props) {
             <>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); setActiveIndex((activeIndex - 1 + safeImages.length) % safeImages.length); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveIndex((activeIndex - 1 + safeImages.length) % safeImages.length);
+                }}
                 className="absolute left-4 top-1/2 -translate-y-1/2 flex h-12 w-12 cursor-pointer items-center justify-center rounded-full bg-white/90 text-slate-900 hover:bg-white"
               >
                 <ChevronLeft size={24} />
               </button>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); setActiveIndex((activeIndex + 1) % safeImages.length); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveIndex((activeIndex + 1) % safeImages.length);
+                }}
                 className="absolute right-4 top-1/2 -translate-y-1/2 flex h-12 w-12 cursor-pointer items-center justify-center rounded-full bg-white/90 text-slate-900 hover:bg-white"
               >
                 <ChevronRight size={24} />

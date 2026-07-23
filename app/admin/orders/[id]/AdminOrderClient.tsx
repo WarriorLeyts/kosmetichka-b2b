@@ -225,6 +225,32 @@ function renderMsgContent(text: string) {
         </div>
       );
     }
+    if (obj?._t === "product-problem") {
+      const imgUrl = getProductImageUrl(obj.imagePath ?? null);
+      return (
+        <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-56 shadow-sm">
+          {imgUrl && (
+            <img
+              src={imgUrl}
+              alt={obj.name}
+              className="w-full h-28 object-contain bg-slate-50 p-1"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          )}
+          <div className="p-2">
+            <p className="font-semibold text-sm leading-snug mb-1">{obj.name}</p>
+            {obj.price > 0 && (
+              <p className="text-xs text-slate-500 mb-2">
+                {Number(obj.price).toLocaleString("ru-RU")} ₽
+              </p>
+            )}
+            <div className="rounded-lg bg-orange-50 border border-orange-200 px-2 py-1.5">
+              <p className="text-xs font-semibold text-orange-700">⚠️ {obj.problem}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
   } catch {}
   return <span style={{ whiteSpace: "pre-wrap" }}>{text}</span>;
 }
@@ -287,6 +313,7 @@ export default function AdminOrderClient({
   const [variantPickerProduct, setVariantPickerProduct] = useState<CatalogProduct | null>(null);
   const [variantPickerList, setVariantPickerList] = useState<CatalogProductVariant[]>([]);
   const [loadingVariants, setLoadingVariants] = useState(false);
+  const [variantChangeIdx, setVariantChangeIdx] = useState<number | null>(null);
 
   // ── Picker chat: assign picker dropdown ──
   const [assigningPicker, setAssigningPicker] = useState(false);
@@ -543,6 +570,32 @@ export default function AdminOrderClient({
     }
   }
 
+  async function openVariantPickerForItem(idx: number) {
+    const item = editItems[idx];
+    setVariantChangeIdx(idx);
+    setVariantPickerProduct({
+      id: item.productId,
+      name: item.productName,
+      barcode: item.barcode,
+      article: null,
+      stock: null,
+      price: item.price,
+      prices: [],
+      imagePath: null,
+      hasVariants: true,
+    });
+    setLoadingVariants(true);
+    try {
+      const res = await fetch(`/api/admin/products/${item.productId}/variants`);
+      if (res.ok) {
+        const data = await res.json();
+        setVariantPickerList(data.variants ?? []);
+      }
+    } finally {
+      setLoadingVariants(false);
+    }
+  }
+
   // ── Order edit ──
   function startEdit() {
     setEditItems(
@@ -555,6 +608,8 @@ export default function AdminOrderClient({
         price: i.price,
         removed: false,
         isNew: false,
+        variantName: i.variantName ?? null,
+        variantImageUrl: i.variantImageUrl ?? null,
       }))
     );
     setEditMode(true);
@@ -567,6 +622,49 @@ export default function AdminOrderClient({
     setEditError("");
   }
 
+  // ── Notify customer about problems ──
+  async function notifyClientAboutProblems() {
+    const CHECK_LABELS: Record<string, string> = {
+      out_of_stock: "Нет в наличии",
+      expired: "Истёк срок годности",
+      bad_condition: "Плохое состояние",
+      insufficient_qty: "Не хватает",
+    };
+
+    const problematic = order.items.filter(
+      (i) => i.check && i.check.status !== "ok"
+    );
+    if (problematic.length === 0) return;
+
+    // Intro message
+    await sendCustomerMessage(
+      `Здравствуйте! По вашему заказу №${order.id} возникли проблемы с некоторыми позициями:`
+    );
+
+    // Send product card for each problematic item
+    for (const item of problematic) {
+      const label = CHECK_LABELS[item.check!.status] ?? item.check!.status;
+      const extra =
+        item.check!.status === "insufficient_qty" && item.check!.availableQty !== null
+          ? ` (есть ${item.check!.availableQty} шт.)`
+          : "";
+      const note = item.check!.note ? ` — ${item.check!.note}` : "";
+
+      // Use picker photo if available, otherwise null
+      const imagePath = item.photos.length > 0 ? item.photos[0].url : null;
+
+      const msgJson = JSON.stringify({
+        _t: "product-problem",
+        id: item.productId,
+        name: item.productName,
+        price: item.price,
+        imagePath,
+        problem: `${label}${extra}${note}`,
+      });
+      await sendCustomerMessage(msgJson);
+    }
+  }
+
   async function saveEdit() {
     setSaving(true);
     setEditError("");
@@ -577,6 +675,8 @@ export default function AdminOrderClient({
       id: i.id as number,
       quantity: i.quantity,
       price: i.price,
+      variantName: i.variantName ?? null,
+      variantImageUrl: i.variantImageUrl ?? null,
     }));
 
     const res = await fetch(`/api/admin/orders/${order.id}/items`, {
@@ -875,13 +975,22 @@ export default function AdminOrderClient({
         <div>
           {/* Edit mode bar */}
           {!editMode ? (
-            <div className="no-print mb-4 flex gap-2">
+            <div className="no-print mb-4 flex flex-wrap gap-2">
               {["consultation", "assembly"].includes(order.status) && (
                 <button
                   onClick={startEdit}
                   className="rounded-xl border px-4 py-2 text-sm font-bold hover:bg-slate-50"
                 >
                   ✏️ Редактировать позиции
+                </button>
+              )}
+              {order.items.some((i) => i.check && i.check.status !== "ok") && (
+                <button
+                  onClick={notifyClientAboutProblems}
+                  disabled={sendingCustomerMsg}
+                  className="rounded-xl border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-bold text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+                >
+                  📢 Сообщить клиенту о проблемах
                 </button>
               )}
             </div>
@@ -933,6 +1042,11 @@ export default function AdminOrderClient({
                     <div key={idx} className="flex items-center gap-2 rounded-xl border bg-white p-2">
                       <span className="flex-1 text-sm font-medium">{item.productName}</span>
                       {item.isNew && <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Новый</span>}
+                      {item.variantName && (
+                        <span className="text-xs text-blue-600 font-semibold bg-blue-50 rounded-full px-2 py-0.5 shrink-0">
+                          🎨 {item.variantName}
+                        </span>
+                      )}
                       <input
                         type="number"
                         min="1"
@@ -949,6 +1063,13 @@ export default function AdminOrderClient({
                         className="w-24 rounded-lg border px-2 py-1 text-center text-sm"
                       />
                       <span className="text-xs text-slate-400">₽</span>
+                      <button
+                        onClick={() => openVariantPickerForItem(idx)}
+                        className="rounded-lg border px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 shrink-0"
+                        title="Сменить вариант"
+                      >
+                        🎨
+                      </button>
                       <button
                         onClick={() => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, removed: true } : i))}
                         className="rounded-lg border px-2 py-1 text-xs text-red-500 hover:bg-red-50"
@@ -1253,11 +1374,26 @@ export default function AdminOrderClient({
           <div className="w-full max-w-lg mx-4 bg-white rounded-2xl shadow-2xl overflow-hidden">
             <div className="flex items-center gap-3 border-b px-5 py-4">
               <button
-                onClick={() => { setVariantPickerProduct(null); setVariantPickerList([]); }}
+                onClick={() => { setVariantPickerProduct(null); setVariantPickerList([]); setVariantChangeIdx(null); }}
                 className="flex h-8 w-8 items-center justify-center rounded-xl border hover:bg-slate-100"
               >
                 ✕
               </button>
+              {variantChangeIdx !== null && (
+                <button
+                  onClick={() => {
+                    setEditItems((prev) => prev.map((i, n) =>
+                      n === variantChangeIdx ? { ...i, variantName: null, variantImageUrl: null } : i
+                    ));
+                    setVariantChangeIdx(null);
+                    setVariantPickerProduct(null);
+                    setVariantPickerList([]);
+                  }}
+                  className="ml-auto mr-2 rounded-xl border border-red-300 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
+                >
+                  Убрать вариант
+                </button>
+              )}
               <div>
                 <h2 className="font-bold">Выберите вариант</h2>
                 <p className="text-xs text-slate-400 truncate max-w-xs">{variantPickerProduct.name}</p>
@@ -1274,10 +1410,19 @@ export default function AdminOrderClient({
                     <button
                       key={v.id}
                       onClick={() => {
-                        addProductToEdit(variantPickerProduct, v);
+                        if (variantChangeIdx !== null) {
+                          setEditItems((prev) => prev.map((i, n) =>
+                            n === variantChangeIdx
+                              ? { ...i, variantName: v.name, variantImageUrl: v.imageUrl }
+                              : i
+                          ));
+                          setVariantChangeIdx(null);
+                        } else {
+                          addProductToEdit(variantPickerProduct, v);
+                          setShowCatalog(false);
+                        }
                         setVariantPickerProduct(null);
                         setVariantPickerList([]);
-                        setShowCatalog(false);
                       }}
                       className="group flex flex-col rounded-2xl border-2 border-slate-200 overflow-hidden hover:border-blue-500 hover:shadow-md transition-all text-left"
                     >
