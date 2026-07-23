@@ -76,7 +76,9 @@ export default async function OrdersPage() {
       quantity: item.quantity,
       price: item.price,
       total: item.total,
-      imagePath: imageByProductId.get(item.productId) ?? null,
+      // variant image takes priority over default product image
+      imagePath: item.variantImageUrl ?? imageByProductId.get(item.productId) ?? null,
+      variantName: item.variantName ?? null,
     })),
   }));
 

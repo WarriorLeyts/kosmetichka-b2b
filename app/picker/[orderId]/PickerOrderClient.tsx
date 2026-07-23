@@ -29,6 +29,8 @@ type OrderItem = {
   quantity: number;
   price: number;
   total: number;
+  variantName: string | null;
+  variantImageUrl: string | null;
   check: {
     status: string;
     availableQty: number | null;
@@ -150,6 +152,8 @@ function vibrate(type: "ok" | "issue") {
 
 function ProductImage({ url, name }: { url: string | null; name: string }) {
   const [failed, setFailed] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
   if (!url || failed) {
     return (
       <div className="flex h-36 w-36 flex-shrink-0 items-center justify-center bg-slate-100 text-4xl sm:h-44 sm:w-44">
@@ -158,14 +162,40 @@ function ProductImage({ url, name }: { url: string | null; name: string }) {
     );
   }
   return (
-    <div className="h-36 w-36 flex-shrink-0 bg-slate-100 sm:h-44 sm:w-44">
-      <img
-        src={url}
-        alt={name}
-        className="h-full w-full object-contain p-2"
-        onError={() => setFailed(true)}
-      />
-    </div>
+    <>
+      <div
+        className="h-36 w-36 flex-shrink-0 cursor-zoom-in bg-slate-100 sm:h-44 sm:w-44"
+        onClick={() => setLightboxOpen(true)}
+        title="Нажмите для увеличения"
+      >
+        <img
+          src={url}
+          alt={name}
+          className="h-full w-full object-contain p-2"
+          onError={() => setFailed(true)}
+        />
+      </div>
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 p-4"
+          onClick={() => setLightboxOpen(false)}
+        >
+          <img
+            src={url}
+            alt={name}
+            className="max-h-[90vh] max-w-[90vw] object-contain rounded-xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(false)}
+            className="absolute right-4 top-4 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-white/90 text-slate-800 text-xl font-bold hover:bg-white"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -629,7 +659,8 @@ export default function PickerOrderClient({
           {order.items.map((item) => {
             const state = items[item.id];
             const currentStatus = state?.status ?? null;
-            const imageUrl = imageMap[item.productId] ?? null;
+            // variant image takes priority over default product image
+            const imageUrl = item.variantImageUrl ?? imageMap[item.productId] ?? null;
             const isHighlighted = highlightedItem === item.id;
             const borderColor = isHighlighted ? "border-yellow-400 shadow-lg" : currentStatus === null ? "border-slate-200" : currentStatus === "ok" ? "border-green-400" : "border-orange-400";
             return (
@@ -643,6 +674,9 @@ export default function PickerOrderClient({
                   <div className="flex flex-1 flex-col justify-between p-4">
                     <div>
                       <div className="text-base font-bold leading-snug">{item.productName}</div>
+                      {item.variantName && (
+                        <div className="mt-0.5 text-xs font-semibold text-purple-600">🎨 {item.variantName}</div>
+                      )}
                       {item.barcode && <div className="mt-1 text-xs text-slate-400">📊 {item.barcode}</div>}
                     </div>
                     <div className="mt-3 flex items-end justify-between">
