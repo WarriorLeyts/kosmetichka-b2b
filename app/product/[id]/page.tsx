@@ -59,6 +59,10 @@ export default async function ProductPage({ params }: Props) {
       brand: true,
       images: true,
       prices: true,
+      variants: {
+        include: { image: true },
+        orderBy: { sortOrder: "asc" },
+      },
     },
   });
 
