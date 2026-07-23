@@ -41,11 +41,9 @@ export function ProductPageClient({
   function handleAddToCart() {
     if (hasVariants && !selectedVariant) {
       setVariantError(true);
-      // сбрасываем через 600ms чтобы анимация повторялась при повторном нажатии
       setTimeout(() => setVariantError(false), 600);
       return;
     }
-
     if (hasVariants && selectedVariant) {
       addToCartWithVariant(product, {
         id: selectedVariant.id,
@@ -61,79 +59,74 @@ export function ProductPageClient({
 
   return (
     <main className="min-h-screen bg-slate-50 p-3 md:p-6">
-      <Link
-        href="/catalog"
-        className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-pink-500"
-      >
-        <ArrowLeft size={18} />
-        Назад в каталог
-      </Link>
-      <div className="mb-5 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
-        <Link href="/" className="hover:text-pink-500">
-          Главная
-        </Link>
-
+      {/* Хлебные крошки */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
+        <Link href="/" className="hover:text-pink-500">Главная</Link>
         <span>/</span>
-
-        <Link href="/catalog" className="hover:text-pink-500">
-          Каталог
-        </Link>
-
+        <Link href="/catalog" className="hover:text-pink-500">Каталог</Link>
         {product.brand?.name && (
           <>
             <span>/</span>
             <span className="text-slate-700">{product.brand.name}</span>
           </>
         )}
-
         <span>/</span>
-
         <span className="line-clamp-1 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-transparent">
           {product.name}
         </span>
       </div>
-      <section className="grid grid-cols-1 gap-6 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm md:gap-10 md:rounded-[32px] md:p-8 xl:grid-cols-[520px_1fr]">
-        <ProductGallery
-          images={product.images}
-          productName={product.name}
-        />
 
-        <div>
-          <div className="mb-3 flex flex-wrap gap-1.5 md:mb-4 md:gap-2">
+      {/* Назад */}
+      <Link
+        href="/catalog"
+        className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-pink-500"
+      >
+        <ArrowLeft size={18} />
+        Назад в каталог
+      </Link>
+
+      {/* Основная секция: галерея + инфо (ровно 2 дочерних элемента!) */}
+      <section className="mt-4 grid grid-cols-1 gap-6 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm md:gap-8 md:rounded-[32px] md:p-8 xl:grid-cols-[1fr_380px]">
+
+        {/* Левая колонка — галерея */}
+        <ProductGallery images={product.images} productName={product.name} />
+
+        {/* Правая колонка — информация о товаре */}
+        <div className="flex flex-col">
+          {/* Теги категория + бренд */}
+          <div className="mb-3 flex flex-wrap gap-1.5">
             {product.category?.name && (
-              <span className="rounded-full bg-pink-50 px-3 py-1 text-xs font-bold text-pink-500 md:px-4 md:py-2 md:text-sm">
+              <span className="rounded-full bg-pink-50 px-3 py-1 text-xs font-bold text-pink-500">
                 {product.category.name}
               </span>
             )}
-
             {product.brand?.name && (
-              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-600 md:px-4 md:py-2 md:text-sm">
+              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-600">
                 {product.brand.name}
               </span>
             )}
           </div>
 
-          <h1 className="mb-3 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-lg font-black leading-tight text-transparent md:text-4xl">
+          {/* Название */}
+          <h1 className="mb-3 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-xl font-black leading-tight text-transparent md:text-3xl">
             {product.name}
           </h1>
 
-          <div className="mb-4 space-y-1.5 text-xs font-semibold text-slate-600 md:space-y-3 md:text-sm">
+          {/* Штрихкод / артикул / наличие */}
+          <div className="mb-4 space-y-1.5 text-xs font-semibold text-slate-600">
             <p>Штрихкод: {product.barcode || "—"}</p>
             <p>Артикул: {product.article || "—"}</p>
             <p>
               Наличие:{" "}
-              <span className={`stock-pill ${stock.className}`}>
-                {stock.text}
-              </span>
+              <span className={`stock-pill ${stock.className}`}>{stock.text}</span>
             </p>
           </div>
 
           {/* Выбор варианта */}
           {hasVariants && (
-            <div className="mb-4 md:mb-6">
+            <div className="mb-4">
               <p className="mb-2 text-sm font-bold text-slate-700">
-                Вариант товара{" "}
-                <span className="text-pink-500">*</span>
+                Вариант товара <span className="text-pink-500">*</span>
               </p>
               <div className="flex flex-wrap gap-2">
                 {product.variants.map((variant: any) => {
@@ -150,24 +143,24 @@ export function ProductPageClient({
                         setVariantError(false);
                       }}
                       title={variant.name}
-                      className={`flex flex-col items-center gap-1 rounded-xl border-2 p-1.5 transition cursor-pointer ${
+                      className={`flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 p-1.5 transition ${
                         isSelected
                           ? "border-pink-500 bg-pink-50 ring-2 ring-pink-200"
                           : variantError
                           ? "border-red-400 bg-red-50"
                           : "border-slate-200 bg-white hover:border-pink-300"
                       }`}
-                      style={{ width: 72 }}
+                      style={{ width: 70 }}
                     >
                       {src ? (
                         <img
                           src={src}
                           alt={variant.name}
-                          className="h-12 w-12 rounded-lg object-contain"
+                          className="h-11 w-11 rounded-lg object-contain"
                           loading="lazy"
                         />
                       ) : (
-                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-bold text-slate-400">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-100 text-[10px] font-bold text-slate-400">
                           ?
                         </div>
                       )}
@@ -178,18 +171,11 @@ export function ProductPageClient({
                   );
                 })}
               </div>
-
-              {/* Сообщение об ошибке */}
               {variantError && (
-                <p
-                  className="mt-2 text-xs font-bold text-red-500"
-                  style={{ animation: "shake 0.4s ease" }}
-                >
+                <p className="mt-2 text-xs font-bold text-red-500" style={{ animation: "shake 0.4s ease" }}>
                   Выберите вариант товара
                 </p>
               )}
-
-              {/* Анимация встряски */}
               <style>{`
                 @keyframes shake {
                   0%   { transform: translateX(0); }
@@ -203,36 +189,34 @@ export function ProductPageClient({
             </div>
           )}
 
-          <div className="mb-4 rounded-[16px] bg-slate-50 p-3 md:mb-8 md:rounded-[22px] md:p-5">
+          {/* Цена */}
+          <div className="mb-4 rounded-[16px] bg-slate-50 p-4">
             {customer && (
-              <div className="mb-2 flex justify-between text-sm md:mb-3 md:text-lg">
+              <div className="mb-2 flex justify-between text-sm">
                 <span className="text-slate-500">Розница:</span>
                 <b>{product.retailPrice ?? 0} ₽</b>
               </div>
             )}
-
-            <div className="flex justify-between text-base md:text-2xl">
-              <span className="font-bold text-slate-500">
-                {customer ? mainLabel : "Цена"}:
-              </span>
+            <div className="flex justify-between text-xl font-black">
+              <span className="text-slate-500">{customer ? mainLabel : "Цена"}:</span>
               <b className="bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-transparent">
                 {mainPrice} ₽
               </b>
             </div>
           </div>
 
-          <div className="flex gap-2 md:gap-3">
+          {/* Кнопки */}
+          <div className="mt-auto flex gap-2">
             <button
               onClick={handleAddToCart}
-              className="flex h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 text-sm font-black text-white shadow-lg md:h-14 md:rounded-2xl md:text-base"
+              className="flex h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 text-sm font-black text-white shadow-lg"
             >
               <ShoppingCart size={16} />
               В корзину
             </button>
-
             <button
               onClick={() => toggleFavorite(product)}
-              className={`flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl border md:h-14 md:w-14 md:rounded-2xl ${
+              className={`flex h-12 w-12 cursor-pointer items-center justify-center rounded-xl border ${
                 isFavorite
                   ? "border-pink-200 bg-pink-50 text-pink-500"
                   : "border-slate-200 bg-white text-pink-500"
@@ -242,51 +226,27 @@ export function ProductPageClient({
             </button>
           </div>
         </div>
-        <div className="mb-4 grid grid-cols-2 gap-2 md:mb-8 md:gap-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-3 md:rounded-2xl md:p-4">
-            <div className="text-xs font-semibold text-slate-400">
-              Бренд
-            </div>
-
-            <div className="mt-1 text-xs font-bold text-slate-800 md:mt-2 md:text-sm">
-              {product.brand?.name || "Не указан"}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-3 md:rounded-2xl md:p-4">
-            <div className="text-xs font-semibold text-slate-400">
-              Наличие
-            </div>
-
-            <div className="mt-1 text-xs font-bold md:mt-2 md:text-sm">
-              <span className={`stock-pill ${stock.className}`}>{stock.text}</span>
-            </div>
-          </div>
-        </div>
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:mt-8 md:rounded-3xl md:p-6">
-          <h3 className="mb-3 text-base font-black text-slate-800 md:mb-4 md:text-lg">
-            Описание товара
-          </h3>
-
-          <p className="text-sm leading-6 text-slate-600 md:leading-7">
-            {product.description ||
-              "Описание для данного товара пока не заполнено."}
-          </p>
-        </div>
       </section>
+
+      {/* Описание */}
+      {product.description && (
+        <section className="mt-4 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm md:rounded-[32px] md:p-8">
+          <h2 className="mb-3 text-base font-black text-slate-800 md:text-lg">
+            Описание товара
+          </h2>
+          <p className="text-sm leading-7 text-slate-600">{product.description}</p>
+        </section>
+      )}
+
+      {/* Похожие товары */}
       {relatedProducts.length > 0 && (
-        <section className="mt-8">
+        <section className="mt-6">
           <h2 className="mb-4 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-xl font-black text-transparent md:text-2xl">
             Похожие товары
           </h2>
-
           <div className="product-grid grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-4">
             {relatedProducts.map((item) => (
-              <ProductCard
-                key={item.id}
-                product={item}
-                addToCart={addToCart}
-              />
+              <ProductCard key={item.id} product={item} addToCart={addToCart} />
             ))}
           </div>
         </section>
