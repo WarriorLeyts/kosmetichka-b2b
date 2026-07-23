@@ -169,10 +169,24 @@ export function ProductPageClient({
     Описание товара
   </h3>
 
-  <p className="text-sm leading-6 text-slate-600 md:leading-7">
-    {product.description ||
-      "Описание для данного товара пока не заполнено."}
-  </p>
+  {product.description ? (
+    <div
+      className="text-sm leading-6 text-slate-600 md:leading-7 [&_strong]:font-bold [&_strong]:text-slate-800"
+      dangerouslySetInnerHTML={{
+        __html: product.description
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+          .replace(/\*(.+?)\*/g, "<em>$1</em>")
+          .replace(/\n/g, "<br />"),
+      }}
+    />
+  ) : (
+    <p className="text-sm leading-6 text-slate-600 md:leading-7">
+      Описание для данного товара пока не заполнено.
+    </p>
+  )}
 </div>
       </section>
       {relatedProducts.length > 0 && (
