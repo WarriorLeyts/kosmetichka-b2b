@@ -7,13 +7,20 @@ import {
   Sparkles,
   Droplets,
   Palette,
-  Brush,
   Package,
   FlaskConical,
-  SprayCan,
   Search,
   SlidersHorizontal,
   X,
+  LayoutGrid,
+  Gem,
+  Smile,
+  Gift,
+  Wind,
+  HandMetal,
+  FolderOpen,
+  Scissors,
+  Flower2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -51,26 +58,26 @@ type Props = {
   onClose?: () => void;
 };
 
-function getCategoryIcon(name: string) {
-  const lower = name.toLowerCase();
+// ─── маппинг по точному названию категории ───────────────────
+const CATEGORY_ICONS: Record<string, React.ElementType> = {
+  "все товары":              LayoutGrid,
+  "бытовая химия":           Sparkles,
+  "декоративная косметичка": Palette,
+  "аксессуары":              Gem,
+  "уход за лицом":           Smile,
+  "подарочные наборы":       Gift,
+  "уход за волосами":        Wind,
+  "уход за телом":           Droplets,
+  "уход за полостью рта":    FlaskConical,
+  "уход за ногами и руками": HandMetal,
+  "<без категории>":         FolderOpen,
+  "без категории":           FolderOpen,
+  "средства для депиляции":  Scissors,
+  "парфюмерия":              Flower2,
+};
 
-  if (lower.includes("гель")) return Droplets;
-  if (lower.includes("масло")) return Droplets;
-  if (lower.includes("крем")) return FlaskConical;
-  if (lower.includes("лосьон")) return SprayCan;
-  if (lower.includes("маска")) return Sparkles;
-  if (lower.includes("мицелляр")) return Droplets;
-  if (lower.includes("набор")) return Package;
-  if (lower.includes("пенка")) return Brush;
-  if (
-    lower.includes("помад") ||
-    lower.includes("тон") ||
-    lower.includes("пудр")
-  ) {
-    return Palette;
-  }
-
-  return ShoppingBag;
+function getCategoryIcon(name: string): React.ElementType {
+  return CATEGORY_ICONS[name.toLowerCase().trim()] ?? Package;
 }
 
 export function CatalogSidebar({
@@ -192,7 +199,7 @@ export function CatalogSidebar({
             onClick={() => setCategoryId(null)}
           >
             <span className="category-icon">
-              <ShoppingBag size={17} />
+              <LayoutGrid size={17} />
             </span>
             Все товары
           </button>
