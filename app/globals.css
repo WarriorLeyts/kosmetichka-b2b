@@ -804,6 +804,11 @@ grid-template-columns: repeat(2, 1fr);
 }
 
 @media (max-width: 900px) {
+.catalog-page {
+padding-left: 12px;
+padding-right: 12px;
+}
+
 .catalog-layout {
 grid-template-columns: 1fr;
 }
