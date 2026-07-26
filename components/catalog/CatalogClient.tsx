@@ -230,7 +230,13 @@ export function CatalogClient({
 
   return (
     <main className="catalog-page">
-      <TopBar search={search} setSearch={setSearch} onMenuClick={() => setMobileFiltersOpen(true)} />
+      <TopBar
+        search={search}
+        setSearch={setSearch}
+        categories={categories}
+        categoryId={categoryId}
+        onCategorySelect={(id) => { setCategoryId(id); }}
+      />
 
       <div
         className={`catalog-layout ${
