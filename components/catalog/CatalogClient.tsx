@@ -27,10 +27,7 @@ export function CatalogClient({
 }) {
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
-  const [categoryId, setCategoryId] = useState<number | null>(() => {
-    const cat = searchParams.get("category");
-    return cat ? Number(cat) : null;
-  });
+  const [categoryId, setCategoryId] = useState<number | null>(null);
   const [brandGuids, setBrandGuids] = useState<string[]>([]);
   const [onlyStock, setOnlyStock] = useState(false);
   const [priceMin, setPriceMin] = useState<number | null>(null);
@@ -100,14 +97,6 @@ export function CatalogClient({
       );
     } catch {}
   }, [products, total, page, hasMore, search, categoryId, brandGuids, onlyStock, priceMin, priceMax, sort]);
-
-  // ── Sync URL searchParams → state (e.g. when TopBar navigates to a category) ─
-  useEffect(() => {
-    // Skip if state was just restored from sessionStorage (isRestored handled by filter effect)
-    if (isRestored.current) return;
-    const cat = searchParams.get("category");
-    setCategoryId(cat ? Number(cat) : null);
-  }, [searchParams]);
 
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -240,9 +229,8 @@ export function CatalogClient({
   ]);
 
   return (
-    <>
-      <TopBar search={search} setSearch={setSearch} />
     <main className="catalog-page">
+      <TopBar search={search} setSearch={setSearch} onMenuClick={() => setMobileFiltersOpen(true)} />
 
       <div
         className={`catalog-layout ${
@@ -301,6 +289,5 @@ export function CatalogClient({
         </section>
       </div>
     </main>
-    </>
   );
 }

@@ -14,9 +14,10 @@ import { useOrdersNotifStore } from "@/store/ordersNotifStore";
 type TopBarProps = {
   search: string;
   setSearch: (value: string) => void;
+  onMenuClick?: () => void;
 };
 
-export function TopBar({ search, setSearch }: TopBarProps) {
+export function TopBar({ search, setSearch, onMenuClick }: TopBarProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
@@ -77,10 +78,17 @@ export function TopBar({ search, setSearch }: TopBarProps) {
         </div>
       </div>
 
-      <Link href="/catalog" className="catalog-button">
-        <Menu size={18} />
-        <span className="catalog-button-text">Каталог</span>
-      </Link>
+      {onMenuClick ? (
+        <button type="button" className="catalog-button" onClick={onMenuClick}>
+          <Menu size={18} />
+          <span className="catalog-button-text">Каталог</span>
+        </button>
+      ) : (
+        <Link href="/catalog" className="catalog-button">
+          <Menu size={18} />
+          <span className="catalog-button-text">Каталог</span>
+        </Link>
+      )}
 
       <form
         className="search-box"
