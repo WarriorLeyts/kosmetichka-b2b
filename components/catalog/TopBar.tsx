@@ -167,7 +167,7 @@ export function TopBar({
 
         {/* Catalog button */}
         {onCategorySelect ? (
-          <div style={{ position: "relative", flexShrink: 0, order: -1 }}>
+          <div style={{ position: "relative", flexShrink: 0, order: -1, marginRight: 8, marginBottom: 10 }}>
             <button
               ref={catBtnRef}
               type="button"
