@@ -874,7 +874,7 @@ position: sticky;
 top: 0;
 margin-left: 0;
 margin-right: 0;
-padding: 10px 16px 0;
+padding: 10px 10px 0;
 border-radius: 0 0 22px 22px;
 box-shadow: 0 4px 24px rgba(17, 24, 39, 0.1);
 gap: 0;
@@ -908,8 +908,8 @@ flex-shrink: 0;
 }
 
 .brand-name {
-font-size: 16px;
-letter-spacing: -0.3px;
+font-size: 13px;
+letter-spacing: -0.2px;
 }
 
 .top-actions {
@@ -933,9 +933,9 @@ display: none;
 /* Строка 2: поиск на всю ширину */
 .search-box {
 order: 3;
-flex-basis: calc(100% + 32px);
-margin-left: -16px;
-margin-right: -16px;
+flex-basis: calc(100% + 20px);
+margin-left: -10px;
+margin-right: -10px;
 height: 44px;
 border-radius: 0 0 22px 22px;
 border: none;
