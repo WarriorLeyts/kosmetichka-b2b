@@ -38,3 +38,6 @@ next-env.d.ts
 
 # uploads / generated
 /public/uploads
+
+# 1C sync data (large XML/binary files, generated on server)
+/data
