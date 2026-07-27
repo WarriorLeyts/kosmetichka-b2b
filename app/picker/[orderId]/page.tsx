@@ -8,8 +8,10 @@ export const dynamic = "force-dynamic";
 
 export default async function PickerOrderPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orderId: string }>;
+  searchParams: Promise<{ returnUrl?: string }>;
 }) {
   // ── Auth guard ────────────────────────────────────────────────────────────
   const cookieStore = await cookies();
@@ -22,6 +24,12 @@ export default async function PickerOrderPage({
   // ─────────────────────────────────────────────────────────────────────────
 
   const { orderId } = await params;
+  const { returnUrl } = await searchParams;
+  // Sanitize returnUrl to only allow internal paths
+  const safeReturnUrl =
+    returnUrl && returnUrl.startsWith("/") && !returnUrl.startsWith("//")
+      ? returnUrl
+      : undefined;
 
   const order = await prisma.order.findUnique({
     where: { id: Number(orderId) },
@@ -88,5 +96,5 @@ export default async function PickerOrderPage({
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <PickerOrderClient order={serializedOrder as any} imageMap={imageMap} />;
+  return <PickerOrderClient order={serializedOrder as any} imageMap={imageMap} returnUrl={safeReturnUrl} />;
 }

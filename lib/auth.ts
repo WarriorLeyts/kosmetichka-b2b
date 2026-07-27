@@ -15,10 +15,10 @@ function resolveJwtSecret(): string {
   // loop instead of just failing once. Warn loudly and keep going with a
   // random secret instead (sessions just won't survive a restart).
   console.warn(
-    "[auth] JWT_SECRET is not set in .env — using a temporary random secret for this dev session. Set JWT_SECRET before deploying to production."
+    "[auth] JWT_SECRET is not set in .env — using a fixed dev-only secret. Set JWT_SECRET before deploying to production."
   );
 
-  return `dev-only-${Math.random().toString(36).slice(2)}${Date.now()}`;
+  return "dev-secret-kosmetichka-change-in-production";
 }
 
 const secret = new TextEncoder().encode(resolveJwtSecret());

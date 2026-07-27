@@ -23,6 +23,17 @@ const STATUS_CLASSES: Record<string, string> = {
   cancelled: "bg-red-100 text-red-700",
 };
 
+/** Parse rich JSON check status into individual status strings */
+function parseCheckStatuses(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map((e) => (typeof e === "string" ? e : e.s)).filter(Boolean);
+    }
+  } catch {}
+  return [raw];
+}
+
 export default async function AdminOrdersPage({
   searchParams,
 }: {
@@ -34,16 +45,16 @@ export default async function AdminOrdersPage({
 }) {
   const params = await searchParams;
 
-  const selectedDate = params.date || "";
+  // date=undefined → today (default); date="" → all; date="YYYY-MM-DD" → that day
+  const today = new Date().toISOString().slice(0, 10);
+  const selectedDate = params.date !== undefined ? params.date : today;
   const customerSearch = params.customer || "";
   const selectedStatus = params.status || "";
-
-  const today = new Date().toISOString().slice(0, 10);
 
   let dateFilter = {};
   if (selectedDate) {
     const startDate = new Date(`${selectedDate}T00:00:00`);
-    const endDate = new Date(`${selectedDate}T23:59:59`);
+    const endDate = new Date(`${selectedDate}T23:59:59.999`);
     dateFilter = { createdAt: { gte: startDate, lte: endDate } };
   }
 
@@ -75,9 +86,9 @@ export default async function AdminOrdersPage({
     },
   });
 
-  // Count by status (for today by default)
+  // Count by status (always for today)
   const todayStart = new Date(`${today}T00:00:00`);
-  const todayEnd = new Date(`${today}T23:59:59`);
+  const todayEnd = new Date(`${today}T23:59:59.999`);
   const todayCounts = await prisma.order.groupBy({
     by: ["status"],
     where: { createdAt: { gte: todayStart, lte: todayEnd } },
@@ -86,7 +97,7 @@ export default async function AdminOrdersPage({
   const countMap: Record<string, number> = {};
   for (const c of todayCounts) countMap[c.status] = c._count.id;
 
-  const PIPELINE_STATUSES = ["pending", "assembly", "consultation", "payment", "exported", "cancelled"];
+  const PIPELINE_STATUSES = ["pending", "approved", "assembly", "consultation", "payment", "exported", "cancelled"];
 
   return (
     <div className="p-4 md:p-6">
@@ -111,7 +122,7 @@ export default async function AdminOrdersPage({
         </Link>
         {PIPELINE_STATUSES.map((s) => {
           const count = countMap[s] ?? 0;
-          if (count === 0 && !["pending", "assembly", "consultation", "payment"].includes(s)) return null;
+          if (count === 0 && !["pending", "approved", "assembly", "consultation", "payment"].includes(s)) return null;
           return (
             <Link
               key={s}
@@ -160,6 +171,7 @@ export default async function AdminOrdersPage({
           >
             <option value="">Все статусы</option>
             <option value="pending">Ожидание</option>
+            <option value="approved">Подтверждён</option>
             <option value="assembly">Сборка</option>
             <option value="consultation">Консультация</option>
             <option value="payment">К оплате</option>
@@ -184,7 +196,11 @@ export default async function AdminOrdersPage({
       {/* Orders list */}
       <div className="space-y-3">
         {orders.map((order) => {
-          const hasIssues = order.items.some((i) => i.check && i.check.status !== "ok");
+          // BUG-3 fix: parse JSON check statuses correctly
+          const hasIssues = order.items.some((i) => {
+            if (!i.check) return false;
+            return parseCheckStatuses(i.check.status).some((s) => s !== "ok");
+          });
           const checkedCount = order.items.filter((i) => i.check).length;
           const itemCount = order._count.items;
 

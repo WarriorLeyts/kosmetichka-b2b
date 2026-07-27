@@ -28,6 +28,8 @@ async function updateCustomer(formData: FormData) {
   const priceType = String(formData.get("priceType") || "wholesale");
   const isActive = formData.get("isActive") === "active";
   const isApproved = formData.get("isApproved") === "true";
+  const manager = String(formData.get("manager") || "");
+  const oneCId = String(formData.get("oneCId") || "");
   const password = String(formData.get("password") || "");
 
   const data: any = {
@@ -41,6 +43,8 @@ async function updateCustomer(formData: FormData) {
     priceType,
     isActive,
     isApproved,
+    manager: manager || null,
+    oneCId: oneCId || null,
   };
 
   if (password.trim()) {
@@ -181,6 +185,26 @@ export default async function EditCustomerPage({
               <option value="true">Подтверждён ✓</option>
               <option value="false">Не подтверждён</option>
             </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-bold">Менеджер (1С)</label>
+            <input
+              name="manager"
+              defaultValue={customer.manager || ""}
+              className="w-full rounded-xl border p-3"
+              placeholder="ФИО менеджера"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-bold">ID в 1С</label>
+            <input
+              name="oneCId"
+              defaultValue={customer.oneCId || ""}
+              className="w-full rounded-xl border p-3"
+              placeholder="Идентификатор контрагента в 1С"
+            />
           </div>
 
           <div>

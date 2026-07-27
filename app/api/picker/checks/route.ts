@@ -54,6 +54,17 @@ export async function POST(request: Request) {
     );
   }
 
+  // SEC-3: validate that every submitted itemId belongs to this order
+  const orderItemIds = new Set(order.items.map((i) => i.id));
+  for (const item of items) {
+    if (!orderItemIds.has(item.itemId)) {
+      return NextResponse.json(
+        { error: "Позиция не принадлежит этому заказу" },
+        { status: 403 }
+      );
+    }
+  }
+
   // Upsert each item check
   for (const item of items) {
     // Определяем значение для хранения в БД
