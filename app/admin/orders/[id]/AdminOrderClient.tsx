@@ -167,7 +167,6 @@ const TRANSITIONS: Record<string, { label: string; to: string; style: string }[]
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
   payment: [
-    { label: "✓ Выгрузить в 1С", to: "exported", style: "bg-emerald-600 hover:bg-emerald-700 text-white" },
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
 };
