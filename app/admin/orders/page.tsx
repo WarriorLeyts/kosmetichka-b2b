@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import Link from "next/link";
 import PaginationBar from "@/components/PaginationBar";
 
@@ -63,7 +64,7 @@ export default async function AdminOrdersPage({
     dateFilter = { createdAt: { gte: startDate, lte: endDate } };
   }
 
-  const where = {
+  const where: Prisma.OrderWhereInput = {
     ...dateFilter,
     status: selectedStatus || undefined,
     customer: customerSearch
