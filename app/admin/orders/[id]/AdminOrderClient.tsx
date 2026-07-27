@@ -650,8 +650,11 @@ export default function AdminOrderClient({
           : "";
       const note = item.check!.note ? ` — ${item.check!.note}` : "";
 
-      // Use picker photo if available, otherwise null
-      const imagePath = item.photos.length > 0 ? item.photos[0].url : null;
+      // Use picker photo first, then variant image, then null
+      const imagePath =
+        item.photos.length > 0
+          ? item.photos[0].url
+          : (item.variantImageUrl ?? null);
 
       const msgJson = JSON.stringify({
         _t: "product-problem",
