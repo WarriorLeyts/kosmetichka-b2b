@@ -13,7 +13,7 @@ export default async function AdminOrderPage({
 }) {
   // ── Auth guard ────────────────────────────────────────────────────────────
   const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
+  const token = cookieStore.get("admin_token")?.value;
   if (!token) redirect("/admin");
   const payload = await verifyToken(token);
   if (!payload?.id) redirect("/admin");
