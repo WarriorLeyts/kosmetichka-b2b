@@ -756,7 +756,12 @@ export default function PickerOrderClient({
                       {item.variantName && (
                         <div className="mt-0.5 text-xs font-semibold text-purple-600">🎨 {item.variantName}</div>
                       )}
-                      {item.barcode && <div className="mt-1 text-xs text-slate-400">📊 {item.barcode}</div>}
+                      {item.barcode && (
+                        <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2 py-1">
+                          <span className="text-xs text-slate-400">▌▌▌</span>
+                          <span className="font-mono text-sm font-bold tracking-wider text-slate-700">{item.barcode}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="mt-3 flex items-end justify-between">
                       <div>
