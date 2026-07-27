@@ -1,25 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
+import { verifyToken } from "@/lib/auth";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
-
-function getSecret() {
-  return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
-}
 
 async function getCurrentPickerId(): Promise<number | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get("admin_token")?.value;
   if (!token) return null;
-  try {
-    const { payload } = await jwtVerify(token, getSecret());
-    if (payload.role !== "picker") return null;
-    return payload.id as number;
-  } catch {
-    return null;
-  }
+  const payload = await verifyToken(token);
+  if (!payload || payload.role !== "picker") return null;
+  return payload.id as number;
 }
 
 export default async function PickerDashboard() {

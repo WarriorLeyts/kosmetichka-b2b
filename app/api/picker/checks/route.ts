@@ -1,26 +1,18 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
+import { verifyToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
-function getSecret() {
-  const secret = process.env.JWT_SECRET || "dev-fallback";
-  return new TextEncoder().encode(secret);
-}
 
 async function getPickerUser() {
   const cookieStore = await cookies();
   const token = cookieStore.get("admin_token")?.value;
   if (!token) return null;
 
-  try {
-    const { payload } = await jwtVerify(token, getSecret());
-    const role = payload.role as string;
-    if (!["admin", "manager", "picker"].includes(role)) return null;
-    return { id: payload.id as number, role };
-  } catch {
-    return null;
-  }
+  const payload = await verifyToken(token);
+  if (!payload) return null;
+  const role = payload.role as string;
+  if (!["admin", "manager", "picker"].includes(role)) return null;
+  return { id: payload.id as number, role };
 }
 
 export async function POST(request: Request) {

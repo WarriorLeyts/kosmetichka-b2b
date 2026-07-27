@@ -1,9 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 
 async function updateCustomer(formData: FormData) {
   "use server";
+
+  // Auth guard inside server action
+  const cookieStore = await cookies();
+  const token = cookieStore.get("admin_token")?.value;
+  if (!token) redirect("/admin");
+  const payload = await verifyToken(token);
+  if (!payload?.id || !["admin", "manager"].includes(payload.role as string)) {
+    redirect("/admin");
+  }
 
   const id = Number(formData.get("id"));
 
