@@ -213,10 +213,12 @@ function formatDate(str: string) {
   });
 }
 
+const IMAGES_BASE = process.env.NEXT_PUBLIC_IMAGES_BASE_URL ?? "https://kosmetichka-opt.ru";
+
 function getProductImageUrl(imagePath: string | null): string | null {
   if (!imagePath) return null;
   if (imagePath.startsWith("http")) return imagePath;
-  return `https://kosmetichka-opt.ru/api/1c/${imagePath}`;
+  return `${IMAGES_BASE}/api/1c/${imagePath}`;
 }
 
 function renderMsgContent(text: string) {
@@ -401,7 +403,6 @@ export default function AdminOrderClient({
       body: JSON.stringify({ status: toStatus }),
     });
     if (res.ok) {
-      router.refresh();
       window.location.reload();
     } else {
       const data = await res.json();
@@ -785,7 +786,6 @@ export default function AdminOrderClient({
       body: JSON.stringify({ pickerId: selectedPickerId }),
     });
     if (res.ok) {
-      router.refresh();
       window.location.reload();
     } else {
       const data = await res.json();

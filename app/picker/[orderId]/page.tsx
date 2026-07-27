@@ -69,10 +69,11 @@ export default async function PickerOrderPage({
   const productBarcodeMap: Record<number, string | null> = {};
   for (const p of products) {
     const rawPath = p.images[0]?.path ?? null;
+    const imagesBase = process.env.NEXT_PUBLIC_IMAGES_BASE_URL ?? "https://kosmetichka-opt.ru";
     imageMap[p.id] = rawPath
       ? rawPath.startsWith("http")
         ? rawPath
-        : `https://kosmetichka-opt.ru/api/1c/${rawPath}`
+        : `${imagesBase}/api/1c/${rawPath}`
       : null;
     productBarcodeMap[p.id] = p.barcode ?? null;
   }

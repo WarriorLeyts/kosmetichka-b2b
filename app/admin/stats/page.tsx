@@ -98,12 +98,32 @@ export default async function AdminStatsPage() {
     .sort((a, b) => b[1].qty - a[1].qty)
     .slice(0, 10);
 
-  // Check issues stats
-  const allChecks = await prisma.orderItemCheck.groupBy({
-    by: ["status"],
-    _count: { id: true },
+  // Check issues stats — parse rich JSON status format
+  const checkRows = await prisma.orderItemCheck.findMany({
+    select: { status: true },
   });
-  const totalChecks = allChecks.reduce((s, c) => s + c._count.id, 0);
+
+  function expandCheckStatus(raw: string): string[] {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((e) => (typeof e === "string" ? e : e.s)).filter(Boolean);
+      }
+    } catch {}
+    return [raw];
+  }
+
+  const checkStatusCounts: Record<string, number> = {};
+  for (const row of checkRows) {
+    for (const s of expandCheckStatus(row.status)) {
+      checkStatusCounts[s] = (checkStatusCounts[s] ?? 0) + 1;
+    }
+  }
+  const allChecks = Object.entries(checkStatusCounts).map(([status, count]) => ({
+    status,
+    _count: { id: count },
+  }));
+  const totalChecks = Object.values(checkStatusCounts).reduce((s, c) => s + c, 0);
 
   return (
     <div className="p-4 md:p-6">

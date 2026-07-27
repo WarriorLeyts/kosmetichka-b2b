@@ -27,6 +27,7 @@ async function updateCustomer(formData: FormData) {
   const address = String(formData.get("address") || "");
   const priceType = String(formData.get("priceType") || "wholesale");
   const isActive = formData.get("isActive") === "active";
+  const isApproved = formData.get("isApproved") === "true";
   const password = String(formData.get("password") || "");
 
   const data: any = {
@@ -39,6 +40,7 @@ async function updateCustomer(formData: FormData) {
     address,
     priceType,
     isActive,
+    isApproved,
   };
 
   if (password.trim()) {
@@ -158,7 +160,7 @@ export default async function EditCustomerPage({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-bold">Статус</label>
+            <label className="mb-1 block text-sm font-bold">Статус аккаунта</label>
             <select
               name="isActive"
               defaultValue={customer.isActive ? "active" : "blocked"}
@@ -166,6 +168,18 @@ export default async function EditCustomerPage({
             >
               <option value="active">Активен</option>
               <option value="blocked">Заблокирован</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-bold">Подтверждение администратором</label>
+            <select
+              name="isApproved"
+              defaultValue={customer.isApproved ? "true" : "false"}
+              className="w-full rounded-xl border p-3"
+            >
+              <option value="true">Подтверждён ✓</option>
+              <option value="false">Не подтверждён</option>
             </select>
           </div>
 

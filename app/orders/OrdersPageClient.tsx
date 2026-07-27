@@ -71,10 +71,12 @@ function formatMoney(amount: number) {
   return amount.toLocaleString("ru-RU") + " ₽";
 }
 
+const IMAGES_BASE = process.env.NEXT_PUBLIC_IMAGES_BASE_URL ?? "https://kosmetichka-opt.ru";
+
 function getProductImageUrl(imagePath: string | null): string | null {
   if (!imagePath) return null;
   if (imagePath.startsWith("http")) return imagePath;
-  return `https://kosmetichka-opt.ru/api/1c/${imagePath}`;
+  return `${IMAGES_BASE}/api/1c/${imagePath}`;
 }
 
 function renderMsgContent(text: string) {
@@ -145,10 +147,11 @@ function OrderChat({ orderId }: { orderId: number }) {
 
   useEffect(() => {
     fetchMessages();
+    if (!open) return;
     const timer = setInterval(fetchMessages, 8000);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId]);
+  }, [orderId, open]);
 
   useEffect(() => {
     if (open) {
@@ -328,11 +331,9 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
               const imgSrc = item.variantImageUrl
                 ? (item.variantImageUrl.startsWith("http")
                     ? item.variantImageUrl
-                    : `https://kosmetichka-opt.ru${item.variantImageUrl}`)
+                    : `${IMAGES_BASE}${item.variantImageUrl}`)
                 : item.imagePath
-                ? (item.imagePath.startsWith("http")
-                    ? item.imagePath
-                    : `https://kosmetichka-opt.ru/api/1c/${item.imagePath}`)
+                ? getProductImageUrl(item.imagePath)
                 : null;
               return (
               <div key={item.id} className="flex items-center gap-3">
