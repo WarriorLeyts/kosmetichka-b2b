@@ -302,6 +302,9 @@ export default function AdminOrderClient({
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
 
+  // ── Image lightbox ──
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
   // ── Picker chat ──
   const [messages, setMessages] = useState<Message[]>(initialOrder.messages);
   const [msgText, setMsgText] = useState("");
@@ -1174,38 +1177,59 @@ export default function AdminOrderClient({
                 </tr>
               </thead>
               <tbody>
-                {order.items.map((item) => (
+                {order.items.map((item) => {
+                  const rawImgPath = item.variantImageUrl ?? productImages[item.productId] ?? null;
+                  const imgUrl = rawImgPath
+                    ? (rawImgPath.startsWith("http") ? rawImgPath : getProductImageUrl(rawImgPath))
+                    : null;
+                  return (
                   <tr key={item.id} className="border-t hover:bg-slate-50">
                     <td className="p-3">
-                      <div className="font-medium">{item.productName}</div>
-                      {item.variantName && (
-                        <div className="mt-1 flex items-center gap-1.5">
-                          {item.variantImageUrl && (
+                      <div className="flex items-start gap-3">
+                        {/* Product image thumbnail */}
+                        {imgUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => setLightboxUrl(imgUrl)}
+                            className="shrink-0 h-14 w-14 rounded-xl border bg-slate-50 overflow-hidden hover:ring-2 hover:ring-blue-400 transition-all cursor-zoom-in"
+                            title="Нажмите для увеличения"
+                          >
                             <img
-                              src={item.variantImageUrl}
-                              alt={item.variantName}
-                              className="h-8 w-8 rounded-lg object-contain border bg-slate-50"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                              src={imgUrl}
+                              alt={item.productName}
+                              className="h-full w-full object-contain p-1"
+                              onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = "none"; }}
                             />
+                          </button>
+                        ) : (
+                          <div className="shrink-0 h-14 w-14 rounded-xl border bg-slate-100 flex items-center justify-center text-2xl text-slate-300">
+                            📦
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-medium leading-snug">{item.productName}</div>
+                          {item.variantName && (
+                            <div className="mt-1 flex items-center gap-1.5">
+                              <span className="text-xs font-semibold text-blue-700 bg-blue-50 rounded-full px-2 py-0.5">
+                                🎨 {item.variantName}
+                              </span>
+                            </div>
                           )}
-                          <span className="text-xs font-semibold text-blue-700 bg-blue-50 rounded-full px-2 py-0.5">
-                            {item.variantName}
-                          </span>
+                          {item.barcode && <div className="mt-0.5 text-xs text-slate-400 font-mono">{item.barcode}</div>}
+                          {item.photos.length > 0 && (
+                            <div className="mt-1 flex gap-1">
+                              {item.photos.map((ph) => (
+                                <button key={ph.id} type="button" onClick={() => setLightboxUrl(ph.url)}>
+                                  <img src={ph.url} alt="" className="h-8 w-8 rounded object-cover border hover:ring-2 hover:ring-blue-400 cursor-zoom-in" />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {item.check?.note && (
+                            <div className="mt-1 text-xs text-slate-500 italic">{item.check.note}</div>
+                          )}
                         </div>
-                      )}
-                      {item.barcode && <div className="text-xs text-slate-400">{item.barcode}</div>}
-                      {item.photos.length > 0 && (
-                        <div className="mt-1 flex gap-1">
-                          {item.photos.map((ph) => (
-                            <a key={ph.id} href={ph.url} target="_blank" rel="noreferrer">
-                              <img src={ph.url} alt="" className="h-8 w-8 rounded object-cover border" />
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                      {item.check?.note && (
-                        <div className="mt-1 text-xs text-slate-500 italic">{item.check.note}</div>
-                      )}
+                      </div>
                     </td>
                     <td className="p-3 text-center font-bold">{item.quantity}</td>
                     <td className="p-3 text-right">{item.price.toLocaleString("ru-RU")} ₽</td>
@@ -1235,7 +1259,8 @@ export default function AdminOrderClient({
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
               <tfoot className="border-t bg-slate-50">
                 <tr>
@@ -1657,6 +1682,28 @@ export default function AdminOrderClient({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-black/85 p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <img
+            src={lightboxUrl}
+            alt=""
+            className="max-h-[90vh] max-w-[90vw] rounded-2xl object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            onClick={() => setLightboxUrl(null)}
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-slate-800 text-xl font-bold hover:bg-white shadow"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>
