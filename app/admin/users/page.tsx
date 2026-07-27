@@ -42,7 +42,15 @@ export default async function AdminUsersPage() {
     <div className="p-4 md:p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Сотрудники</h1>
-        <span className="text-sm text-slate-400">{users.length} записей</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-400">{users.length} записей</span>
+          <Link
+            href="/admin/users/new"
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700"
+          >
+            + Создать
+          </Link>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border bg-white">
