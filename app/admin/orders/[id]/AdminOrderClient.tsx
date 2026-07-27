@@ -146,7 +146,7 @@ const CHECK_LABELS: Record<string, { label: string; color: string }> = {
   insufficient_qty: { label: "⬇ Не хватает", color: "bg-blue-100 text-blue-700" },
 };
 
-const PIPELINE = ["pending", "assembly", "consultation", "payment", "exported"];
+const PIPELINE = ["pending", "approved", "assembly", "consultation", "payment", "exported"];
 
 const TRANSITIONS: Record<string, { label: string; to: string; style: string }[]> = {
   pending: [

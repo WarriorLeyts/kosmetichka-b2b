@@ -5,36 +5,47 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-async function getCurrentPickerId(): Promise<number | null> {
+/** Parse JSON or plain check status into individual status strings */
+function parseCheckStatuses(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map((e) => (typeof e === "string" ? e : e.s)).filter(Boolean);
+    }
+  } catch {}
+  return [raw];
+}
+
+async function getCurrentUserId(): Promise<number | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get("admin_token")?.value;
   if (!token) return null;
   const payload = await verifyToken(token);
-  if (!payload || payload.role !== "picker") return null;
+  if (!payload) return null;
+  const role = payload.role as string;
+  // admin and manager can also act as pickers
+  if (!["admin", "manager", "picker"].includes(role)) return null;
   return payload.id as number;
 }
 
 export default async function PickerDashboard() {
-  const currentPickerId = await getCurrentPickerId();
+  const currentUserId = await getCurrentUserId();
 
   const orders = await prisma.order.findMany({
-    where: {
-      status: "assembly",
-    },
+    where: { status: "assembly" },
     include: {
       customer: true,
       items: {
-        include: {
-          check: true,
-        },
+        include: { check: true },
       },
     },
+    orderBy: { createdAt: "asc" },
   });
 
-  // Sort: assigned to current picker first, then unassigned, then assigned to others
+  // Sort: assigned to current user first, then unassigned, then assigned to others
   const sorted = [...orders].sort((a, b) => {
-    const aIsMe = currentPickerId && a.pickerId === currentPickerId ? 0 : 1;
-    const bIsMe = currentPickerId && b.pickerId === currentPickerId ? 0 : 1;
+    const aIsMe = currentUserId && a.pickerId === currentUserId ? 0 : 1;
+    const bIsMe = currentUserId && b.pickerId === currentUserId ? 0 : 1;
     if (aIsMe !== bIsMe) return aIsMe - bIsMe;
     // Within same group — oldest first
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
@@ -53,24 +64,29 @@ export default async function PickerDashboard() {
           {sorted.map((order) => {
             const totalItems = order.items.length;
             const checkedItems = order.items.filter((i) => i.check).length;
-            const hasIssues = order.items.some(
-              (i) => i.check && i.check.status !== "ok"
-            );
+
+            // JSON-aware issue detection
+            const hasIssues = order.items.some((i) => {
+              if (!i.check) return false;
+              return parseCheckStatuses(i.check.status).some((s) => s !== "ok");
+            });
+
             const allChecked = checkedItems === totalItems && totalItems > 0;
-            const isMyOrder = currentPickerId && order.pickerId === currentPickerId;
-            const isAssignedToOther = order.pickerId && order.pickerId !== currentPickerId;
+            const isMyOrder = currentUserId && order.pickerId === currentUserId;
+            const isAssignedToOther =
+              order.pickerId && order.pickerId !== currentUserId;
 
             return (
               <Link
                 href={`/picker/${order.id}`}
                 key={order.id}
-                className={`block rounded-2xl border bg-white p-5 shadow-sm hover:bg-slate-50 ${
+                className={`block rounded-2xl border bg-white p-5 shadow-sm hover:bg-slate-50 transition-colors ${
                   isMyOrder ? "border-blue-300 ring-1 ring-blue-200" : ""
                 }`}
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <div className="text-lg font-black">Заказ №{order.id}</div>
                       {isMyOrder && (
                         <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700">
@@ -84,14 +100,21 @@ export default async function PickerDashboard() {
                       )}
                     </div>
                     <div className="mt-1 text-sm text-slate-500">
-                      {order.customer.companyName || order.customer.name || order.customer.phone}
+                      {order.customer.companyName ||
+                        order.customer.name ||
+                        order.customer.phone}
                     </div>
-                    <div className="text-sm text-slate-500">
-                      {new Date(order.createdAt).toLocaleString("ru-RU")}
+                    <div className="text-sm text-slate-400">
+                      {new Date(order.createdAt).toLocaleString("ru-RU", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </div>
                   </div>
 
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <div className="text-sm font-semibold text-slate-600">
                       {totalItems} поз.
                     </div>
@@ -105,7 +128,7 @@ export default async function PickerDashboard() {
                                 : "bg-green-100 text-green-700"
                             }`}
                           >
-                            {hasIssues ? "Есть проблемы" : "Всё ОК"}
+                            {hasIssues ? "⚠ Проблемы" : "✓ Всё ОК"}
                           </span>
                         ) : (
                           <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700">

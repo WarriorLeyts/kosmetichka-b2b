@@ -1,175 +1,202 @@
 import { prisma } from "@/lib/prisma";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Ожидание",
+  approved: "Подтверждён",
+  assembly: "Сборка",
+  consultation: "Консультация",
+  payment: "К оплате",
+  exported: "Выгружен в 1С",
+  cancelled: "Отменён",
+};
 
 export default async function InvoicePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // Auth guard
+  const cookieStore = await cookies();
+  const token = cookieStore.get("admin_token")?.value;
+  if (!token) redirect("/admin");
+  const payload = await verifyToken(token);
+  if (!payload?.id) redirect("/admin");
+  if (!["admin", "manager"].includes(payload.role as string)) redirect("/admin");
+
   const { id } = await params;
 
   const order = await prisma.order.findUnique({
     where: { id: Number(id) },
     include: {
       customer: true,
-      items: true,
+      items: {
+        orderBy: { id: "asc" },
+      },
     },
   });
 
   if (!order) notFound();
 
-  const date = new Date(order.createdAt).toLocaleDateString("ru-RU", {
+  const issueDate = new Date(order.createdAt).toLocaleDateString("ru-RU", {
     day: "2-digit",
-    month: "2-digit",
+    month: "long",
     year: "numeric",
   });
-
-  const customerName = order.customer.companyName || order.customer.name || "—";
-  const inn = order.customer.inn || "";
-  const phone = order.customer.phone || "";
 
   return (
     <>
       <style>{`
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, sans-serif; font-size: 12px; color: #000; background: #fff; }
-        .page { max-width: 800px; margin: 0 auto; padding: 30px 40px; }
-        h1 { font-size: 20px; font-weight: bold; margin-bottom: 4px; }
-        .subtitle { font-size: 13px; color: #444; margin-bottom: 24px; }
-        .header-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
-        .section-label { font-size: 10px; text-transform: uppercase; color: #888; letter-spacing: 0.5px; margin-bottom: 4px; }
-        .section-value { font-size: 13px; font-weight: 600; }
-        .section-sub { font-size: 12px; color: #555; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        thead tr { background: #f5f5f5; }
-        th { padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; border-bottom: 2px solid #ddd; }
-        td { padding: 8px 10px; font-size: 12px; border-bottom: 1px solid #eee; vertical-align: top; }
-        .text-right { text-align: right; }
-        .text-center { text-align: center; }
-        tfoot td { font-weight: bold; border-top: 2px solid #ddd; border-bottom: none; }
-        .total-row td { font-size: 14px; }
-        .footer { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
-        .sign-line { border-top: 1px solid #000; margin-top: 40px; padding-top: 4px; font-size: 11px; color: #555; }
-        .no-print { display: block; }
         @media print {
           .no-print { display: none !important; }
-          body { padding: 0; }
-          .page { padding: 20px; }
+          body { margin: 0; }
+          .invoice-wrap { box-shadow: none !important; margin: 0 !important; border-radius: 0 !important; }
         }
-        .print-btn {
-          display: inline-block;
-          margin-bottom: 20px;
-          padding: 10px 24px;
-          background: #1e40af;
-          color: white;
-          border: none;
-          border-radius: 8px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-        }
-        .print-btn:hover { background: #1d3faa; }
       `}</style>
 
-      <div className="page">
-        {/* Print button */}
-        <div className="no-print" style={{ marginBottom: 20 }}>
-          <button className="print-btn" onClick={() => window.print()}>
-            🖨️ Печать / Сохранить PDF
-          </button>
-          <span style={{ marginLeft: 16, fontSize: 13, color: "#666" }}>
-            В браузере выберите «Сохранить как PDF» вместо принтера
-          </span>
-        </div>
+      {/* Screen toolbar */}
+      <div className="no-print flex items-center gap-3 bg-slate-800 px-6 py-3">
+        <a
+          href={`/admin/orders/${order.id}`}
+          className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+        >
+          ← Назад к заказу
+        </a>
+        <button
+          onClick={() => window.print()}
+          className="rounded-lg bg-white px-4 py-2 text-sm font-bold text-slate-800 hover:bg-slate-100"
+        >
+          🖨️ Печать
+        </button>
+        <span className="ml-auto text-sm text-slate-400">
+          Счёт №{order.id} от {issueDate}
+        </span>
+      </div>
+
+      {/* Invoice */}
+      <div className="invoice-wrap mx-auto my-8 max-w-3xl rounded-2xl bg-white px-10 py-10 shadow-lg print:my-0 print:max-w-none print:shadow-none">
 
         {/* Header */}
-        <h1>Счёт на оплату №{order.id}</h1>
-        <div className="subtitle">от {date}</div>
+        <div className="mb-8 flex items-start justify-between border-b pb-6">
+          <div>
+            <h1 className="text-3xl font-black text-slate-900">СЧЁТ</h1>
+            <p className="mt-1 text-lg font-semibold text-slate-500">№{order.id}</p>
+          </div>
+          <div className="text-right text-sm text-slate-500">
+            <p className="font-semibold text-slate-700">Дата выставления</p>
+            <p>{issueDate}</p>
+            <p className="mt-2 font-semibold text-slate-700">Статус заказа</p>
+            <p>{STATUS_LABELS[order.status] ?? order.status}</p>
+          </div>
+        </div>
 
         {/* Parties */}
-        <div className="header-grid">
+        <div className="mb-8 grid grid-cols-2 gap-8">
           <div>
-            <div className="section-label">Поставщик</div>
-            <div className="section-value">ИП Косметичка</div>
-            <div className="section-sub">kosmetichka-opt.ru</div>
+            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">Поставщик</p>
+            <p className="font-bold text-slate-800">ООО «Косметичка»</p>
+            <p className="text-sm text-slate-500">kosmetichka-opt.ru</p>
           </div>
           <div>
-            <div className="section-label">Покупатель</div>
-            <div className="section-value">{customerName}</div>
-            {inn && <div className="section-sub">ИНН: {inn}</div>}
-            {phone && <div className="section-sub">Тел: {phone}</div>}
+            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">Покупатель</p>
+            <p className="font-bold text-slate-800">
+              {order.customer.companyName || order.customer.name || "—"}
+            </p>
+            {order.customer.inn && (
+              <p className="text-sm text-slate-500">ИНН: {order.customer.inn}</p>
+            )}
+            {order.customer.phone && (
+              <p className="text-sm text-slate-500">{order.customer.phone}</p>
+            )}
+            {order.customer.email && (
+              <p className="text-sm text-slate-500">{order.customer.email}</p>
+            )}
+            {order.customer.city && (
+              <p className="text-sm text-slate-500">{order.customer.city}</p>
+            )}
+            {order.customer.address && (
+              <p className="text-sm text-slate-500">{order.customer.address}</p>
+            )}
+            {order.customer.manager && (
+              <p className="mt-1 text-xs text-indigo-600 font-semibold">
+                Менеджер: {order.customer.manager}
+              </p>
+            )}
           </div>
         </div>
 
         {/* Items table */}
-        <table>
+        <table className="mb-6 w-full text-sm">
           <thead>
-            <tr>
-              <th style={{ width: 30 }}>№</th>
-              <th>Наименование товара</th>
-              <th className="text-center" style={{ width: 60 }}>Кол-во</th>
-              <th className="text-right" style={{ width: 80 }}>Цена, ₽</th>
-              <th className="text-right" style={{ width: 90 }}>Сумма, ₽</th>
+            <tr className="border-b-2 border-slate-200">
+              <th className="pb-2 text-left font-semibold text-slate-500">№</th>
+              <th className="pb-2 text-left font-semibold text-slate-500">Наименование</th>
+              <th className="pb-2 text-center font-semibold text-slate-500">Кол-во</th>
+              <th className="pb-2 text-right font-semibold text-slate-500">Цена, ₽</th>
+              <th className="pb-2 text-right font-semibold text-slate-500">Сумма, ₽</th>
             </tr>
           </thead>
           <tbody>
             {order.items.map((item, idx) => (
-              <tr key={item.id}>
-                <td>{idx + 1}</td>
-                <td>
-                  {item.productName}
+              <tr key={item.id} className="border-b border-slate-100">
+                <td className="py-2.5 pr-3 text-slate-400">{idx + 1}</td>
+                <td className="py-2.5 pr-3">
+                  <span className="font-medium text-slate-800">{item.productName}</span>
+                  {item.variantName && (
+                    <span className="ml-2 text-xs text-blue-600">🎨 {item.variantName}</span>
+                  )}
                   {item.barcode && (
-                    <div style={{ fontSize: 10, color: "#888" }}>
-                      Арт: {item.barcode}
-                    </div>
+                    <span className="ml-2 font-mono text-xs text-slate-400">{item.barcode}</span>
                   )}
                 </td>
-                <td className="text-center">{item.quantity} шт.</td>
-                <td className="text-right">{item.price.toLocaleString("ru-RU")}</td>
-                <td className="text-right">{item.total.toLocaleString("ru-RU")}</td>
+                <td className="py-2.5 text-center text-slate-700">{item.quantity}</td>
+                <td className="py-2.5 text-right text-slate-700">
+                  {item.price.toLocaleString("ru-RU")}
+                </td>
+                <td className="py-2.5 text-right font-semibold text-slate-800">
+                  {item.total.toLocaleString("ru-RU")}
+                </td>
               </tr>
             ))}
           </tbody>
-          <tfoot>
-            <tr className="total-row">
-              <td colSpan={4} className="text-right">Итого к оплате:</td>
-              <td className="text-right">{order.total.toLocaleString("ru-RU")} ₽</td>
-            </tr>
-          </tfoot>
         </table>
+
+        {/* Totals */}
+        <div className="flex justify-end">
+          <div className="w-64">
+            <div className="flex justify-between border-t-2 border-slate-800 pt-3">
+              <span className="text-lg font-black text-slate-800">ИТОГО:</span>
+              <span className="text-lg font-black text-slate-800">
+                {order.total.toLocaleString("ru-RU")} ₽
+              </span>
+            </div>
+          </div>
+        </div>
 
         {/* Comment */}
         {order.comment && (
-          <div style={{ marginBottom: 20, fontSize: 12, color: "#555" }}>
-            <strong>Комментарий:</strong> {order.comment}
+          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            <span className="font-semibold">Комментарий к заказу:</span> {order.comment}
           </div>
         )}
 
-        {/* NDS note */}
-        <div style={{ fontSize: 11, color: "#888", marginBottom: 24 }}>
-          НДС не облагается. Оплата в течение 3 рабочих дней.
-        </div>
-
-        {/* Signatures */}
-        <div className="footer">
-          <div>
-            <div style={{ marginBottom: 8, fontSize: 12 }}>Поставщик:</div>
-            <div className="sign-line">Подпись / дата</div>
-          </div>
-          <div>
-            <div style={{ marginBottom: 8, fontSize: 12 }}>Покупатель:</div>
-            <div className="sign-line">Подпись / дата</div>
-          </div>
+        {/* Footer */}
+        <div className="mt-10 border-t pt-6 text-center text-xs text-slate-400">
+          Счёт сформирован автоматически системой управления заказами kosmetichka-opt.ru
         </div>
       </div>
 
       <script
         dangerouslySetInnerHTML={{
           __html: `
-            document.querySelector('.print-btn')?.addEventListener('click', function() {
-              window.print();
+            document.querySelectorAll('button').forEach(btn => {
+              btn.addEventListener('click', () => {
+                if (btn.textContent.includes('Печать')) window.print();
+              });
             });
           `,
         }}

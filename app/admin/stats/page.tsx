@@ -49,9 +49,10 @@ export default async function AdminStatsPage() {
   ]);
   const todayTotal = todayAgg._sum.total ?? 0;
 
-  // Last 7 days — group by day
+  // Last 7 days — group by day (select only needed fields)
   const weekOrders = await prisma.order.findMany({
     where: { createdAt: { gte: weekStart } },
+    select: { createdAt: true, total: true },
     orderBy: { createdAt: "asc" },
   });
 

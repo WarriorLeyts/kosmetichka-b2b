@@ -108,10 +108,10 @@ export default async function AdminOrdersPage({
         </Link>
       </div>
 
-      {/* Status chips (today counts) */}
+      {/* Status chips (today counts) — preserve current date param */}
       <div className="mb-4 flex flex-wrap gap-2">
         <Link
-          href={`/admin/orders?status=`}
+          href={selectedDate ? `/admin/orders?date=${selectedDate}&status=` : `/admin/orders?status=`}
           className={`rounded-full px-3 py-1 text-sm font-medium border transition-all ${
             !selectedStatus ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 hover:bg-slate-50"
           }`}
@@ -123,10 +123,13 @@ export default async function AdminOrdersPage({
         {PIPELINE_STATUSES.map((s) => {
           const count = countMap[s] ?? 0;
           if (count === 0 && !["pending", "approved", "assembly", "consultation", "payment"].includes(s)) return null;
+          const chipHref = selectedDate
+            ? `/admin/orders?date=${selectedDate}&status=${s}`
+            : `/admin/orders?status=${s}`;
           return (
             <Link
               key={s}
-              href={`/admin/orders?status=${s}`}
+              href={chipHref}
               className={`rounded-full px-3 py-1 text-sm font-medium border transition-all ${
                 selectedStatus === s
                   ? "bg-slate-800 text-white border-slate-800"

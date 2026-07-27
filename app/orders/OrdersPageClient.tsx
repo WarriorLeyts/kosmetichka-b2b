@@ -146,8 +146,9 @@ function OrderChat({ orderId }: { orderId: number }) {
   }
 
   useEffect(() => {
-    fetchMessages();
+    // Only fetch and poll when chat is open — avoids redundant HTTP on mount
     if (!open) return;
+    fetchMessages();
     const timer = setInterval(fetchMessages, 8000);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
