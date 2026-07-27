@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import PaginationBar from "@/components/PaginationBar";
+
+const PAGE_SIZE = 50;
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +44,7 @@ export default async function AdminOrdersPage({
     date?: string;
     customer?: string;
     status?: string;
+    page?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -50,6 +54,7 @@ export default async function AdminOrdersPage({
   const selectedDate = params.date !== undefined ? params.date : today;
   const customerSearch = params.customer || "";
   const selectedStatus = params.status || "";
+  const page = Math.max(1, parseInt(params.page || "1", 10));
 
   let dateFilter = {};
   if (selectedDate) {
@@ -58,21 +63,27 @@ export default async function AdminOrdersPage({
     dateFilter = { createdAt: { gte: startDate, lte: endDate } };
   }
 
-  const orders = await prisma.order.findMany({
-    where: {
-      ...dateFilter,
-      status: selectedStatus || undefined,
-      customer: customerSearch
-        ? {
-            OR: [
-              { name: { contains: customerSearch, mode: "insensitive" } },
-              { companyName: { contains: customerSearch, mode: "insensitive" } },
-              { phone: { contains: customerSearch } },
-            ],
-          }
-        : undefined,
-    },
+  const where = {
+    ...dateFilter,
+    status: selectedStatus || undefined,
+    customer: customerSearch
+      ? {
+          OR: [
+            { name: { contains: customerSearch, mode: "insensitive" } },
+            { companyName: { contains: customerSearch, mode: "insensitive" } },
+            { phone: { contains: customerSearch } },
+          ],
+        }
+      : undefined,
+  };
+
+  const [totalCount, orders] = await Promise.all([
+    prisma.order.count({ where }),
+    prisma.order.findMany({
+    where,
     orderBy: { createdAt: "desc" },
+    take: PAGE_SIZE,
+    skip: (page - 1) * PAGE_SIZE,
     select: {
       id: true,
       status: true,
@@ -84,7 +95,22 @@ export default async function AdminOrdersPage({
         select: { check: { select: { status: true } } },
       },
     },
-  });
+  }),
+  ]);
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  // Build href preserving all current filters + changing page
+  function pageHref(p: number) {
+    const sp = new URLSearchParams();
+    if (selectedDate !== today) sp.set("date", selectedDate);
+    else if (params.date !== undefined) sp.set("date", selectedDate);
+    if (customerSearch) sp.set("customer", customerSearch);
+    if (selectedStatus) sp.set("status", selectedStatus);
+    if (p > 1) sp.set("page", String(p));
+    const qs = sp.toString();
+    return `/admin/orders${qs ? `?${qs}` : ""}`;
+  }
 
   // Count by status (always for today)
   const todayStart = new Date(`${today}T00:00:00`);
@@ -103,9 +129,14 @@ export default async function AdminOrdersPage({
     <div className="p-4 md:p-6">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Заказы</h1>
-        <Link href="/admin/stats" className="rounded-xl border px-4 py-2 text-sm hover:bg-slate-50">
-          📊 Статистика
-        </Link>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-400">
+            {totalCount} {totalCount === 1 ? "заказ" : totalCount < 5 ? "заказа" : "заказов"}
+          </span>
+          <Link href="/admin/stats" className="rounded-xl border px-4 py-2 text-sm hover:bg-slate-50">
+            📊 Статистика
+          </Link>
+        </div>
       </div>
 
       {/* Status chips (today counts) — preserve current date param */}
@@ -261,6 +292,8 @@ export default async function AdminOrdersPage({
           </div>
         )}
       </div>
+
+      <PaginationBar page={page} totalPages={totalPages} buildHref={pageHref} />
     </div>
   );
 }

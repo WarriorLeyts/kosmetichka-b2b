@@ -1,27 +1,30 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import PaginationBar from "@/components/PaginationBar";
+
+const PAGE_SIZE = 50;
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminCustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; page?: string }>;
 }) {
   const params = await searchParams;
   const q = params.q?.trim() || "";
   const statusFilter = params.status || "";
+  const page = Math.max(1, parseInt(params.page || "1", 10));
 
-  const customers = await prisma.customer.findMany({
-    where: {
+  const where = {
       AND: [
         q
           ? {
               OR: [
-                { name: { contains: q, mode: "insensitive" } },
-                { companyName: { contains: q, mode: "insensitive" } },
+                { name: { contains: q, mode: "insensitive" as const } },
+                { companyName: { contains: q, mode: "insensitive" as const } },
                 { phone: { contains: q } },
-                { email: { contains: q, mode: "insensitive" } },
+                { email: { contains: q, mode: "insensitive" as const } },
               ],
             }
           : {},
@@ -33,7 +36,12 @@ export default async function AdminCustomersPage({
           ? { isActive: false }
           : {},
       ],
-    },
+  };
+
+  const [totalCount, customers] = await Promise.all([
+    prisma.customer.count({ where }),
+    prisma.customer.findMany({
+    where,
     select: {
       id: true,
       name: true,
@@ -49,8 +57,21 @@ export default async function AdminCustomersPage({
       createdAt: true,
     },
     orderBy: { createdAt: "desc" },
-    take: 200,
-  });
+    take: PAGE_SIZE,
+    skip: (page - 1) * PAGE_SIZE,
+  }),
+  ]);
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  function pageHref(p: number) {
+    const sp = new URLSearchParams();
+    if (q) sp.set("q", q);
+    if (statusFilter) sp.set("status", statusFilter);
+    if (p > 1) sp.set("page", String(p));
+    const qs = sp.toString();
+    return `/admin/customers${qs ? `?${qs}` : ""}`;
+  }
 
   const STATUS_FILTER_OPTIONS = [
     { value: "", label: "Все" },
@@ -69,7 +90,7 @@ export default async function AdminCustomersPage({
     <div className="p-4 md:p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Клиенты</h1>
-        <span className="text-sm text-slate-400">{customers.length} записей</span>
+        <span className="text-sm text-slate-400">{totalCount} записей</span>
       </div>
 
       {/* Filters */}
@@ -168,6 +189,8 @@ export default async function AdminCustomersPage({
           </tbody>
         </table>
       </div>
+
+      <PaginationBar page={page} totalPages={totalPages} buildHref={pageHref} />
     </div>
   );
 }

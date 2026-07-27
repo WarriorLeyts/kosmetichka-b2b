@@ -4,10 +4,17 @@ import { verifyToken } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import OrdersPageClient from "./OrdersPageClient";
 import Link from "next/link";
+import PaginationBar from "@/components/PaginationBar";
 
 export const dynamic = "force-dynamic";
 
-export default async function OrdersPage() {
+const PAGE_SIZE = 20;
+
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
   if (!token) redirect("/login");
@@ -15,10 +22,16 @@ export default async function OrdersPage() {
   if (!payload?.id) redirect("/login");
 
   const customerId = payload.id as number;
+  const p = await searchParams;
+  const page = Math.max(1, parseInt(p.page || "1", 10));
 
-  const orders = await prisma.order.findMany({
+  const [totalCount, orders] = await Promise.all([
+    prisma.order.count({ where: { customerId } }),
+    prisma.order.findMany({
     where: { customerId },
     orderBy: { createdAt: "desc" },
+    take: PAGE_SIZE,
+    skip: (page - 1) * PAGE_SIZE,
     include: {
       items: {
         orderBy: { id: "asc" },
@@ -35,27 +48,30 @@ export default async function OrdersPage() {
         },
       },
     },
-  });
+  }),
+  ]);
 
-  // Stats
-  const totalOrders = orders.length;
-  const totalSum = orders.reduce((s, o) => s + o.total, 0);
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  // Top product by total quantity across all orders
-  const productQty: Record<string, number> = {};
-  for (const order of orders) {
-    for (const item of order.items) {
-      productQty[item.productName] = (productQty[item.productName] ?? 0) + item.quantity;
-    }
-  }
-  let topProduct: string | null = null;
-  let topProductQty = 0;
-  for (const [name, qty] of Object.entries(productQty)) {
-    if (qty > topProductQty) {
-      topProduct = name;
-      topProductQty = qty;
-    }
-  }
+  // Stats across ALL orders (light aggregate queries)
+  const [sumResult, topItems] = await Promise.all([
+    prisma.order.aggregate({
+      where: { customerId },
+      _sum: { total: true },
+      _count: { id: true },
+    }),
+    prisma.orderItem.groupBy({
+      by: ["productName"],
+      where: { order: { customerId } },
+      _sum: { quantity: true },
+      orderBy: { _sum: { quantity: "desc" } },
+      take: 1,
+    }),
+  ]);
+  const totalOrders = sumResult._count.id;
+  const totalSum = sumResult._sum.total ?? 0;
+  const topProduct = topItems[0]?.productName ?? null;
+  const topProductQty = topItems[0]?._sum.quantity ?? 0;
 
   const serialized = orders.map((o) => ({
     id: o.id,
@@ -102,10 +118,22 @@ export default async function OrdersPage() {
       </nav>
 
       <div className="mx-auto max-w-3xl px-4 py-6">
-        <h1 className="mb-6 text-2xl font-black text-slate-900">Мои заказы</h1>
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-2xl font-black text-slate-900">Мои заказы</h1>
+          {totalCount > PAGE_SIZE && (
+            <span className="text-sm text-slate-400">
+              {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalCount)} из {totalCount}
+            </span>
+          )}
+        </div>
         <OrdersPageClient
           orders={serialized}
           stats={{ totalOrders, totalSum, topProduct, topProductQty }}
+        />
+        <PaginationBar
+          page={page}
+          totalPages={totalPages}
+          buildHref={(p) => (p === 1 ? "/orders" : `/orders?page=${p}`)}
         />
       </div>
     </main>
