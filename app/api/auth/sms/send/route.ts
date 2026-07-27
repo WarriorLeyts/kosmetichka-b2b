@@ -19,7 +19,7 @@ function generateCode(): string {
 async function sendSmsAero(phone: string, text: string): Promise<boolean> {
   const email = process.env.SMSAERO_EMAIL;
   const apiKey = process.env.SMSAERO_API_KEY;
-  const sign = process.env.SMSAERO_SIGN || "SMS Aero";
+  const sign = process.env.SMSAERO_SIGN || "Kosmetichka";
 
   if (!email || !apiKey) {
     console.error("SMSAERO_EMAIL или SMSAERO_API_KEY не заданы");
