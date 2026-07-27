@@ -230,12 +230,14 @@ function renderMsgContent(text: string) {
       return (
         <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-56 shadow-sm">
           {imgUrl && (
-            <img
-              src={imgUrl}
-              alt={obj.name}
-              className="w-full h-28 object-contain bg-slate-50 p-1"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
+            <a href={imgUrl} target="_blank" rel="noreferrer">
+              <img
+                src={imgUrl}
+                alt={obj.name}
+                className="w-full h-28 object-contain bg-slate-50 p-1 cursor-pointer hover:opacity-90"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            </a>
           )}
           <div className="p-2">
             <p className="font-semibold text-sm leading-snug mb-1">{obj.name}</p>
@@ -261,10 +263,12 @@ export default function AdminOrderClient({
   order: initialOrder,
   pickers,
   customerMessages: initialCustomerMessages,
+  productImages = {},
 }: {
   order: Order;
   pickers: PickerUser[];
   customerMessages: CustomerMessage[];
+  productImages?: Record<number, string | null>;
 }) {
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
@@ -650,11 +654,11 @@ export default function AdminOrderClient({
           : "";
       const note = item.check!.note ? ` — ${item.check!.note}` : "";
 
-      // Use picker photo first, then variant image, then null
+      // Use picker photo first, then variant image, then catalog product image
       const imagePath =
         item.photos.length > 0
           ? item.photos[0].url
-          : (item.variantImageUrl ?? null);
+          : (item.variantImageUrl ?? productImages[item.productId] ?? null);
 
       const msgJson = JSON.stringify({
         _t: "product-problem",

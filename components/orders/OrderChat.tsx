@@ -49,12 +49,14 @@ function renderBubble(text: string) {
           boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
         }}>
           {imgUrl && (
-            <img
-              src={imgUrl}
-              alt={obj.name}
-              style={{ width: "100%", height: 110, objectFit: "contain", background: "#f8fafc", padding: 4, display: "block" }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
+            <a href={imgUrl} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+              <img
+                src={imgUrl}
+                alt={obj.name}
+                style={{ width: "100%", height: 110, objectFit: "contain", background: "#f8fafc", padding: 4, display: "block", cursor: "pointer" }}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            </a>
           )}
           <div style={{ padding: "8px 10px" }}>
             <p style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3, margin: "0 0 4px" }}>{obj.name}</p>
@@ -83,12 +85,14 @@ function renderBubble(text: string) {
           boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
         }}>
           {imgUrl && (
-            <img
-              src={imgUrl}
-              alt={obj.name}
-              style={{ width: "100%", height: 96, objectFit: "contain", background: "#f8fafc", padding: 4, display: "block" }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
+            <a href={imgUrl} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+              <img
+                src={imgUrl}
+                alt={obj.name}
+                style={{ width: "100%", height: 96, objectFit: "contain", background: "#f8fafc", padding: 4, display: "block", cursor: "pointer" }}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            </a>
           )}
           <div style={{ padding: "8px 10px" }}>
             <p style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3, margin: "0 0 4px" }}>{obj.name}</p>

@@ -62,6 +62,23 @@ export default async function AdminOrderPage({
 
   if (!order) notFound();
 
+  // ── Product images from catalog ───────────────────────────────────────────
+  const productIds = order.items.map((i) => i.productId);
+  const products = await prisma.product.findMany({
+    where: { id: { in: productIds } },
+    include: { images: { take: 1 } },
+  });
+  const productImages: Record<number, string | null> = {};
+  for (const p of products) {
+    const rawPath = p.images[0]?.path ?? null;
+    productImages[p.id] = rawPath
+      ? rawPath.startsWith("http")
+        ? rawPath
+        : `https://kosmetichka-opt.ru/api/1c/${rawPath}`
+      : null;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const serialized = {
     ...order,
     createdAt: order.createdAt.toISOString(),
@@ -123,6 +140,7 @@ export default async function AdminOrderPage({
       order={serialized as any}
       pickers={pickers}
       customerMessages={serialized.customerMessages}
+      productImages={productImages}
     />
   );
 }
