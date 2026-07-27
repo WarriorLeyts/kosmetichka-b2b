@@ -8,7 +8,7 @@ import { Heart, LogIn } from "lucide-react";
 export default function LoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
 
   const [error, setError] = useState("");
@@ -24,7 +24,7 @@ export default function LoginPage() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: login, password }),
     });
 
     const text = await res.text();
@@ -60,11 +60,12 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-4">
           <input
-            type="email"
-            placeholder="Email"
+            type="text"
+            placeholder="Email или номер телефона"
             className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none focus:border-pink-300"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={login}
+            onChange={(e) => setLogin(e.target.value)}
+            autoComplete="username"
           />
 
           <input
@@ -73,6 +74,7 @@ export default function LoginPage() {
             className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none focus:border-pink-300"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
           />
 
           {error && (
