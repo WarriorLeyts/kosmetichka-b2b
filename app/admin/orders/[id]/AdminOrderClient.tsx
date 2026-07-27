@@ -261,10 +261,12 @@ export default function AdminOrderClient({
   order: initialOrder,
   pickers,
   customerMessages: initialCustomerMessages,
+  productImages = {},
 }: {
   order: Order;
   pickers: PickerUser[];
   customerMessages: CustomerMessage[];
+  productImages?: Record<number, string | null>;
 }) {
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
@@ -669,8 +671,11 @@ export default function AdminOrderClient({
           : "";
       const note = item.check!.note ? ` — ${item.check!.note}` : "";
 
-      // Use picker photo if available, otherwise null
-      const imagePath = item.photos.length > 0 ? item.photos[0].url : null;
+      // Use picker photo → variant image → catalog image
+      const imagePath =
+        item.photos.length > 0
+          ? item.photos[0].url
+          : (item.variantImageUrl ?? productImages[item.productId] ?? null);
 
       const msgJson = JSON.stringify({
         _t: "product-problem",
