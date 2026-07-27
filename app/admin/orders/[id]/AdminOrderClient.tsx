@@ -67,6 +67,7 @@ type Order = {
     phone: string | null;
     city: string | null;
     inn: string | null;
+    manager: string | null;
   };
   items: OrderItem[];
   messages: Message[];
@@ -908,6 +909,12 @@ export default function AdminOrderClient({
           <div className="mt-2 ml-12 text-sm text-slate-500">
             <div>{order.customer.companyName || order.customer.name} · {order.customer.phone}</div>
             {order.customer.city && <div>{order.customer.city}</div>}
+            {order.customer.manager && (
+              <div className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-indigo-600">
+                <span>👤</span>
+                <span>Менеджер: {order.customer.manager}</span>
+              </div>
+            )}
             <div className="text-xs">{formatDate(order.createdAt)}</div>
           </div>
         </div>
