@@ -173,6 +173,15 @@ const TRANSITIONS: Record<string, { label: string; to: string; style: string }[]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+function parseCheckStatuses(status: string | null): string[] {
+  if (!status) return [];
+  try {
+    const parsed = JSON.parse(status);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {}
+  return [status];
+}
+
 function formatDate(str: string) {
   return new Date(str).toLocaleString("ru-RU", {
     day: "2-digit",
@@ -645,16 +654,17 @@ export default function AdminOrderClient({
 
   // ── Notify customer about problems ──
   async function notifyClientAboutProblems() {
-    const CHECK_LABELS: Record<string, string> = {
+    const PROBLEM_LABELS: Record<string, string> = {
       out_of_stock: "Нет в наличии",
       expired: "Истёк срок годности",
-      bad_condition: "Плохое состояние",
+      bad_condition: "Плохой вид",
       insufficient_qty: "Не хватает",
     };
 
-    const problematic = order.items.filter(
-      (i) => i.check && i.check.status !== "ok"
-    );
+    const problematic = order.items.filter((i) => {
+      if (!i.check) return false;
+      return parseCheckStatuses(i.check.status).some((s) => s !== "ok");
+    });
     if (problematic.length === 0) return;
 
     // Intro message
@@ -664,12 +674,16 @@ export default function AdminOrderClient({
 
     // Send product card for each problematic item
     for (const item of problematic) {
-      const label = CHECK_LABELS[item.check!.status] ?? item.check!.status;
-      const extra =
-        item.check!.status === "insufficient_qty" && item.check!.availableQty !== null
-          ? ` (есть ${item.check!.availableQty} шт.)`
-          : "";
+      const statuses = parseCheckStatuses(item.check!.status).filter((s) => s !== "ok");
+      const problemParts = statuses.map((s) => {
+        const label = PROBLEM_LABELS[s] ?? s;
+        if (s === "insufficient_qty" && item.check!.availableQty !== null) {
+          return `${label} (есть ${item.check!.availableQty} шт.)`;
+        }
+        return label;
+      });
       const note = item.check!.note ? ` — ${item.check!.note}` : "";
+      const problemText = problemParts.join(", ") + note;
 
       // Use picker photo → variant image → catalog image
       const imagePath =
@@ -683,7 +697,7 @@ export default function AdminOrderClient({
         name: item.productName,
         price: item.price,
         imagePath,
-        problem: `${label}${extra}${note}`,
+        problem: problemText,
       });
       await sendCustomerMessage(msgJson);
     }
@@ -1017,7 +1031,7 @@ export default function AdminOrderClient({
                   ✏️ Редактировать позиции
                 </button>
               )}
-              {order.items.some((i) => i.check && i.check.status !== "ok") && (
+              {order.items.some((i) => i.check && parseCheckStatuses(i.check.status).some((s) => s !== "ok")) && (
                 <button
                   onClick={notifyClientAboutProblems}
                   disabled={sendingCustomerMsg}
@@ -1168,9 +1182,13 @@ export default function AdminOrderClient({
                     <td className="p-3 text-center">
                       {item.check ? (
                         <div>
-                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${CHECK_LABELS[item.check.status]?.color || "bg-slate-100"}`}>
-                            {CHECK_LABELS[item.check.status]?.label || item.check.status}
-                          </span>
+                          <div className="flex flex-wrap justify-center gap-1">
+                            {parseCheckStatuses(item.check.status).map((s) => (
+                              <span key={s} className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${CHECK_LABELS[s]?.color || "bg-slate-100"}`}>
+                                {CHECK_LABELS[s]?.label || s}
+                              </span>
+                            ))}
+                          </div>
                           {item.check.availableQty !== null && (
                             <div className="text-xs text-slate-400 mt-0.5">есть {item.check.availableQty}</div>
                           )}

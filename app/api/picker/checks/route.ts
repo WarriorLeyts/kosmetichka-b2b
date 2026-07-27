@@ -34,7 +34,8 @@ export async function POST(request: Request) {
     orderId: number;
     items: Array<{
       itemId: number;
-      status: string;
+      statuses?: string[];   // новый формат (массив)
+      status?: string;       // старый формат (обратная совместимость)
       availableQty?: number | null;
       note?: string | null;
     }>;
@@ -62,17 +63,21 @@ export async function POST(request: Request) {
 
   // Upsert each item check
   for (const item of items) {
+    // Нормализуем: если пришёл массив — сохраняем как JSON, если один — как строку
+    const statuses = item.statuses ?? (item.status ? [item.status] : ["ok"]);
+    const statusValue = statuses.length === 1 ? statuses[0] : JSON.stringify(statuses);
+
     await prisma.orderItemCheck.upsert({
       where: { orderItemId: item.itemId },
       update: {
-        status: item.status,
+        status: statusValue,
         availableQty: item.availableQty ?? null,
         note: item.note ?? null,
         pickerId: user.id,
       },
       create: {
         orderItemId: item.itemId,
-        status: item.status,
+        status: statusValue,
         availableQty: item.availableQty ?? null,
         note: item.note ?? null,
         pickerId: user.id,
@@ -81,7 +86,10 @@ export async function POST(request: Request) {
   }
 
   // Issues → consultation; all OK → payment
-  const hasIssues = items.some((i) => i.status !== "ok");
+  const hasIssues = items.some((i) => {
+    const statuses = i.statuses ?? (i.status ? [i.status] : ["ok"]);
+    return statuses.some((s) => s !== "ok");
+  });
   const newStatus = hasIssues ? "consultation" : "payment";
 
   await prisma.order.update({

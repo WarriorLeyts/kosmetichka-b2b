@@ -12,7 +12,7 @@ type CheckStatus =
   | null;
 
 type ItemState = {
-  status: CheckStatus;
+  statuses: CheckStatus[];
   availableQty: string;
   note: string;
   photos: string[];
@@ -113,17 +113,26 @@ const CHECK_OPTIONS: {
   },
 ];
 
+function parseStatuses(statusStr: string | null): CheckStatus[] {
+  if (!statusStr) return [];
+  try {
+    const parsed = JSON.parse(statusStr);
+    if (Array.isArray(parsed)) return parsed as CheckStatus[];
+  } catch {}
+  return [statusStr as CheckStatus];
+}
+
 function getInitialState(item: OrderItem): ItemState {
   if (item.check) {
     return {
-      status: item.check.status as CheckStatus,
+      statuses: parseStatuses(item.check.status),
       availableQty: item.check.availableQty?.toString() || "",
       note: item.check.note || "",
       photos: item.photos.map((p) => p.url),
       uploading: false,
     };
   }
-  return { status: null, availableQty: "", note: "", photos: [], uploading: false };
+  return { statuses: [], availableQty: "", note: "", photos: [], uploading: false };
 }
 
 function playBeep(type: "ok" | "issue") {
@@ -350,7 +359,22 @@ export default function PickerOrderClient({
   }
 
   function setItemStatus(itemId: number, status: CheckStatus) {
-    setItems((prev) => ({ ...prev, [itemId]: { ...prev[itemId], status } }));
+    setItems((prev) => {
+      const current = prev[itemId].statuses;
+      let next: CheckStatus[];
+      if (status === "ok") {
+        // OK — эксклюзивный: переключает, снимает все остальные
+        next = current.includes("ok") ? [] : ["ok"];
+      } else {
+        // Остальные — тогглятся; при добавлении снимает OK
+        if (current.includes(status)) {
+          next = current.filter((s) => s !== status);
+        } else {
+          next = [...current.filter((s) => s !== "ok"), status];
+        }
+      }
+      return { ...prev, [itemId]: { ...prev[itemId], statuses: next } };
+    });
     playBeep(status === "ok" ? "ok" : "issue");
     vibrate(status === "ok" ? "ok" : "issue");
   }
@@ -511,7 +535,7 @@ export default function PickerOrderClient({
   }
 
   // ── Submit check ──
-  const checkedCount = order.items.filter((i) => items[i.id]?.status !== null).length;
+  const checkedCount = order.items.filter((i) => (items[i.id]?.statuses?.length ?? 0) > 0).length;
   const allChecked = checkedCount === order.items.length;
 
   async function handleSubmit() {
@@ -523,9 +547,9 @@ export default function PickerOrderClient({
         orderId: order.id,
         items: order.items.map((i) => ({
           itemId: i.id,
-          status: items[i.id].status,
+          statuses: items[i.id].statuses,
           availableQty:
-            items[i.id].status === "insufficient_qty" && items[i.id].availableQty
+            items[i.id].statuses.includes("insufficient_qty") && items[i.id].availableQty
               ? Number(items[i.id].availableQty)
               : null,
           note: items[i.id].note || null,
@@ -660,11 +684,12 @@ export default function PickerOrderClient({
         <div className="space-y-4">
           {order.items.map((item) => {
             const state = items[item.id];
-            const currentStatus = state?.status ?? null;
+            const currentStatuses = state?.statuses ?? [];
+            const hasIssue = currentStatuses.length > 0 && !currentStatuses.includes("ok");
             // variant image takes priority over default product image
             const imageUrl = item.variantImageUrl ?? imageMap[item.productId] ?? null;
             const isHighlighted = highlightedItem === item.id;
-            const borderColor = isHighlighted ? "border-yellow-400 shadow-lg" : currentStatus === null ? "border-slate-200" : currentStatus === "ok" ? "border-green-400" : "border-orange-400";
+            const borderColor = isHighlighted ? "border-yellow-400 shadow-lg" : currentStatuses.length === 0 ? "border-slate-200" : currentStatuses.includes("ok") ? "border-green-400" : "border-orange-400";
             return (
               <div
                 key={item.id}
@@ -696,22 +721,22 @@ export default function PickerOrderClient({
                 <div className="border-t p-4">
                   <div className="flex flex-wrap gap-2">
                     {CHECK_OPTIONS.map((opt) => (
-                      <button key={opt.value} type="button" onClick={() => setItemStatus(item.id, opt.value)} className={`rounded-xl border-2 px-3 py-2 text-sm font-bold transition-all ${currentStatus === opt.value ? opt.active : `bg-white ${opt.inactive}`}`}>
+                      <button key={opt.value} type="button" onClick={() => setItemStatus(item.id, opt.value)} className={`rounded-xl border-2 px-3 py-2 text-sm font-bold transition-all ${currentStatuses.includes(opt.value) ? opt.active : `bg-white ${opt.inactive}`}`}>
                         {opt.label}
                       </button>
                     ))}
                   </div>
-                  {currentStatus === "insufficient_qty" && (
+                  {currentStatuses.includes("insufficient_qty") && (
                     <div className="mt-3 flex items-center gap-3">
                       <label className="text-sm font-bold text-blue-700">Есть:</label>
                       <input type="number" min="0" max={item.quantity - 1} value={state.availableQty} onChange={(e) => setItemQty(item.id, e.target.value)} placeholder={`из ${item.quantity}`} className="w-24 rounded-xl border-2 border-blue-300 px-3 py-2 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" />
                       <span className="text-sm text-slate-500">шт.</span>
                     </div>
                   )}
-                  {currentStatus !== null && currentStatus !== "ok" && (
+                  {hasIssue && (
                     <input type="text" value={state.note} onChange={(e) => setItemNote(item.id, e.target.value)} placeholder="Комментарий (необязательно)" className="mt-3 w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300" />
                   )}
-                  {currentStatus !== null && currentStatus !== "ok" && (
+                  {hasIssue && (
                     <div className="mt-3">
                       <div className="flex items-center gap-2 flex-wrap">
                         <label className="cursor-pointer rounded-xl border-2 border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500 hover:border-slate-400">
