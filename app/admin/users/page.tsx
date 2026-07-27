@@ -26,11 +26,12 @@ export default async function AdminUsersPage() {
   if (payload?.role !== "admin") redirect("/admin");
 
   // SEC-1: select only safe fields — password intentionally excluded
+  // Note: User model uses "login" field (unique), not "email"
   const users = await prisma.user.findMany({
     select: {
       id: true,
       name: true,
-      email: true,
+      login: true,
       role: true,
       createdAt: true,
     },
@@ -50,7 +51,7 @@ export default async function AdminUsersPage() {
             <tr>
               <th className="p-3 text-left font-semibold text-slate-600">#</th>
               <th className="p-3 text-left font-semibold text-slate-600">Имя</th>
-              <th className="p-3 text-left font-semibold text-slate-600">Email</th>
+              <th className="p-3 text-left font-semibold text-slate-600">Логин</th>
               <th className="p-3 text-center font-semibold text-slate-600">Роль</th>
               <th className="p-3 text-left font-semibold text-slate-600">Дата создания</th>
               <th className="p-3" />
@@ -61,7 +62,7 @@ export default async function AdminUsersPage() {
               <tr key={u.id} className="border-t hover:bg-slate-50">
                 <td className="p-3 text-xs text-slate-400">{u.id}</td>
                 <td className="p-3 font-semibold">{u.name || "—"}</td>
-                <td className="p-3 text-slate-500">{u.email || "—"}</td>
+                <td className="p-3 text-slate-500">{u.login || "—"}</td>
                 <td className="p-3 text-center">
                   <span
                     className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${

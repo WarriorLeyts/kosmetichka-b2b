@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
+import PrintButton from "@/components/admin/PrintButton";
 
 export const dynamic = "force-dynamic";
 
@@ -66,12 +67,7 @@ export default async function InvoicePage({
         >
           ← Назад к заказу
         </a>
-        <button
-          onClick={() => window.print()}
-          className="rounded-lg bg-white px-4 py-2 text-sm font-bold text-slate-800 hover:bg-slate-100"
-        >
-          🖨️ Печать
-        </button>
+        <PrintButton />
         <span className="ml-auto text-sm text-slate-400">
           Счёт №{order.id} от {issueDate}
         </span>
@@ -190,17 +186,6 @@ export default async function InvoicePage({
         </div>
       </div>
 
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            document.querySelectorAll('button').forEach(btn => {
-              btn.addEventListener('click', () => {
-                if (btn.textContent.includes('Печать')) window.print();
-              });
-            });
-          `,
-        }}
-      />
     </>
   );
 }
