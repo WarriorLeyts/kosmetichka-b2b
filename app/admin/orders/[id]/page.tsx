@@ -62,6 +62,20 @@ export default async function AdminOrderPage({
 
   if (!order) notFound();
 
+  // Fetch product images for all items in the order
+  const productIds = order.items.map((i) => i.productId);
+  const productImageRows = await prisma.productImage.findMany({
+    where: { productId: { in: productIds } },
+    select: { productId: true, path: true },
+    orderBy: { id: "asc" },
+  });
+  const productImages: Record<number, string | null> = {};
+  for (const img of productImageRows) {
+    if (!productImages[img.productId]) {
+      productImages[img.productId] = img.path;
+    }
+  }
+
   const serialized = {
     ...order,
     createdAt: order.createdAt.toISOString(),
@@ -124,6 +138,7 @@ export default async function AdminOrderPage({
       order={serialized as any}
       pickers={pickers}
       customerMessages={serialized.customerMessages}
+      productImages={productImages}
     />
   );
 }
