@@ -712,7 +712,7 @@ export default function PickerOrderClient({
             onChange={(e) => handleBarcodeSearch(e.target.value)}
             onKeyDown={handleBarcodeKey}
             placeholder="Штрихкод или название товара..."
-            className="w-full rounded-xl border-2 border-slate-200 py-2.5 pl-9 pr-3 text-sm focus:border-blue-400 focus:outline-none"
+            className="w-full rounded-xl border-2 border-slate-200 py-2.5 pl-9 pr-3 text-base focus:border-blue-400 focus:outline-none"
           />
         </div>
         {barcodeInput && (
@@ -936,7 +936,7 @@ export default function PickerOrderClient({
                 value={searchQuery}
                 onChange={(e) => handleCatalogSearch(e.target.value)}
                 placeholder="Поиск по названию или штрихкоду..."
-                className="w-full rounded-xl border px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full rounded-xl border px-4 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                 autoFocus
               />
             </div>

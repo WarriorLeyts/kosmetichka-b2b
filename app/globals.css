@@ -71,8 +71,18 @@ font-family: Manrope, Montserrat, Inter, Arial, sans-serif;
 
 button,
 input,
-select {
+select,
+textarea {
 font-family: inherit;
+}
+
+/* Prevent iOS Safari from auto-zooming when tapping any input/textarea/select */
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
 }
 
 .catalog-page {
