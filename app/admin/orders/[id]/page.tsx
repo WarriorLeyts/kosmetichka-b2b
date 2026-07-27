@@ -14,11 +14,11 @@ export default async function AdminOrderPage({
   // ── Auth guard ────────────────────────────────────────────────────────────
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
-  if (!token) redirect("/login");
+  if (!token) redirect("/admin");
   const payload = await verifyToken(token);
-  if (!payload?.id) redirect("/login");
+  if (!payload?.id) redirect("/admin");
   const allowedRoles = ["admin", "manager"];
-  if (!allowedRoles.includes(payload.role as string)) redirect("/login");
+  if (!allowedRoles.includes(payload.role as string)) redirect("/admin");
   // ─────────────────────────────────────────────────────────────────────────
 
   const { id } = await params;
