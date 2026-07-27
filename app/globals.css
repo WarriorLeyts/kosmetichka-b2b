@@ -76,12 +76,14 @@ textarea {
 font-family: inherit;
 }
 
-/* Prevent iOS Safari from auto-zooming when tapping any input/textarea/select */
+/* Prevent iOS Safari from auto-zooming when tapping any input/textarea/select.
+   !important overrides specific class rules (.search-box input, .order-chat-input, etc.)
+   that set font-size < 16px */
 @media (max-width: 768px) {
   input,
   textarea,
   select {
-    font-size: max(16px, 1em);
+    font-size: 16px !important;
   }
 }
 
