@@ -13,12 +13,12 @@ export default async function PickerOrderPage({
 }) {
   // ── Auth guard ────────────────────────────────────────────────────────────
   const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-  if (!token) redirect("/login");
+  const token = cookieStore.get("admin_token")?.value;
+  if (!token) redirect("/picker/login");
   const payload = await verifyToken(token);
-  if (!payload?.id) redirect("/login");
+  if (!payload?.id) redirect("/picker/login");
   const allowedRoles = ["picker", "admin", "manager"];
-  if (!allowedRoles.includes(payload.role as string)) redirect("/login");
+  if (!allowedRoles.includes(payload.role as string)) redirect("/picker/login");
   // ─────────────────────────────────────────────────────────────────────────
 
   const { orderId } = await params;
