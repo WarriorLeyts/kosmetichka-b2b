@@ -48,7 +48,7 @@ export async function POST(request: Request) {
 
 const token = await createToken({
   id: customer.id,
-  email: customer.email,
+  email: customer.email ?? customer.phone ?? String(customer.id),
   role: customer.role || "customer",
 });
 
