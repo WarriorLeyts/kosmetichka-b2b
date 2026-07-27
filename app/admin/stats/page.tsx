@@ -33,16 +33,21 @@ export default async function AdminStatsPage() {
   const weekStart = new Date(todayStart);
   weekStart.setDate(weekStart.getDate() - 6);
 
-  // Today's stats
-  const todayOrders = await prisma.order.findMany({
-    where: { createdAt: { gte: todayStart } },
-    include: { items: { include: { check: true } } },
-  });
-
-  const todayTotal = todayOrders.reduce((s, o) => s + o.total, 0);
-  const todayIssues = todayOrders.filter((o) =>
-    o.items.some((i) => i.check && i.check.status !== "ok")
-  ).length;
+  // Today's stats — use DB aggregations instead of loading all orders into memory
+  const [todayCount, todayAgg, todayIssues] = await Promise.all([
+    prisma.order.count({ where: { createdAt: { gte: todayStart } } }),
+    prisma.order.aggregate({
+      _sum: { total: true },
+      where: { createdAt: { gte: todayStart } },
+    }),
+    prisma.order.count({
+      where: {
+        createdAt: { gte: todayStart },
+        items: { some: { check: { status: { not: "ok" } } } },
+      },
+    }),
+  ]);
+  const todayTotal = todayAgg._sum.total ?? 0;
 
   // Last 7 days — group by day
   const weekOrders = await prisma.order.findMany({
@@ -110,7 +115,7 @@ export default async function AdminStatsPage() {
       {/* Today cards */}
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <div className="rounded-2xl border bg-white p-4">
-          <div className="text-2xl font-black">{todayOrders.length}</div>
+          <div className="text-2xl font-black">{todayCount}</div>
           <div className="text-sm text-slate-500">Заказов сегодня</div>
         </div>
         <div className="rounded-2xl border bg-white p-4">

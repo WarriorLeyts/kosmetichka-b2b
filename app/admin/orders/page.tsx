@@ -62,10 +62,15 @@ export default async function AdminOrdersPage({
         : undefined,
     },
     orderBy: { createdAt: "desc" },
-    include: {
-      customer: true,
+    select: {
+      id: true,
+      status: true,
+      total: true,
+      createdAt: true,
+      customer: { select: { name: true, companyName: true, phone: true } },
+      _count: { select: { items: true } },
       items: {
-        include: { check: true },
+        select: { check: { select: { status: true } } },
       },
     },
   });
@@ -181,6 +186,7 @@ export default async function AdminOrdersPage({
         {orders.map((order) => {
           const hasIssues = order.items.some((i) => i.check && i.check.status !== "ok");
           const checkedCount = order.items.filter((i) => i.check).length;
+          const itemCount = order._count.items;
 
           return (
             <Link
@@ -202,7 +208,7 @@ export default async function AdminOrdersPage({
                     )}
                     {order.status === "assembly" && checkedCount > 0 && (
                       <span className="text-xs text-slate-400">
-                        {checkedCount}/{order.items.length} проверено
+                        {checkedCount}/{itemCount} проверено
                       </span>
                     )}
                   </div>
@@ -223,7 +229,7 @@ export default async function AdminOrdersPage({
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-lg font-black">{order.total.toLocaleString("ru-RU")} ₽</div>
-                  <div className="text-xs text-slate-400">{order.items.length} позиций</div>
+                  <div className="text-xs text-slate-400">{itemCount} позиций</div>
                 </div>
               </div>
             </Link>

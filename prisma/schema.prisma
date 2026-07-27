@@ -191,6 +191,9 @@ model OrderItem {
 
   check  OrderItemCheck?
   photos OrderItemPhoto[]
+
+  @@index([orderId])
+  @@index([productId])
 }
 
 model OrderItemCheck {
@@ -250,6 +253,8 @@ model OrderStatusLog {
   toStatus   String
 
   createdAt DateTime @default(now())
+
+  @@index([orderId])
 }
 
 model OneCCustomer {
