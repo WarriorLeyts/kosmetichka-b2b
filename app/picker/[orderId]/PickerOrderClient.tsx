@@ -256,9 +256,11 @@ function renderMsgContent(text: string) {
 export default function PickerOrderClient({
   order,
   imageMap,
+  returnUrl,
 }: {
   order: Order;
   imageMap: Record<number, string | null>;
+  returnUrl?: string;
 }) {
   const router = useRouter();
   const [items, setItems] = useState<Record<number, ItemState>>(
@@ -539,7 +541,7 @@ export default function PickerOrderClient({
         setError(data.error || "Ошибка отправки");
         return;
       }
-      router.push("/picker");
+      router.push(returnUrl ?? "/picker");
       router.refresh();
     } catch {
       setError("Ошибка соединения");
@@ -611,7 +613,7 @@ export default function PickerOrderClient({
     <div>
       {/* Header */}
       <div className="mb-4 flex items-center gap-3">
-        <a href="/picker" className="flex h-10 w-10 items-center justify-center rounded-xl border text-lg font-bold hover:bg-slate-100">←</a>
+        <a href={returnUrl ?? "/picker"} className="flex h-10 w-10 items-center justify-center rounded-xl border text-lg font-bold hover:bg-slate-100">←</a>
         <div className="flex-1">
           <h1 className="text-2xl font-black">Заказ №{order.id}</h1>
           <div className="text-sm text-slate-500">

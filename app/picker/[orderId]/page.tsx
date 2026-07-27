@@ -8,8 +8,10 @@ export const dynamic = "force-dynamic";
 
 export default async function PickerOrderPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ orderId: string }>;
+  searchParams: Promise<{ returnUrl?: string }>;
 }) {
   // ── Auth guard ────────────────────────────────────────────────────────────
   const cookieStore = await cookies();
@@ -22,6 +24,8 @@ export default async function PickerOrderPage({
   // ─────────────────────────────────────────────────────────────────────────
 
   const { orderId } = await params;
+  const { returnUrl } = await searchParams;
+  const isAdminOrManager = ["admin", "manager"].includes(payload.role as string);
 
   const order = await prisma.order.findUnique({
     where: { id: Number(orderId) },
@@ -38,7 +42,8 @@ export default async function PickerOrderPage({
 
   if (!order) notFound();
 
-  if (order.status !== "assembly") {
+  // Allow admins/managers to access regardless of status; pickers only during assembly
+  if (order.status !== "assembly" && !isAdminOrManager) {
     return (
       <div className="rounded-2xl border bg-white p-8 text-center">
         <p className="text-slate-600">
@@ -71,6 +76,8 @@ export default async function PickerOrderPage({
       : null;
   }
 
+  const backUrl = returnUrl ?? (isAdminOrManager ? `/admin/orders/${order.id}` : "/picker");
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <PickerOrderClient order={order as any} imageMap={imageMap} />;
+  return <PickerOrderClient order={order as any} imageMap={imageMap} returnUrl={backUrl} />;
 }

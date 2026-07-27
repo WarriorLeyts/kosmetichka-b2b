@@ -230,14 +230,12 @@ function renderMsgContent(text: string) {
       return (
         <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-56 shadow-sm">
           {imgUrl && (
-            <a href={imgUrl} target="_blank" rel="noreferrer">
-              <img
-                src={imgUrl}
-                alt={obj.name}
-                className="w-full h-28 object-contain bg-slate-50 p-1 cursor-pointer hover:opacity-90"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
-            </a>
+            <img
+              src={imgUrl}
+              alt={obj.name}
+              className="w-full h-28 object-contain bg-slate-50 p-1"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
           )}
           <div className="p-2">
             <p className="font-semibold text-sm leading-snug mb-1">{obj.name}</p>
@@ -263,12 +261,10 @@ export default function AdminOrderClient({
   order: initialOrder,
   pickers,
   customerMessages: initialCustomerMessages,
-  productImages = {},
 }: {
   order: Order;
   pickers: PickerUser[];
   customerMessages: CustomerMessage[];
-  productImages?: Record<number, string | null>;
 }) {
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
@@ -376,6 +372,25 @@ export default function AdminOrderClient({
       alert(data.error || "Ошибка смены статуса");
     }
     setChangingStatus(false);
+  }
+
+  // ── Self-assemble: transition to assembly (if needed) then open picker UI ──
+  async function selfAssemble() {
+    if (order.status !== "assembly") {
+      setChangingStatus(true);
+      const res = await fetch(`/api/admin/orders/${order.id}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "assembly" }),
+      });
+      setChangingStatus(false);
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Ошибка смены статуса");
+        return;
+      }
+    }
+    window.location.href = `/picker/${order.id}?returnUrl=/admin/orders/${order.id}`;
   }
 
   // ── Picker chat ──
@@ -654,11 +669,8 @@ export default function AdminOrderClient({
           : "";
       const note = item.check!.note ? ` — ${item.check!.note}` : "";
 
-      // Use picker photo first, then variant image, then catalog product image
-      const imagePath =
-        item.photos.length > 0
-          ? item.photos[0].url
-          : (item.variantImageUrl ?? productImages[item.productId] ?? null);
+      // Use picker photo if available, otherwise null
+      const imagePath = item.photos.length > 0 ? item.photos[0].url : null;
 
       const msgJson = JSON.stringify({
         _t: "product-problem",
@@ -943,7 +955,7 @@ export default function AdminOrderClient({
       )}
 
       {/* Status action buttons */}
-      {transitions.length > 0 && (
+      {(transitions.length > 0 || ["pending", "approved", "assembly"].includes(order.status)) && (
         <div className="no-print mb-6 flex flex-wrap gap-3">
           {transitions.map((t) => (
             <button
@@ -955,6 +967,15 @@ export default function AdminOrderClient({
               {changingStatus ? "..." : t.label}
             </button>
           ))}
+          {["pending", "approved", "assembly"].includes(order.status) && (
+            <button
+              onClick={selfAssemble}
+              disabled={changingStatus}
+              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition-all disabled:opacity-50"
+            >
+              {changingStatus ? "..." : "📦 Собрать самому"}
+            </button>
+          )}
         </div>
       )}
 
