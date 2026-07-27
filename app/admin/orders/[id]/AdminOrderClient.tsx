@@ -173,13 +173,34 @@ const TRANSITIONS: Record<string, { label: string; to: string; style: string }[]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+type CheckEntry = { status: string; qty?: number };
+
 function parseCheckStatuses(status: string | null): string[] {
   if (!status) return [];
   try {
     const parsed = JSON.parse(status);
-    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed)) {
+      return parsed.map((entry) =>
+        typeof entry === "string" ? entry : entry.s
+      );
+    }
   } catch {}
   return [status];
+}
+
+function parseCheckEntries(status: string | null): CheckEntry[] {
+  if (!status) return [];
+  try {
+    const parsed = JSON.parse(status);
+    if (Array.isArray(parsed)) {
+      return parsed.map((entry) =>
+        typeof entry === "string"
+          ? { status: entry }
+          : { status: entry.s, qty: entry.q }
+      );
+    }
+  } catch {}
+  return [{ status }];
 }
 
 function formatDate(str: string) {
@@ -674,11 +695,14 @@ export default function AdminOrderClient({
 
     // Send product card for each problematic item
     for (const item of problematic) {
-      const statuses = parseCheckStatuses(item.check!.status).filter((s) => s !== "ok");
-      const problemParts = statuses.map((s) => {
-        const label = PROBLEM_LABELS[s] ?? s;
-        if (s === "insufficient_qty" && item.check!.availableQty !== null) {
+      const entries = parseCheckEntries(item.check!.status).filter((e) => e.status !== "ok");
+      const problemParts = entries.map((entry) => {
+        const label = PROBLEM_LABELS[entry.status] ?? entry.status;
+        if (entry.status === "insufficient_qty" && item.check!.availableQty !== null) {
           return `${label} (есть ${item.check!.availableQty} шт.)`;
+        }
+        if (entry.qty != null) {
+          return `${label} (${entry.qty} шт.)`;
         }
         return label;
       });
@@ -1183,14 +1207,17 @@ export default function AdminOrderClient({
                       {item.check ? (
                         <div>
                           <div className="flex flex-wrap justify-center gap-1">
-                            {parseCheckStatuses(item.check.status).map((s) => (
-                              <span key={s} className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${CHECK_LABELS[s]?.color || "bg-slate-100"}`}>
-                                {CHECK_LABELS[s]?.label || s}
+                            {parseCheckEntries(item.check.status).map((entry) => (
+                              <span key={entry.status} className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${CHECK_LABELS[entry.status]?.color || "bg-slate-100"}`}>
+                                {CHECK_LABELS[entry.status]?.label || entry.status}
+                                {entry.qty != null && entry.status !== "ok" && (
+                                  <span className="ml-1 opacity-80">({entry.qty} шт.)</span>
+                                )}
                               </span>
                             ))}
                           </div>
                           {item.check.availableQty !== null && (
-                            <div className="text-xs text-slate-400 mt-0.5">есть {item.check.availableQty}</div>
+                            <div className="text-xs text-slate-400 mt-0.5">есть {item.check.availableQty} шт.</div>
                           )}
                           {item.check.picker && (
                             <div className="text-xs text-slate-400">{item.check.picker.name}</div>

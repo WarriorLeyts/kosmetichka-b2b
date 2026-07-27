@@ -34,8 +34,9 @@ export async function POST(request: Request) {
     orderId: number;
     items: Array<{
       itemId: number;
-      statuses?: string[];   // новый формат (массив)
-      status?: string;       // старый формат (обратная совместимость)
+      statuses?: string[];                              // plain string[] for hasIssues
+      statusData?: Array<string | { s: string; q: number }>; // rich format with qty
+      status?: string;                                  // legacy compat
       availableQty?: number | null;
       note?: string | null;
     }>;
@@ -63,9 +64,21 @@ export async function POST(request: Request) {
 
   // Upsert each item check
   for (const item of items) {
-    // Нормализуем: если пришёл массив — сохраняем как JSON, если один — как строку
-    const statuses = item.statuses ?? (item.status ? [item.status] : ["ok"]);
-    const statusValue = statuses.length === 1 ? statuses[0] : JSON.stringify(statuses);
+    // Определяем значение для хранения в БД
+    let statusValue: string;
+    if (item.statusData !== undefined) {
+      // Новый формат с количествами: [{s:"expired",q:2}, "bad_condition", ...]
+      const data = item.statusData;
+      if (data.length === 1 && data[0] === "ok") {
+        statusValue = "ok";
+      } else {
+        statusValue = JSON.stringify(data);
+      }
+    } else {
+      // Старый формат: массив строк или одна строка
+      const statuses = item.statuses ?? (item.status ? [item.status] : ["ok"]);
+      statusValue = statuses.length === 1 ? statuses[0] : JSON.stringify(statuses);
+    }
 
     await prisma.orderItemCheck.upsert({
       where: { orderItemId: item.itemId },

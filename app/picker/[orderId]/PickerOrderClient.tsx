@@ -13,6 +13,7 @@ type CheckStatus =
 
 type ItemState = {
   statuses: CheckStatus[];
+  statusQtys: Partial<Record<string, string>>; // qty per non-OK status
   availableQty: string;
   note: string;
   photos: string[];
@@ -117,22 +118,44 @@ function parseStatuses(statusStr: string | null): CheckStatus[] {
   if (!statusStr) return [];
   try {
     const parsed = JSON.parse(statusStr);
-    if (Array.isArray(parsed)) return parsed as CheckStatus[];
+    if (Array.isArray(parsed)) {
+      return parsed.map((entry) =>
+        typeof entry === "string" ? entry : entry.s
+      ) as CheckStatus[];
+    }
   } catch {}
   return [statusStr as CheckStatus];
+}
+
+function parseStatusQtys(statusStr: string | null): Partial<Record<string, string>> {
+  if (!statusStr) return {};
+  try {
+    const parsed = JSON.parse(statusStr);
+    if (Array.isArray(parsed)) {
+      const qtys: Partial<Record<string, string>> = {};
+      for (const entry of parsed) {
+        if (typeof entry === "object" && entry.s && entry.q != null) {
+          qtys[entry.s] = String(entry.q);
+        }
+      }
+      return qtys;
+    }
+  } catch {}
+  return {};
 }
 
 function getInitialState(item: OrderItem): ItemState {
   if (item.check) {
     return {
       statuses: parseStatuses(item.check.status),
+      statusQtys: parseStatusQtys(item.check.status),
       availableQty: item.check.availableQty?.toString() || "",
       note: item.check.note || "",
       photos: item.photos.map((p) => p.url),
       uploading: false,
     };
   }
-  return { statuses: [], availableQty: "", note: "", photos: [], uploading: false };
+  return { statuses: [], statusQtys: {}, availableQty: "", note: "", photos: [], uploading: false };
 }
 
 function playBeep(type: "ok" | "issue") {
@@ -361,22 +384,37 @@ export default function PickerOrderClient({
   function setItemStatus(itemId: number, status: CheckStatus) {
     setItems((prev) => {
       const current = prev[itemId].statuses;
+      const currentQtys = { ...prev[itemId].statusQtys };
       let next: CheckStatus[];
       if (status === "ok") {
         // OK — эксклюзивный: переключает, снимает все остальные
         next = current.includes("ok") ? [] : ["ok"];
+        // clear all qtys
+        return { ...prev, [itemId]: { ...prev[itemId], statuses: next, statusQtys: {} } };
       } else {
         // Остальные — тогглятся; при добавлении снимает OK
         if (current.includes(status)) {
           next = current.filter((s) => s !== status);
+          // remove qty for this status
+          delete currentQtys[status as string];
         } else {
           next = [...current.filter((s) => s !== "ok"), status];
         }
       }
-      return { ...prev, [itemId]: { ...prev[itemId], statuses: next } };
+      return { ...prev, [itemId]: { ...prev[itemId], statuses: next, statusQtys: currentQtys } };
     });
     playBeep(status === "ok" ? "ok" : "issue");
     vibrate(status === "ok" ? "ok" : "issue");
+  }
+
+  function setStatusQty(itemId: number, status: string, qty: string) {
+    setItems((prev) => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        statusQtys: { ...prev[itemId].statusQtys, [status]: qty },
+      },
+    }));
   }
 
   function setItemQty(itemId: number, availableQty: string) {
@@ -545,15 +583,29 @@ export default function PickerOrderClient({
     try {
       const payload = {
         orderId: order.id,
-        items: order.items.map((i) => ({
-          itemId: i.id,
-          statuses: items[i.id].statuses,
-          availableQty:
-            items[i.id].statuses.includes("insufficient_qty") && items[i.id].availableQty
-              ? Number(items[i.id].availableQty)
-              : null,
-          note: items[i.id].note || null,
-        })),
+        items: order.items.map((i) => {
+          const state = items[i.id];
+          // Build rich status entries with per-status quantities
+          const statusData: Array<string | { s: string; q: number }> = state.statuses.map((s) => {
+            if (s === "ok") return "ok";
+            if (s === "insufficient_qty") {
+              const q = state.availableQty ? Number(state.availableQty) : undefined;
+              return q != null && !isNaN(q) ? { s: s as string, q } : (s as string);
+            }
+            const q = state.statusQtys[s as string] ? Number(state.statusQtys[s as string]) : undefined;
+            return q != null && !isNaN(q) ? { s: s as string, q } : (s as string);
+          });
+          return {
+            itemId: i.id,
+            statuses: state.statuses,   // plain string[] for hasIssues check
+            statusData,                  // rich data with per-status quantities
+            availableQty:
+              state.statuses.includes("insufficient_qty") && state.availableQty
+                ? Number(state.availableQty)
+                : null,
+            note: state.note || null,
+          };
+        }),
       };
       const res = await fetch("/api/picker/checks", {
         method: "POST",
@@ -726,9 +778,36 @@ export default function PickerOrderClient({
                       </button>
                     ))}
                   </div>
+                  {/* Per-status quantity inputs (for expired, bad_condition, out_of_stock) */}
+                  {currentStatuses
+                    .filter((s) => s && s !== "ok" && s !== "insufficient_qty")
+                    .map((s) => {
+                      const opt = CHECK_OPTIONS.find((o) => o.value === s);
+                      const activeColors: Record<string, string> = {
+                        expired: "border-orange-300 focus:ring-orange-400 text-orange-700",
+                        bad_condition: "border-yellow-300 focus:ring-yellow-400 text-yellow-700",
+                        out_of_stock: "border-red-300 focus:ring-red-400 text-red-700",
+                      };
+                      const colorClass = activeColors[s as string] ?? "border-slate-300 focus:ring-slate-400 text-slate-700";
+                      return (
+                        <div key={s} className="mt-2 flex items-center gap-2">
+                          <span className="text-sm font-bold text-slate-600 shrink-0">{opt?.label}:</span>
+                          <input
+                            type="number"
+                            min="1"
+                            max={item.quantity}
+                            value={state.statusQtys[s as string] || ""}
+                            onChange={(e) => setStatusQty(item.id, s as string, e.target.value)}
+                            placeholder="кол-во"
+                            className={`w-20 rounded-xl border-2 px-2 py-1.5 text-center font-bold focus:outline-none focus:ring-2 ${colorClass}`}
+                          />
+                          <span className="text-sm text-slate-500">из {item.quantity} шт.</span>
+                        </div>
+                      );
+                    })}
                   {currentStatuses.includes("insufficient_qty") && (
-                    <div className="mt-3 flex items-center gap-3">
-                      <label className="text-sm font-bold text-blue-700">Есть:</label>
+                    <div className="mt-2 flex items-center gap-3">
+                      <label className="text-sm font-bold text-blue-700">⬇ Мало — есть:</label>
                       <input type="number" min="0" max={item.quantity - 1} value={state.availableQty} onChange={(e) => setItemQty(item.id, e.target.value)} placeholder={`из ${item.quantity}`} className="w-24 rounded-xl border-2 border-blue-300 px-3 py-2 text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-blue-500" />
                       <span className="text-sm text-slate-500">шт.</span>
                     </div>
