@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
     }
 
     const orders = await prisma.order.findMany({
-      where: { status: "approved", oneCExportedAt: null },
+      where: { status: { in: ["approved", "payment"] }, oneCExportedAt: null },
       include: { customer: true, items: true },
       orderBy: { createdAt: "desc" },
       take: 500,
@@ -237,7 +237,7 @@ export async function POST(request: NextRequest) {
       const { prisma } = await import("@/lib/prisma");
       await prisma.order.updateMany({
         where: { id: { in: ids } },
-        data: { oneCExportedAt: new Date() },
+        data: { oneCExportedAt: new Date(), status: "exported" },
       });
       console.log(`[exchange] acknowledged orders: ${ids.join(", ")}`);
     }
