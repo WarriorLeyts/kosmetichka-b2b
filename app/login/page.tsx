@@ -68,13 +68,23 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
           />
 
-          <input
-            type="password"
-            placeholder="Пароль"
-            className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none focus:border-pink-300"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <div>
+            <input
+              type="password"
+              placeholder="Пароль"
+              className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none focus:border-pink-300"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <div className="mt-1.5 text-right">
+              <Link
+                href="/forgot-password"
+                className="text-xs font-semibold text-slate-400 hover:text-pink-500"
+              >
+                Забыли пароль?
+              </Link>
+            </div>
+          </div>
 
           {error && (
             <div className="rounded-2xl bg-red-50 p-3 text-sm font-bold text-red-500">
