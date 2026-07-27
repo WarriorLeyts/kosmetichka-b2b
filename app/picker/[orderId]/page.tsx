@@ -8,24 +8,20 @@ export const dynamic = "force-dynamic";
 
 export default async function PickerOrderPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ orderId: string }>;
-  searchParams: Promise<{ returnUrl?: string }>;
 }) {
   // ── Auth guard ────────────────────────────────────────────────────────────
   const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token")?.value;
-  if (!token) redirect("/picker/login");
+  const token = cookieStore.get("auth_token")?.value;
+  if (!token) redirect("/login");
   const payload = await verifyToken(token);
-  if (!payload?.id) redirect("/picker/login");
+  if (!payload?.id) redirect("/login");
   const allowedRoles = ["picker", "admin", "manager"];
-  if (!allowedRoles.includes(payload.role as string)) redirect("/picker/login");
+  if (!allowedRoles.includes(payload.role as string)) redirect("/login");
   // ─────────────────────────────────────────────────────────────────────────
 
   const { orderId } = await params;
-  const { returnUrl } = await searchParams;
-  const isAdminOrManager = ["admin", "manager"].includes(payload.role as string);
 
   const order = await prisma.order.findUnique({
     where: { id: Number(orderId) },
@@ -42,8 +38,7 @@ export default async function PickerOrderPage({
 
   if (!order) notFound();
 
-  // Allow admins/managers to access regardless of status; pickers only during assembly
-  if (order.status !== "assembly" && !isAdminOrManager) {
+  if (order.status !== "assembly") {
     return (
       <div className="rounded-2xl border bg-white p-8 text-center">
         <p className="text-slate-600">
@@ -59,14 +54,19 @@ export default async function PickerOrderPage({
     );
   }
 
-  // Fetch product images by productId
+  // Fetch product images and barcodes by productId
   const productIds = order.items.map((i) => i.productId);
   const products = await prisma.product.findMany({
     where: { id: { in: productIds } },
-    include: { images: { take: 1 } },
+    select: {
+      id: true,
+      barcode: true,
+      images: { take: 1, select: { path: true } },
+    },
   });
 
   const imageMap: Record<number, string | null> = {};
+  const productBarcodeMap: Record<number, string | null> = {};
   for (const p of products) {
     const rawPath = p.images[0]?.path ?? null;
     imageMap[p.id] = rawPath
@@ -74,10 +74,18 @@ export default async function PickerOrderPage({
         ? rawPath
         : `https://kosmetichka-opt.ru/api/1c/${rawPath}`
       : null;
+    productBarcodeMap[p.id] = p.barcode ?? null;
   }
 
-  const backUrl = returnUrl ?? (isAdminOrManager ? `/admin/orders/${order.id}` : "/picker");
+  // Fill in missing barcodes from the Product table
+  const serializedOrder = {
+    ...order,
+    items: order.items.map((item) => ({
+      ...item,
+      barcode: item.barcode ?? productBarcodeMap[item.productId] ?? null,
+    })),
+  };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <PickerOrderClient order={order as any} imageMap={imageMap} returnUrl={backUrl} />;
+  return <PickerOrderClient order={serializedOrder as any} imageMap={imageMap} />;
 }

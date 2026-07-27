@@ -62,18 +62,28 @@ export default async function AdminOrderPage({
 
   if (!order) notFound();
 
-  // Fetch product images for all items in the order
+  // Fetch product images and barcodes for all items in the order
   const productIds = order.items.map((i) => i.productId);
-  const productImageRows = await prisma.productImage.findMany({
-    where: { productId: { in: productIds } },
-    select: { productId: true, path: true },
-    orderBy: { id: "asc" },
-  });
+  const [productImageRows, productRows] = await Promise.all([
+    prisma.productImage.findMany({
+      where: { productId: { in: productIds } },
+      select: { productId: true, path: true },
+      orderBy: { id: "asc" },
+    }),
+    prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, barcode: true },
+    }),
+  ]);
   const productImages: Record<number, string | null> = {};
   for (const img of productImageRows) {
     if (!productImages[img.productId]) {
       productImages[img.productId] = img.path;
     }
+  }
+  const productBarcodeMap: Record<number, string | null> = {};
+  for (const p of productRows) {
+    productBarcodeMap[p.id] = p.barcode ?? null;
   }
 
   const serialized = {
@@ -95,7 +105,7 @@ export default async function AdminOrderPage({
       id: item.id,
       productId: item.productId,
       productName: item.productName,
-      barcode: item.barcode ?? null,
+      barcode: item.barcode ?? productBarcodeMap[item.productId] ?? null,
       quantity: item.quantity,
       price: item.price,
       total: item.total,
