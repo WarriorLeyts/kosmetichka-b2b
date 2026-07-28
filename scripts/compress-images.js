@@ -33,6 +33,11 @@ async function compressImage(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   const before = fs.statSync(filePath).size;
 
+  // Пропускаем файлы меньше 300 КБ — они уже нормальные
+  if (before < 300 * 1024) {
+    return { before, after: before, saved: 0 };
+  }
+
   // Читаем оригинал
   const input = fs.readFileSync(filePath);
 
