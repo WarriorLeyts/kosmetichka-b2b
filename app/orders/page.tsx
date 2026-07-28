@@ -119,34 +119,39 @@ export default async function OrdersPage({
   }));
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main className="min-h-screen" style={{ background: "linear-gradient(135deg, #fdf2f8 0%, #f5f3ff 50%, #eff6ff 100%)" }}>
       {/* Top nav */}
-      <nav className="bg-white border-b px-4 py-3 flex items-center justify-between sticky top-0 z-10">
-        <Link href="/catalog" className="text-lg font-black text-slate-900">
-          Косметичка
+      <nav className="bg-white/80 backdrop-blur border-b border-pink-100 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+        <Link href="/catalog" className="flex items-center gap-2">
+          <span className="text-pink-500 text-xl">♡</span>
+          <span className="bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-transparent text-lg font-black">
+            Косметичка
+          </span>
         </Link>
         <div className="flex items-center gap-3">
           <Link
             href="/catalog"
-            className="rounded-xl border px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
           >
             Каталог
           </Link>
           <Link
             href="/profile"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border bg-white hover:bg-slate-100 text-slate-600"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-100 to-purple-100 hover:from-pink-200 hover:to-purple-200 transition text-2xl shadow-sm"
             title="Профиль"
           >
-            👤
+            🧕
           </Link>
         </div>
       </nav>
 
-      <div className="mx-auto max-w-3xl px-4 py-6">
+      <div className="mx-auto max-w-3xl px-4 py-8">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-black text-slate-900">Мои заказы</h1>
+          <h1 className="text-3xl font-black bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-transparent">
+            Мои заказы
+          </h1>
           {totalCount > PAGE_SIZE && (
-            <span className="text-sm text-slate-400">
+            <span className="text-sm font-semibold text-slate-400 bg-white rounded-xl px-3 py-1 border">
               {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalCount)} из {totalCount}
             </span>
           )}

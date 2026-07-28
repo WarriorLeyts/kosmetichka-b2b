@@ -13,13 +13,23 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  approved: "bg-green-100 text-green-800",
-  assembly: "bg-blue-100 text-blue-800",
-  consultation: "bg-orange-100 text-orange-800",
-  payment: "bg-green-100 text-green-800",
-  exported: "bg-slate-100 text-slate-600",
-  cancelled: "bg-red-100 text-red-700",
+  pending: "bg-amber-100 text-amber-800 border border-amber-200",
+  approved: "bg-emerald-100 text-emerald-800 border border-emerald-200",
+  assembly: "bg-blue-100 text-blue-800 border border-blue-200",
+  consultation: "bg-orange-100 text-orange-800 border border-orange-200",
+  payment: "bg-emerald-100 text-emerald-800 border border-emerald-200",
+  exported: "bg-slate-100 text-slate-600 border border-slate-200",
+  cancelled: "bg-red-100 text-red-700 border border-red-200",
+};
+
+const STATUS_ICONS: Record<string, string> = {
+  pending: "⏳",
+  approved: "✅",
+  assembly: "📦",
+  consultation: "💬",
+  payment: "💳",
+  exported: "🎉",
+  cancelled: "❌",
 };
 
 type OrderItem = {
@@ -283,21 +293,28 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
     }
   }
 
+  const icon = STATUS_ICONS[order.status] ?? "📋";
+
   return (
-    <div className="rounded-2xl border bg-white shadow-sm">
+    <div className="rounded-2xl bg-white shadow-sm border border-white/60 overflow-hidden" style={{ boxShadow: "0 2px 16px rgba(168,85,247,0.06), 0 1px 4px rgba(0,0,0,0.05)" }}>
       <button
-        className="flex w-full items-center justify-between px-5 py-4 text-left"
+        className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-slate-50/50 transition"
         onClick={() => setExpanded((v) => !v)}
       >
-        <div className="flex flex-col gap-0.5">
-          <span className="font-semibold text-slate-800">{"Заказ №"}{order.id}</span>
-          <span className="text-sm text-slate-500">
-            {formatDate(order.createdAt)} {"·"} {formatMoney(order.total)}
-          </span>
-        </div>
         <div className="flex items-center gap-3">
-          <span className={`rounded-full px-3 py-1 text-xs font-medium ${colorClass}`}>{label}</span>
-          <span className="text-slate-400">{expanded ? "▲" : "▼"}</span>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-pink-50 to-purple-50 text-xl border border-purple-100 flex-shrink-0">
+            {icon}
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="font-black text-slate-800">Заказ №{order.id}</span>
+            <span className="text-xs text-slate-400 font-medium">
+              {formatDate(order.createdAt)} · {formatMoney(order.total)}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`rounded-full px-3 py-1 text-xs font-bold ${colorClass}`}>{label}</span>
+          <span className="text-slate-300 text-xs">{expanded ? "▲" : "▼"}</span>
         </div>
       </button>
 
@@ -385,11 +402,12 @@ export default function OrdersPageClient({
 }) {
   if (orders.length === 0) {
     return (
-      <div className="rounded-2xl border bg-white p-12 text-center text-slate-400">
-        <p className="text-4xl mb-3">{"\u{1F4E6}"}</p>
-        <p className="text-lg font-medium">{"У вас пока нет заказов"}</p>
-        <a href="/catalog" className="mt-4 inline-block rounded-xl bg-indigo-600 px-6 py-3 text-sm font-medium text-white hover:bg-indigo-700">
-          {"Перейти в каталог"}
+      <div className="rounded-3xl bg-white p-16 text-center shadow-sm border border-white/60">
+        <p className="text-5xl mb-4">📦</p>
+        <p className="text-xl font-black text-slate-700 mb-1">Заказов пока нет</p>
+        <p className="text-sm text-slate-400 mb-6">Перейдите в каталог и сделайте первый заказ</p>
+        <a href="/catalog" className="inline-block rounded-2xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 px-8 py-3 text-sm font-bold text-white hover:opacity-90 transition">
+          Перейти в каталог
         </a>
       </div>
     );
@@ -399,18 +417,18 @@ export default function OrdersPageClient({
     <div className="flex flex-col gap-4">
       {stats.totalOrders > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border bg-white px-4 py-3">
-            <p className="text-xs text-slate-500">{"Заказов"}</p>
-            <p className="text-xl font-bold text-slate-800">{stats.totalOrders}</p>
+          <div className="rounded-2xl bg-white px-5 py-4 shadow-sm border border-white/60" style={{ boxShadow: "0 2px 12px rgba(236,72,153,0.08)" }}>
+            <p className="text-xs font-semibold text-slate-400 mb-1">🛒 Заказов</p>
+            <p className="text-2xl font-black bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">{stats.totalOrders}</p>
           </div>
-          <div className="rounded-2xl border bg-white px-4 py-3">
-            <p className="text-xs text-slate-500">{"Сумма"}</p>
-            <p className="text-xl font-bold text-slate-800">{formatMoney(stats.totalSum)}</p>
+          <div className="rounded-2xl bg-white px-5 py-4 shadow-sm border border-white/60" style={{ boxShadow: "0 2px 12px rgba(139,92,246,0.08)" }}>
+            <p className="text-xs font-semibold text-slate-400 mb-1">💰 Сумма</p>
+            <p className="text-xl font-black bg-gradient-to-r from-purple-500 to-blue-600 bg-clip-text text-transparent leading-tight">{formatMoney(stats.totalSum)}</p>
           </div>
           {stats.topProduct && (
-            <div className="col-span-2 rounded-2xl border bg-white px-4 py-3 sm:col-span-1">
-              <p className="text-xs text-slate-500">{"Топ товар"}</p>
-              <p className="text-sm font-semibold text-slate-800 line-clamp-2">{stats.topProduct}</p>
+            <div className="col-span-2 rounded-2xl bg-white px-5 py-4 shadow-sm border border-white/60 sm:col-span-1" style={{ boxShadow: "0 2px 12px rgba(59,130,246,0.08)" }}>
+              <p className="text-xs font-semibold text-slate-400 mb-1">⭐ Топ товар</p>
+              <p className="text-sm font-bold text-slate-800 line-clamp-2">{stats.topProduct}</p>
             </div>
           )}
         </div>
