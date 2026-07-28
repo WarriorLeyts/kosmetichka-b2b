@@ -73,6 +73,30 @@ export default async function OrdersPage({
   const topProduct = topItems[0]?.productName ?? null;
   const topProductQty = topItems[0]?._sum.quantity ?? 0;
 
+  // Fetch first image for each product that lacks a variantImageUrl
+  const productIdsNeedingImage = [
+    ...new Set(
+      orders.flatMap((o) =>
+        o.items.filter((i) => !i.variantImageUrl).map((i) => i.productId)
+      )
+    ),
+  ];
+  const productImages =
+    productIdsNeedingImage.length > 0
+      ? await prisma.productImage.findMany({
+          where: { productId: { in: productIdsNeedingImage } },
+          select: { productId: true, path: true },
+          orderBy: { id: "asc" },
+        })
+      : [];
+  // Keep only the first image per product
+  const imageByProductId = new Map<number, string>();
+  for (const img of productImages) {
+    if (!imageByProductId.has(img.productId)) {
+      imageByProductId.set(img.productId, img.path);
+    }
+  }
+
   const serialized = orders.map((o) => ({
     id: o.id,
     status: o.status,
@@ -90,6 +114,7 @@ export default async function OrdersPage({
       total: item.total,
       variantImageUrl: item.variantImageUrl ?? null,
       variantName: item.variantName ?? null,
+      imagePath: imageByProductId.get(item.productId) ?? null,
     })),
   }));
 

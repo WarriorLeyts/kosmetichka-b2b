@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
+import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendMail } from "@/lib/mail";
 
@@ -11,25 +10,6 @@ const STATUS_LABELS: Record<string, string> = {
   exported: "Выгружен",
   cancelled: "Отменён",
 };
-
-function getSecret() {
-  const secret = process.env.JWT_SECRET || "dev-fallback";
-  return new TextEncoder().encode(secret);
-}
-
-async function getUser() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token")?.value;
-  if (!token) return null;
-  try {
-    const { payload } = await jwtVerify(token, getSecret());
-    const role = payload.role as string;
-    if (!["admin", "manager"].includes(role)) return null;
-    return { id: payload.id as number, role };
-  } catch {
-    return null;
-  }
-}
 
 // Valid transitions
 const TRANSITIONS: Record<string, string[]> = {
@@ -46,7 +26,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getUser();
+  const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
 
   const { id } = await params;
@@ -72,17 +52,23 @@ export async function POST(
     });
   }
 
+  // Reset customer confirmation if order moves back to a state requiring re-review
+  const resetConfirm = toStatus === "assembly" || toStatus === "consultation";
+
   const [updatedOrder] = await prisma.$transaction([
     prisma.order.update({
       where: { id: Number(id) },
-      data: { status: toStatus },
+      data: {
+        status: toStatus,
+        ...(resetConfirm ? { customerConfirmed: false } : {}),
+      },
     }),
     prisma.orderStatusLog.create({
       data: {
         orderId: Number(id),
         fromStatus: order.status,
         toStatus,
-        userId: user.id,
+        userId: user.id as number,
       },
     }),
   ]);
@@ -99,6 +85,7 @@ export async function POST(
       const label = STATUS_LABELS[toStatus] ?? toStatus;
       const clientName = fullOrder.customer.companyName || fullOrder.customer.name || "Клиент";
       const statusColor = toStatus === "cancelled" ? "#ef4444" : toStatus === "payment" ? "#10b981" : "#6366f1";
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://kosmetichka-opt.ru";
       sendMail({
         to: email,
         subject: `Заказ #${id} — статус изменён на «${label}»`,
@@ -110,7 +97,7 @@ export async function POST(
               Статус заказа <b>#${id}</b> изменён на
               <span style="font-weight:700;color:${statusColor};">${label}</span>.
             </p>
-            <a href="https://kosmetichka-opt.ru/orders/${id}"
+            <a href="${baseUrl}/orders/${id}"
                style="display:inline-block;padding:12px 28px;background:#6366f1;color:#fff;font-weight:700;text-decoration:none;border-radius:12px;">
               Открыть заказ
             </a>

@@ -105,7 +105,7 @@ export async function POST(request: Request) {
           <p style="margin:0 0 8px;color:#475569;"><b>Клиент:</b> ${clientName}</p>
           ${customer.phone ? `<p style="margin:0 0 8px;color:#475569;"><b>Телефон:</b> ${customer.phone}</p>` : ""}
           <p style="margin:0 0 24px;color:#475569;"><b>Сумма:</b> ${order.total} ₽</p>
-          <a href="https://kosmetichka-opt.ru/admin/orders/${order.id}"
+          <a href="${process.env.NEXT_PUBLIC_BASE_URL || "https://kosmetichka-opt.ru"}/admin/orders/${order.id}"
              style="display:inline-block;padding:12px 28px;background:#6366f1;color:#fff;font-weight:700;text-decoration:none;border-radius:12px;">
             Открыть заказ
           </a>
