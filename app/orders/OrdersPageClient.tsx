@@ -137,6 +137,7 @@ function OrderChat({ orderId }: { orderId: number }) {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const endRef = useRef<HTMLDivElement>(null);
+  const chatBoxRef = useRef<HTMLDivElement>(null);
   const lastCountRef = useRef(0);
 
   async function fetchMessages() {
@@ -172,8 +173,8 @@ function OrderChat({ orderId }: { orderId: number }) {
   }, [open, messages]);
 
   useEffect(() => {
-    if (open) {
-      endRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (open && chatBoxRef.current) {
+      chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
     }
   }, [messages, open]);
 
@@ -212,7 +213,7 @@ function OrderChat({ orderId }: { orderId: number }) {
 
       {open && (
         <div className="mt-3 flex flex-col gap-2">
-          <div className="max-h-60 overflow-y-auto rounded-xl border bg-slate-50 p-3 flex flex-col gap-2">
+          <div ref={chatBoxRef} className="max-h-60 overflow-y-auto rounded-xl border bg-slate-50 p-3 flex flex-col gap-2">
             {messages.length === 0 ? (
               <p className="text-center text-sm text-slate-400">
                 {"Нет сообщений. Задайте вопрос менеджеру."}
