@@ -753,21 +753,26 @@ color: var(--text);
 font-weight: 800;
 }
 
-/* Muted row: non-active price tiers — visible but clearly secondary */
-.price-row-muted {
-opacity: 0.55;
+/* Muted row: non-active price tiers — clearly readable secondary */
+.price-row-muted span {
+color: #94a3b8;
+}
+.price-row-muted b {
+color: #64748b;
+font-weight: 700;
+-webkit-text-fill-color: #64748b;
 }
 
 /* Active row: label + value both highlighted */
 .price-row-active span {
-color: #8b3dff;
-font-weight: 700;
+color: #7c3aed;
+font-weight: 800;
 }
 .price-row-active b {
 background: var(--gradient);
 -webkit-background-clip: text;
 -webkit-text-fill-color: transparent;
-font-size: 14px;
+font-size: 15px;
 font-weight: 900;
 }
 
