@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
+import { sendMail } from "@/lib/mail";
+
+const STATUS_LABELS: Record<string, string> = {
+  assembly: "Сборка",
+  consultation: "Консультация",
+  payment: "К оплате",
+  exported: "Выгружен",
+  cancelled: "Отменён",
+};
 
 function getSecret() {
   const secret = process.env.JWT_SECRET || "dev-fallback";
@@ -77,6 +86,39 @@ export async function POST(
       },
     }),
   ]);
+
+  // Уведомление покупателю о смене статуса
+  const notifyStatuses = ["payment", "cancelled", "assembly"];
+  if (notifyStatuses.includes(toStatus)) {
+    const fullOrder = await prisma.order.findUnique({
+      where: { id: Number(id) },
+      include: { customer: { select: { email: true, name: true, companyName: true } } },
+    });
+    const email = fullOrder?.customer?.email;
+    if (email) {
+      const label = STATUS_LABELS[toStatus] ?? toStatus;
+      const clientName = fullOrder.customer.companyName || fullOrder.customer.name || "Клиент";
+      const statusColor = toStatus === "cancelled" ? "#ef4444" : toStatus === "payment" ? "#10b981" : "#6366f1";
+      sendMail({
+        to: email,
+        subject: `Заказ #${id} — статус изменён на «${label}»`,
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#fff;">
+            <h2 style="margin:0 0 16px;font-size:20px;color:#1e293b;">Статус вашего заказа изменился</h2>
+            <p style="margin:0 0 8px;color:#475569;">Здравствуйте, ${clientName}!</p>
+            <p style="margin:0 0 24px;color:#475569;">
+              Статус заказа <b>#${id}</b> изменён на
+              <span style="font-weight:700;color:${statusColor};">${label}</span>.
+            </p>
+            <a href="https://kosmetichka-opt.ru/orders/${id}"
+               style="display:inline-block;padding:12px 28px;background:#6366f1;color:#fff;font-weight:700;text-decoration:none;border-radius:12px;">
+              Открыть заказ
+            </a>
+          </div>
+        `,
+      }).catch(console.error);
+    }
+  }
 
   return NextResponse.json({ order: updatedOrder });
 }

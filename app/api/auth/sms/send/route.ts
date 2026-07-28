@@ -91,6 +91,11 @@ export async function POST(request: Request) {
       data: { used: true },
     });
 
+    // Очищаем истёкшие коды (старше 24 часов) чтобы таблица не росла
+    await prisma.smsCode.deleteMany({
+      where: { expiresAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+    });
+
     await prisma.smsCode.create({
       data: { phone: smsPhone, code, expiresAt },
     });

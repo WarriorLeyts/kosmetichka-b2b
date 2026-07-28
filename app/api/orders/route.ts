@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { sendMail } from "@/lib/mail";
 
 export async function POST(request: Request) {
   const cookieStore = await cookies();
@@ -89,6 +90,28 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Не удалось создать заказ" }, { status: 400 });
+  }
+
+  // Уведомление администратору о новом заказе
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (adminEmail) {
+    const clientName = customer.companyName || customer.name || customer.phone || `#${customer.id}`;
+    sendMail({
+      to: adminEmail,
+      subject: `Новый заказ #${order.id} — ${clientName}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#fff;">
+          <h2 style="margin:0 0 16px;font-size:20px;color:#1e293b;">🛍️ Новый заказ #${order.id}</h2>
+          <p style="margin:0 0 8px;color:#475569;"><b>Клиент:</b> ${clientName}</p>
+          ${customer.phone ? `<p style="margin:0 0 8px;color:#475569;"><b>Телефон:</b> ${customer.phone}</p>` : ""}
+          <p style="margin:0 0 24px;color:#475569;"><b>Сумма:</b> ${order.total} ₽</p>
+          <a href="https://kosmetichka-opt.ru/admin/orders/${order.id}"
+             style="display:inline-block;padding:12px 28px;background:#6366f1;color:#fff;font-weight:700;text-decoration:none;border-radius:12px;">
+            Открыть заказ
+          </a>
+        </div>
+      `,
+    }).catch(console.error);
   }
 
   return NextResponse.json({

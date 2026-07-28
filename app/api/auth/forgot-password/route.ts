@@ -43,6 +43,11 @@ export async function POST(request: Request) {
       data: { used: true },
     });
 
+    // Очищаем истёкшие токены старше 24 часов
+    await prisma.passwordResetToken.deleteMany({
+      where: { expiresAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+    });
+
     // Generate token
     const token = randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour

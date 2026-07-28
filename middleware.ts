@@ -11,10 +11,10 @@ function resolveJwtSecret(): string {
   }
 
   console.warn(
-    "[middleware] JWT_SECRET is not set in .env — using a temporary random secret for this dev session."
+    "[middleware] JWT_SECRET is not set in .env — using a fixed dev-only secret. Set JWT_SECRET before deploying to production."
   );
 
-  return `dev-only-${Math.random().toString(36).slice(2)}${Date.now()}`;
+  return "dev-secret-kosmetichka-change-in-production";
 }
 
 const secret = new TextEncoder().encode(resolveJwtSecret());
@@ -61,9 +61,27 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // --- Customer routes: require auth_token ---
+  const customerRoutes = ["/orders", "/profile", "/catalog"];
+  const isCustomerRoute = customerRoutes.some(
+    (r) => pathname === r || pathname.startsWith(r + "/")
+  );
+
+  if (isCustomerRoute) {
+    const token = request.cookies.get("auth_token")?.value;
+    if (!token) {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+    try {
+      await jwtVerify(token, secret);
+    } catch {
+      return NextResponse.redirect(new URL("/login", request.url));
+    }
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/picker/:path*"],
+  matcher: ["/admin/:path*", "/picker/:path*", "/orders/:path*", "/orders", "/profile", "/catalog/:path*", "/catalog"],
 };

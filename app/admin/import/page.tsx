@@ -1,7 +1,5 @@
-import { AdminImportClient } from "@/components/admin/AdminImportClient";
-
-export const dynamic = "force-dynamic";
+import { redirect } from "next/navigation";
 
 export default function AdminImportPage() {
-  return <AdminImportClient />;
+  redirect("/admin");
 }

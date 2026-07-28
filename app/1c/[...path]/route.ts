@@ -39,7 +39,7 @@ const file = fs.readFileSync(resolvedPath);
 return new Response(file, {
 headers: {
 "Content-Type": mimeType(resolvedPath),
-"Cache-Control": "public, max-age=86400",
+"Cache-Control": "public, max-age=2592000, immutable",
 },
 });
 }
