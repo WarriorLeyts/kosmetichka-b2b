@@ -82,6 +82,7 @@ export default async function AdminCustomersPage({
 
   const PRICE_LABELS: Record<string, string> = {
     retail: "Розница",
+    discount: "Скидка",
     wholesale: "Опт",
     big_wholesale: "Крупный опт",
   };

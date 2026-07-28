@@ -159,6 +159,7 @@ export default async function EditCustomerPage({
               className="w-full rounded-xl border p-3"
             >
               <option value="retail">Розница</option>
+              <option value="discount">Скидка</option>
               <option value="wholesale">Опт</option>
               <option value="big_wholesale">Крупный опт</option>
             </select>

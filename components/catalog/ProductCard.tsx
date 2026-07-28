@@ -7,7 +7,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SafeImage } from "./SafeImage";
 import { getStockLabel } from "@/lib/utils";
-import { resolveCustomerPriceType, priceFor, priceTypeLabel } from "@/lib/pricing";
+import {
+  resolveCustomerPriceType,
+  effectivePriceType,
+  priceFor,
+} from "@/lib/pricing";
 import { resolveImageUrl } from "@/lib/image";
 import { useCartStore } from "@/store/cartStore";
 import { useState } from "react";
@@ -38,11 +42,12 @@ export function ProductCard({ product, addToCart }: Props) {
   const router = useRouter();
   const customer = useAuthStore((state) => state.customer);
 
+  const cartItems = useCartStore((s) => s.cart);
   const stock = getStockLabel(product.stock);
   const isOutOfStock = (product.stock ?? 0) <= 0;
-  const priceType = resolveCustomerPriceType(customer);
-  const mainPrice = priceFor(product, priceType);
-  const mainLabel = priceTypeLabel(priceType);
+  const base = resolveCustomerPriceType(customer);
+  const activePriceType = effectivePriceType(cartItems, customer);
+  const mainPrice = priceFor(product, activePriceType);
 
   // Variant picker state
   const [variants, setVariants] = useState<Variant[] | null>(null);
@@ -123,17 +128,67 @@ export function ProductCard({ product, addToCart }: Props) {
           <strong className={stock.className}>{stock.text}</strong>
         </div>
 
-        {customer && (
-          <div className="price-row">
+        {/* Гость или Скидка: Розница + Скидка */}
+        {(base === "guest" || base === "discount") && (
+          <>
+            <div className="price-row">
+              <span>Розница:</span>
+              <b>{Number(product.retailPrice ?? 0).toLocaleString("ru-RU")} ₽</b>
+            </div>
+            {product.discountPrice != null &&
+              Number(product.discountPrice) > 0 &&
+              Number(product.discountPrice) !== Number(product.retailPrice) && (
+              <div className="price-row price-row-active">
+                <span>Скидка:</span>
+                <b>{Number(product.discountPrice).toLocaleString("ru-RU")} ₽</b>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Розница: только розничная цена */}
+        {base === "retail" && (
+          <div className="price-row price-row-active">
             <span>Розница:</span>
-            <b>{product.retailPrice ?? 0} ₽</b>
+            <b>{Number(product.retailPrice ?? 0).toLocaleString("ru-RU")} ₽</b>
           </div>
         )}
 
-        <div className="price-row">
-          <span>{customer ? mainLabel + ":" : "Цена:"}</span>
-          <b className={customer ? "accent-price" : ""}>{mainPrice} ₽</b>
-        </div>
+        {/* Опт: Скидка + Опт + Крупный опт с подсветкой активного */}
+        {base === "wholesale" && (
+          <>
+            <div className={`price-row ${activePriceType === "discount" ? "price-row-active" : "price-row-muted"}`}>
+              <span>Скидка:</span>
+              <b>{Number(product.discountPrice ?? product.retailPrice ?? 0).toLocaleString("ru-RU")} ₽</b>
+            </div>
+            <div className={`price-row ${activePriceType === "wholesale" ? "price-row-active" : "price-row-muted"}`}>
+              <span>Опт:</span>
+              <b>{Number(product.wholesalePrice ?? 0).toLocaleString("ru-RU")} ₽</b>
+            </div>
+            {product.bigWholesalePrice != null &&
+              Number(product.bigWholesalePrice) > 0 &&
+              Number(product.bigWholesalePrice) !== Number(product.wholesalePrice) && (
+              <div className={`price-row ${activePriceType === "big_wholesale" ? "price-row-active" : "price-row-muted"}`}>
+                <span>Кр. опт:</span>
+                <b>{Number(product.bigWholesalePrice).toLocaleString("ru-RU")} ₽</b>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Крупный опт: Опт (серый) + Крупный опт (активный) */}
+        {base === "big_wholesale" && (
+          <>
+            <div className="price-row price-row-muted">
+              <span>Опт:</span>
+              <b>{Number(product.wholesalePrice ?? 0).toLocaleString("ru-RU")} ₽</b>
+            </div>
+            <div className="price-row price-row-active">
+              <span>Кр. опт:</span>
+              <b>{Number(product.bigWholesalePrice ?? product.wholesalePrice ?? 0).toLocaleString("ru-RU")} ₽</b>
+            </div>
+          </>
+        )}
 
         <div className="card-actions">
           {isOutOfStock ? (

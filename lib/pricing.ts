@@ -1,42 +1,47 @@
 /**
  * Centralised pricing logic.
  *
- * Price-type resolution (from customer.priceType):
- *   wholesale        → wholesalePrice   (Опт)
- *   big_wholesale    → bigWholesalePrice (Крупный опт, falls back to wholesale)
- *   null/retail/any  → wholesalePrice   (treat as wholesale)
- *   guest (no login) → discountPrice ?? retailPrice
- *
- * Auto-upgrade rule:
- *   If the customer's base priceType is not already big_wholesale AND
- *   the cart sub-total (at their base prices) reaches BIG_WHOLESALE_THRESHOLD,
- *   all prices automatically switch to big_wholesale for that cart session.
+ * Тарифы:
+ *   guest        → discountPrice ?? retailPrice   (не авторизован)
+ *   discount     → discountPrice ?? retailPrice   (всегда, без апгрейда)
+ *   wholesale    → порог корзины: < 5 000 → discount, >= 5 000 → wholesale,
+ *                  >= 50 000 → big_wholesale
+ *   big_wholesale → bigWholesalePrice              (всегда)
  */
 
-export const BIG_WHOLESALE_THRESHOLD = 5000;
+export const WHOLESALE_THRESHOLD = 5_000;
+export const BIG_WHOLESALE_THRESHOLD = 50_000;
 
-export type PriceType = "wholesale" | "big_wholesale" | "guest";
+export type PriceType = "guest" | "retail" | "discount" | "wholesale" | "big_wholesale";
 
-/** Maps the raw DB priceType string to our internal enum. */
+/** Базовый тариф клиента (без учёта корзины). */
 export function resolveCustomerPriceType(
   customer: { priceType?: string | null } | null
 ): PriceType {
   if (!customer) return "guest";
   if (customer.priceType === "big_wholesale") return "big_wholesale";
-  // wholesale / null / retail / discount → all get standard wholesale
-  return "wholesale";
+  if (customer.priceType === "wholesale") return "wholesale";
+  if (customer.priceType === "retail") return "retail";
+  return "discount";
 }
 
-/** Human-readable label for a price type. */
+/** Человекочитаемый ярлык тарифа. */
 export function priceTypeLabel(type: PriceType): string {
-  if (type === "big_wholesale") return "Крупный опт";
-  if (type === "wholesale") return "Опт";
-  return "Цена";
+  switch (type) {
+    case "big_wholesale": return "Крупный опт";
+    case "wholesale":     return "Опт";
+    case "retail":        return "Розница";
+    case "discount":      return "Скидка";
+    default:              return "Цена";
+  }
 }
 
-/** Price for one product given an effective price type. */
+/** Цена одного товара по тарифу. */
 export function priceFor(product: any, type: PriceType): number {
-  if (type === "guest") {
+  if (type === "retail") {
+    return Number(product.retailPrice ?? 0);
+  }
+  if (type === "guest" || type === "discount") {
     return Number(product.discountPrice ?? product.retailPrice ?? 0);
   }
   if (type === "big_wholesale") {
@@ -45,7 +50,7 @@ export function priceFor(product: any, type: PriceType): number {
   return Number(product.wholesalePrice ?? 0);
 }
 
-/** Raw cart total at the given price type (no threshold logic). */
+/** Сумма корзины по тарифу (без авто-апгрейда). */
 export function rawCartTotal(cart: any[], type: PriceType): number {
   return cart.reduce(
     (sum, item) => sum + priceFor(item, type) * item.quantity,
@@ -54,25 +59,48 @@ export function rawCartTotal(cart: any[], type: PriceType): number {
 }
 
 /**
- * Effective price type for display/checkout.
- * Upgrades to big_wholesale if the wholesale total hits the threshold.
+ * Эффективный тариф для корзины / оформления заказа.
+ * Авто-апгрейд считается по оптовой сумме корзины.
  */
 export function effectivePriceType(
   cart: any[],
   customer: { priceType?: string | null } | null
 ): PriceType {
   const base = resolveCustomerPriceType(customer);
+
+  if (base === "guest")         return "guest";
+  if (base === "retail")        return "retail";        // всегда розничная цена
   if (base === "big_wholesale") return "big_wholesale";
-  if (base === "guest") return "guest";
-  // Check if the cart qualifies for big_wholesale
-  const total = rawCartTotal(cart, base);
-  if (total >= BIG_WHOLESALE_THRESHOLD) return "big_wholesale";
-  return base;
+
+  // Скидочные клиенты — всегда скидочная цена, апгрейда нет
+  if (base === "discount") return "discount";
+
+  // Оптовые клиенты — порог по сумме корзины в оптовых ценах
+  const wholesaleTotal = rawCartTotal(cart, "wholesale");
+  if (wholesaleTotal >= BIG_WHOLESALE_THRESHOLD) return "big_wholesale";
+  if (wholesaleTotal >= WHOLESALE_THRESHOLD)     return "wholesale";
+
+  return "discount";
 }
 
 /**
- * How many roubles remain until the big-wholesale threshold.
- * Returns 0 if already at or above threshold (or already big_wholesale customer).
+ * Сколько рублей осталось до тарифа «Опт».
+ * Возвращает 0, если уже достигнуто или не применимо.
+ */
+export function amountUntilWholesale(
+  cart: any[],
+  customer: { priceType?: string | null } | null
+): number {
+  const base = resolveCustomerPriceType(customer);
+  // Только для оптовых клиентов, не достигших порога wholesale
+  if (base !== "wholesale") return 0;
+  const total = rawCartTotal(cart, "wholesale");
+  return Math.max(0, WHOLESALE_THRESHOLD - total);
+}
+
+/**
+ * Сколько рублей осталось до тарифа «Крупный опт».
+ * Возвращает 0, если уже достигнуто или не применимо.
  */
 export function amountUntilBigWholesale(
   cart: any[],
@@ -80,6 +108,6 @@ export function amountUntilBigWholesale(
 ): number {
   const base = resolveCustomerPriceType(customer);
   if (base === "big_wholesale" || base === "guest") return 0;
-  const total = rawCartTotal(cart, base);
+  const total = rawCartTotal(cart, "wholesale");
   return Math.max(0, BIG_WHOLESALE_THRESHOLD - total);
 }

@@ -19,11 +19,43 @@ declare global {
   }
 }
 
+const PRICE_TYPE_OPTIONS = [
+  {
+    value: "retail",
+    label: "Розница",
+    desc: "Покупаю для себя или в розницу",
+    icon: "🛍️",
+    autoApprove: true,
+  },
+  {
+    value: "discount",
+    label: "Скидка",
+    desc: "Постоянный покупатель со скидкой",
+    icon: "🏷️",
+    autoApprove: true,
+  },
+  {
+    value: "wholesale",
+    label: "Опт",
+    desc: "Оптовый покупатель, владелец магазина",
+    icon: "📦",
+    autoApprove: false,
+  },
+  {
+    value: "big_wholesale",
+    label: "Крупный опт",
+    desc: "Крупный оптовик, сеть магазинов",
+    icon: "🏭",
+    autoApprove: false,
+  },
+];
+
 export default function RegisterPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [priceType, setPriceType] = useState("wholesale");
 
   // SMS step
   const [smsSent, setSmsSent] = useState(false);
@@ -128,7 +160,7 @@ export default function RegisterPage() {
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, phone, email, password, captchaToken, smsCode }),
+      body: JSON.stringify({ name, phone, email, password, captchaToken, smsCode, priceType }),
     });
 
     const text = await res.text();
@@ -179,7 +211,7 @@ export default function RegisterPage() {
             </h1>
 
             <p className="mt-2 text-sm font-semibold text-slate-500">
-              Оставьте заявку на доступ к B2B-каталогу
+              Создайте аккаунт для доступа к B2B-каталогу
             </p>
           </div>
 
@@ -276,6 +308,43 @@ export default function RegisterPage() {
               </button>
             </div>
 
+            {/* ─── Тип покупателя ──────────────────────────────── */}
+            <div>
+              <p className="mb-2 text-sm font-bold text-slate-600">Кто вы?</p>
+              <div className="grid grid-cols-2 gap-2">
+                {PRICE_TYPE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setPriceType(opt.value)}
+                    className={`flex flex-col items-start gap-0.5 rounded-2xl border-2 p-3 text-left transition-all ${
+                      priceType === opt.value
+                        ? "border-pink-400 bg-pink-50"
+                        : "border-slate-200 bg-slate-50 hover:border-slate-300"
+                    }`}
+                  >
+                    <span className="text-lg">{opt.icon}</span>
+                    <span className={`text-sm font-black ${priceType === opt.value ? "text-pink-600" : "text-slate-700"}`}>
+                      {opt.label}
+                    </span>
+                    <span className="text-xs text-slate-400 leading-snug">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Warning for wholesale types */}
+              {(priceType === "wholesale" || priceType === "big_wholesale") && (
+                <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs font-bold text-amber-700">
+                    ⚠️ Для оптовых клиентов требуется подтверждение
+                  </p>
+                  <p className="mt-0.5 text-xs text-amber-600">
+                    После регистрации менеджер свяжется с вами, чтобы подтвердить, что вы являетесь владельцем магазина или бизнеса.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* ─── Yandex SmartCaptcha ──────────────────────────── */}
             <div ref={containerRef} />
 
@@ -297,7 +366,11 @@ export default function RegisterPage() {
               className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 font-black text-white disabled:opacity-50"
             >
               <Send size={18} />
-              {loading ? "Отправляем..." : "Отправить заявку"}
+              {loading
+                ? "Регистрируемся..."
+                : priceType === "wholesale" || priceType === "big_wholesale"
+                ? "Отправить заявку"
+                : "Зарегистрироваться"}
             </button>
           </form>
 

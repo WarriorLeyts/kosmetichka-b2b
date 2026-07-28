@@ -50,8 +50,13 @@ async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
   }
 }
 
+const AUTO_APPROVE_TYPES = new Set(["retail", "discount"]);
+
 export async function POST(request: Request) {
-  const { name, phone, email, password, captchaToken, smsCode } = await request.json();
+  const { name, phone, email, password, captchaToken, smsCode, priceType: rawPriceType } = await request.json();
+  const priceType = ["retail", "discount", "wholesale", "big_wholesale"].includes(rawPriceType)
+    ? rawPriceType
+    : "wholesale";
 
   // ─── Проверка капчи ───────────────────────────────────────────
   if (!captchaToken) {
@@ -145,6 +150,13 @@ export async function POST(request: Request) {
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  // Determine effective priceType: 1C record overrides user selection if linked
+  const effectivePriceType = oneCCustomer?.priceType || priceType;
+
+  // Auto-approve retail/discount customers; wholesale types need manager confirmation
+  // Exception: always auto-approve if linked to 1C record
+  const shouldAutoApprove = Boolean(oneCCustomer) || AUTO_APPROVE_TYPES.has(effectivePriceType);
+
   const customer = await prisma.customer.create({
     data: {
       name,
@@ -154,16 +166,16 @@ export async function POST(request: Request) {
 
       oneCId: oneCCustomer?.oneCId || null,
 
-      isApproved: Boolean(oneCCustomer),
+      isApproved: shouldAutoApprove,
       isActive: true,
 
       manager: oneCCustomer?.manager || null,
       role: "customer",
-      priceType: oneCCustomer?.priceType || "wholesale",
+      priceType: effectivePriceType,
     },
   });
 
-  if (oneCCustomer) {
+  if (shouldAutoApprove) {
     const token = await createToken({
       id: customer.id,
       email: customer.email || "",
@@ -183,11 +195,11 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     success: true,
-    autoLogin: Boolean(oneCCustomer),
+    autoLogin: shouldAutoApprove,
     oneCLinked: Boolean(oneCCustomer),
 
-    message: oneCCustomer
+    message: shouldAutoApprove
       ? "Регистрация успешно завершена."
-      : "Заявка отправлена. Ожидайте подтверждения администратора.",
+      : "Заявка отправлена на рассмотрение. Менеджер свяжется с вами для подтверждения того, что вы являетесь владельцем магазина или бизнеса.",
   });
 }
