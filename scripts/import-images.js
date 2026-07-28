@@ -15,7 +15,6 @@ const data = parser.parse(xml);
 const raw = data["КоммерческаяИнформация"]?.["Каталог"]?.["Товары"]?.["Товар"] ?? [];
 const products = Array.isArray(raw) ? raw : [raw];
 
-// Determine MIME type from extension
 function mimeType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === ".png") return "image/png";
@@ -24,7 +23,6 @@ function mimeType(filePath) {
   return "image/jpeg";
 }
 
-// Сжать изображение на месте (если стало меньше)
 async function compressInPlace(filePath) {
   try {
     const ext = path.extname(filePath).toLowerCase();
@@ -47,11 +45,10 @@ async function compressInPlace(filePath) {
       fs.writeFileSync(filePath, output);
     }
   } catch {
-    // не критично, оставляем оригинал
+    // не критично
   }
 }
 
-// Преобразует hex-строку без дефисов в UUID формат
 function hexToGuid(hex) {
   if (!hex || hex.length !== 32) return null;
   return [
@@ -77,16 +74,12 @@ async function main() {
       : [];
     if (!imgs.length) continue;
 
-    // Check at least one image file exists locally before touching the DB
     const validImgs = imgs.filter((imgPath) => {
       const rel = String(imgPath).replace(/\\/g, "/");
       return fs.existsSync(path.join(ROOT, "data", "1c", rel));
     });
 
-    if (!validImgs.length) {
-      skipped++;
-      continue;
-    }
+    if (!validImgs.length) { skipped++; continue; }
 
     const product = await prisma.product.findUnique({ where: { guid: String(guid) } });
     if (!product) continue;
@@ -96,20 +89,15 @@ async function main() {
     for (const imgPath of validImgs) {
       const rel = String(imgPath).replace(/\\/g, "/");
       await compressInPlace(path.join(ROOT, "data", "1c", rel));
-
-      await prisma.productImage.create({
-        data: { productId: product.id, path: rel },
-      });
+      await prisma.productImage.create({ data: { productId: product.id, path: rel } });
       saved++;
     }
   }
 
-  console.log("Проход 1 (XML): путей сохранено: " + saved + " | Без картинок: " + skipped);
+  console.log("Проход 1 (XML): сохранено: " + saved + " | пропущено: " + skipped);
 
   // ── Проход 2: матчинг по GUID-префиксу имени файла ────────────────────────
-  // Имена файлов: {ГУИДтовара}_{ГУИДкартинки}.jpg (без дефисов, нижний регистр)
-  // Первая часть до "_" — это GUID товара из 1С → совпадает с Product.guid
-  console.log("\nПроход 2 (GUID-матчинг по файлам)...");
+  console.log("\nПроход 2 (GUID-матчинг)...");
 
   const importFilesDir = path.join(ROOT, "data", "1c", "import_files");
   if (!fs.existsSync(importFilesDir)) {
@@ -117,74 +105,68 @@ async function main() {
     return;
   }
 
-  // Собираем все файлы изображений из import_files/**
-  const allImageFiles = [];
+  // 1. Собираем все файлы и группируем по GUID-префиксу
+  const byProductGuid = new Map(); // guid → [relPath, ...]
   const subdirs = fs.readdirSync(importFilesDir);
   for (const subdir of subdirs) {
     const subdirPath = path.join(importFilesDir, subdir);
     if (!fs.statSync(subdirPath).isDirectory()) continue;
-    const files = fs.readdirSync(subdirPath);
-    for (const file of files) {
+    for (const file of fs.readdirSync(subdirPath)) {
       const ext = path.extname(file).toLowerCase();
-      if ([".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(ext)) {
-        allImageFiles.push(path.join("import_files", subdir, file));
-      }
+      if (![".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(ext)) continue;
+      const baseName = path.basename(file, ext);
+      const underscoreIdx = baseName.indexOf("_");
+      if (underscoreIdx === -1) continue;
+      const guidHex = baseName.slice(0, underscoreIdx).toLowerCase();
+      if (guidHex.length !== 32) continue;
+      const guid = hexToGuid(guidHex);
+      if (!guid) continue;
+      const relPath = "import_files/" + subdir + "/" + file;
+      if (!byProductGuid.has(guid)) byProductGuid.set(guid, []);
+      byProductGuid.get(guid).push(relPath);
     }
   }
 
-  console.log("Файлов найдено в import_files:", allImageFiles.length);
+  console.log("Файлов найдено: " + [...byProductGuid.values()].reduce((s, a) => s + a.length, 0));
+  console.log("Уникальных GUID в файлах: " + byProductGuid.size);
 
-  // Группируем файлы по GUID товара (первая часть имени до "_")
-  const byProductGuid = new Map();
-  for (const relPath of allImageFiles) {
-    const filename = path.basename(relPath, path.extname(relPath));
-    const underscoreIdx = filename.indexOf("_");
-    if (underscoreIdx === -1) continue;
-    const guidHex = filename.slice(0, underscoreIdx).toLowerCase();
-    if (guidHex.length !== 32) continue;
-    const guid = hexToGuid(guidHex);
-    if (!guid) continue;
-    if (!byProductGuid.has(guid)) byProductGuid.set(guid, []);
-    byProductGuid.get(guid).push(relPath);
-  }
+  // 2. Загружаем ВСЕ продукты одним запросом: guid → id
+  const allProducts = await prisma.product.findMany({ select: { id: true, guid: true } });
+  const guidToId = new Map(allProducts.map((p) => [p.guid, p.id]));
+  console.log("Товаров в базе: " + allProducts.length);
 
-  console.log("Уникальных GUID товаров в файлах:", byProductGuid.size);
+  // 3. Загружаем все productId у которых уже есть картинки
+  const withImages = await prisma.productImage.findMany({ select: { productId: true } });
+  const hasImageSet = new Set(withImages.map((r) => r.productId));
+  console.log("Товаров с картинками уже: " + hasImageSet.size);
 
+  // 4. Создаём записи только для тех у кого нет картинок
   let linked = 0;
+  let notFound = 0;
   let alreadyHas = 0;
 
   for (const [guid, filePaths] of byProductGuid) {
-    const product = await prisma.product.findUnique({ where: { guid } });
-    if (!product) continue;
+    const productId = guidToId.get(guid);
+    if (!productId) { notFound++; continue; }
+    if (hasImageSet.has(productId)) { alreadyHas++; continue; }
 
-    // Если у товара уже есть картинки (привязанные на проходе 1 или ранее) — не трогаем
-    const existingCount = await prisma.productImage.count({
-      where: { productId: product.id },
-    });
-    if (existingCount > 0) {
-      alreadyHas++;
-      continue;
-    }
-
-    // Берём только существующие файлы, сортируем для стабильного порядка
     const validPaths = filePaths
       .filter((p) => fs.existsSync(path.join(ROOT, "data", "1c", p)))
       .sort();
-
     if (!validPaths.length) continue;
 
-    for (const relPath of validPaths) {
-      const normalizedRel = relPath.replace(/\\/g, "/");
-      await compressInPlace(path.join(ROOT, "data", "1c", normalizedRel));
-      await prisma.productImage.create({
-        data: { productId: product.id, path: normalizedRel },
-      });
-      linked++;
-    }
+    // Берём только первую картинку (главную)
+    const relPath = validPaths[0].replace(/\\/g, "/");
+    await compressInPlace(path.join(ROOT, "data", "1c", relPath));
+    await prisma.productImage.create({ data: { productId, path: relPath } });
+    hasImageSet.add(productId); // чтобы не дублировать если несколько файлов на один GUID
+    linked++;
   }
 
-  console.log("Проход 2: новых картинок привязано: " + linked);
-  console.log("Проход 2: товаров с уже имевшимися картинками: " + alreadyHas);
+  console.log("\nРезультат прохода 2:");
+  console.log("  Привязано новых картинок: " + linked);
+  console.log("  Уже имели картинку: " + alreadyHas);
+  console.log("  GUID не найден в базе: " + notFound);
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect());
