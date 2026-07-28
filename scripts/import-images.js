@@ -30,13 +30,18 @@ async function compressInPlace(filePath) {
     const ext = path.extname(filePath).toLowerCase();
     if (![".jpg", ".jpeg", ".png", ".webp"].includes(ext)) return;
     const input = fs.readFileSync(filePath);
+    const MAX_PX = 1200;
+    const pipeline = sharp(input).resize(MAX_PX, MAX_PX, {
+      fit: "inside",
+      withoutEnlargement: true,
+    });
     let output;
     if (ext === ".png") {
-      output = await sharp(input).png({ compressionLevel: 9, quality: 80 }).toBuffer();
+      output = await pipeline.png({ compressionLevel: 9, quality: 80 }).toBuffer();
     } else if (ext === ".webp") {
-      output = await sharp(input).webp({ quality: 75 }).toBuffer();
+      output = await pipeline.webp({ quality: 75 }).toBuffer();
     } else {
-      output = await sharp(input).jpeg({ quality: 78, mozjpeg: true }).toBuffer();
+      output = await pipeline.jpeg({ quality: 82, mozjpeg: true }).toBuffer();
     }
     if (output.length < input.length) {
       fs.writeFileSync(filePath, output);

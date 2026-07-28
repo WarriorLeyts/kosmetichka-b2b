@@ -36,21 +36,22 @@ async function compressImage(filePath) {
   // Читаем оригинал
   const input = fs.readFileSync(filePath);
 
+  const MAX_PX = 1200; // максимум 1200px по длинной стороне
+
   let output;
   try {
+    const pipeline = sharp(input).resize(MAX_PX, MAX_PX, {
+      fit: "inside",          // пропорционально, не обрезает
+      withoutEnlargement: true, // маленькие не увеличивать
+    });
+
     if (ext === ".png") {
-      output = await sharp(input)
-        .png({ compressionLevel: 9, quality: 80 })
-        .toBuffer();
+      output = await pipeline.png({ compressionLevel: 9, quality: 80 }).toBuffer();
     } else if (ext === ".webp") {
-      output = await sharp(input)
-        .webp({ quality: 75 })
-        .toBuffer();
+      output = await pipeline.webp({ quality: 75 }).toBuffer();
     } else {
       // jpg / jpeg
-      output = await sharp(input)
-        .jpeg({ quality: 78, mozjpeg: true })
-        .toBuffer();
+      output = await pipeline.jpeg({ quality: 82, mozjpeg: true }).toBuffer();
     }
   } catch (err) {
     console.warn(`  SKIP (cant decode): ${filePath} — ${err.message}`);
