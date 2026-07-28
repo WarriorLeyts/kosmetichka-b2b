@@ -62,7 +62,8 @@ export async function middleware(request: NextRequest) {
   }
 
   // --- Customer routes: require auth_token ---
-  const customerRoutes = ["/orders", "/profile", "/catalog"];
+  // /catalog is intentionally public — guests can browse with retail prices
+  const customerRoutes = ["/orders", "/profile"];
   const isCustomerRoute = customerRoutes.some(
     (r) => pathname === r || pathname.startsWith(r + "/")
   );
@@ -83,5 +84,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/picker/:path*", "/orders/:path*", "/orders", "/profile", "/catalog/:path*", "/catalog"],
+  matcher: ["/admin/:path*", "/picker/:path*", "/orders/:path*", "/orders", "/profile"],
 };
