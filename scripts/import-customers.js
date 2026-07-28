@@ -139,6 +139,64 @@ async function main() {
   console.log("Создано:", created);
   console.log("Обновлено:", updated);
   console.log("Пропущено:", skipped);
+
+  // ── Синхронизация таблицы Customer с OneCCustomer по телефону ──────────────
+  // Ищем клиентов сайта без привязки к 1С (oneCId = null) и связываем их
+  // с записями из 1С по совпадению номера телефона.
+  console.log("\nСинхронизация Customer ↔ OneCCustomer по телефону...");
+
+  const oneCCustomers = await prisma.oneCCustomer.findMany({
+    where: { phone: { not: null } },
+  });
+
+  let linked = 0;
+  let priceUpdated = 0;
+
+  for (const oc of oneCCustomers) {
+    if (!oc.phone) continue;
+
+    // Ищем клиента сайта с таким же телефоном
+    const customer = await prisma.customer.findFirst({
+      where: { phone: oc.phone },
+    });
+
+    if (!customer) continue;
+
+    const updateData = {};
+
+    // Привязываем oneCId если ещё не привязан
+    if (!customer.oneCId) {
+      updateData.oneCId = oc.oneCId;
+    }
+
+    // Обновляем тип цен из 1С (если 1С возвращает тип цен)
+    if (oc.priceType && oc.priceType !== customer.priceType) {
+      updateData.priceType = oc.priceType;
+      priceUpdated++;
+    }
+
+    // Обновляем менеджера из 1С
+    if (oc.manager && oc.manager !== customer.manager) {
+      updateData.manager = oc.manager;
+    }
+
+    // Если клиент был в режиме ожидания (isApproved=false) — автоматически одобряем
+    // т.к. он теперь есть в 1С
+    if (!customer.isApproved) {
+      updateData.isApproved = true;
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.customer.update({
+        where: { id: customer.id },
+        data: updateData,
+      });
+      linked++;
+    }
+  }
+
+  console.log("Клиентов сайта привязано/обновлено:", linked);
+  console.log("Тип цен обновлён у:", priceUpdated);
 }
 
 main()
