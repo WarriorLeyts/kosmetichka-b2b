@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Script from "next/script";
 import { useState, useRef, useCallback } from "react";
-import { Heart, Send, MessageSquare, RefreshCw } from "lucide-react";
+import { Heart, Send, MessageSquare, RefreshCw, Eye, EyeOff } from "lucide-react";
 
 const SMARTCAPTCHA_CLIENT_KEY =
   process.env.NEXT_PUBLIC_SMARTCAPTCHA_CLIENT_KEY ||
@@ -35,6 +35,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [smsLoading, setSmsLoading] = useState(false);
 
+  const [showPassword, setShowPassword] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const widgetIdRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -255,14 +256,25 @@ export default function RegisterPage() {
               onChange={(e) => setEmail(e.target.value)}
             />
 
-            <input
-              required
-              type="password"
-              placeholder="Пароль"
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none focus:border-pink-300"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <div className="relative">
+              <input
+                required
+                type={showPassword ? "text" : "password"}
+                placeholder="Пароль"
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pr-12 text-sm font-semibold outline-none focus:border-pink-300"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                tabIndex={-1}
+                aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
 
             {/* ─── Yandex SmartCaptcha ──────────────────────────── */}
             <div ref={containerRef} />

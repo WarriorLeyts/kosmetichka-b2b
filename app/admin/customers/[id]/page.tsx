@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import bcrypt from "bcryptjs";
+import PasswordInput from "@/components/PasswordInput";
 
 async function updateCustomer(formData: FormData) {
   "use server";
@@ -211,11 +212,10 @@ export default async function EditCustomerPage({
             <label className="mb-1 block text-sm font-bold">
               Новый пароль
             </label>
-            <input
+            <PasswordInput
               name="password"
-              type="password"
               placeholder="Оставь пустым, если не менять"
-              className="w-full rounded-xl border p-3"
+              className="w-full rounded-xl border p-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-pink-300"
             />
           </div>
 

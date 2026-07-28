@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import bcrypt from "bcryptjs";
+import PasswordInput from "@/components/PasswordInput";
 
 export const dynamic = "force-dynamic";
 
@@ -190,22 +191,20 @@ export default async function EditUserPage({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-600">Новый пароль</label>
-            <input
+            <PasswordInput
               name="password"
-              type="password"
               autoComplete="new-password"
               placeholder="Минимум 6 символов"
-              className="w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              className="w-full rounded-xl border px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-600">Повтор пароля</label>
-            <input
+            <PasswordInput
               name="passwordConfirm"
-              type="password"
               autoComplete="new-password"
               placeholder="Повторите пароль"
-              className="w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              className="w-full rounded-xl border px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
           </div>
         </div>
