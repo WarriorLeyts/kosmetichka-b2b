@@ -3,6 +3,7 @@ import { XMLParser } from "fast-xml-parser";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import sharp from "sharp";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -21,6 +22,28 @@ function mimeType(filePath) {
   if (ext === ".gif") return "image/gif";
   if (ext === ".webp") return "image/webp";
   return "image/jpeg";
+}
+
+// Сжать изображение на месте (если стало меньше)
+async function compressInPlace(filePath) {
+  try {
+    const ext = path.extname(filePath).toLowerCase();
+    if (![".jpg", ".jpeg", ".png", ".webp"].includes(ext)) return;
+    const input = fs.readFileSync(filePath);
+    let output;
+    if (ext === ".png") {
+      output = await sharp(input).png({ compressionLevel: 9, quality: 80 }).toBuffer();
+    } else if (ext === ".webp") {
+      output = await sharp(input).webp({ quality: 75 }).toBuffer();
+    } else {
+      output = await sharp(input).jpeg({ quality: 78, mozjpeg: true }).toBuffer();
+    }
+    if (output.length < input.length) {
+      fs.writeFileSync(filePath, output);
+    }
+  } catch {
+    // не критично, оставляем оригинал
+  }
 }
 
 async function main() {
@@ -57,6 +80,9 @@ async function main() {
       // resolveImageUrl() will prepend "/1c/" → "/1c/import_files/e5/filename.jpg"
       // The /1c/[...path] route serves from data/1c/ on the server.
       const rel = String(imgPath).replace(/\\/g, "/");
+      // Сжать картинку на месте
+      await compressInPlace(path.join(ROOT, "data", "1c", rel));
+
       await prisma.productImage.create({
         data: { productId: product.id, path: rel },
       });

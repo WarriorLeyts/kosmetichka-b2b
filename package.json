@@ -11,7 +11,8 @@
     "import:prices": "node scripts/import-prices.js",
     "import:images": "node scripts/import-images.js",
     "import:1c": "npm run import:catalog && npm run import:prices && npm run import:images",
-    "import:customers": "node scripts/import-customers.js"
+    "import:customers": "node scripts/import-customers.js",
+    "compress:images": "node scripts/compress-images.js"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
