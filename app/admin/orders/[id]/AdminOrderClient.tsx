@@ -159,6 +159,8 @@ const TRANSITIONS: Record<string, { label: string; to: string; style: string }[]
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
   assembly: [
+    { label: "💬 На консультацию", to: "consultation", style: "bg-orange-100 hover:bg-orange-200 text-orange-700" },
+    { label: "✓ К оплате", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
   consultation: [
@@ -169,6 +171,13 @@ const TRANSITIONS: Record<string, { label: string; to: string; style: string }[]
   payment: [
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
+};
+
+// Which statuses we can revert TO from a given status (must match backend)
+const BACKWARDS: Record<string, string[]> = {
+  assembly: ["pending", "approved"],
+  consultation: ["assembly"],
+  payment: ["assembly", "consultation"],
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -329,6 +338,7 @@ export default function AdminOrderClient({
   const [editItems, setEditItems] = useState<EditItem[]>([]);
   const [editError, setEditError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [discountPct, setDiscountPct] = useState("");
 
   // ── Catalog modal ──
   // mode: "order" = add to order, "chat-picker" | "chat-customer" = send product card in chat
@@ -675,6 +685,17 @@ export default function AdminOrderClient({
     setEditMode(false);
     setEditItems([]);
     setEditError("");
+    setDiscountPct("");
+  }
+
+  function applyDiscount() {
+    const pct = parseFloat(discountPct);
+    if (isNaN(pct) || pct <= 0 || pct >= 100) return;
+    const factor = 1 - pct / 100;
+    setEditItems((prev) =>
+      prev.map((i) => ({ ...i, price: Math.max(0, Math.round(i.price * factor)) }))
+    );
+    setDiscountPct("");
   }
 
   // ── Notify customer about problems ──
@@ -797,6 +818,13 @@ export default function AdminOrderClient({
 
   const transitions = TRANSITIONS[order.status] || [];
   const pipelineIndex = PIPELINE.indexOf(order.status);
+
+  // Revert: find previous status from status logs
+  const lastLog = order.statusLogs[order.statusLogs.length - 1];
+  const prevStatus = lastLog?.fromStatus ?? null;
+  const canRevert =
+    prevStatus !== null &&
+    (BACKWARDS[order.status] ?? []).includes(prevStatus);
 
   // Category tree rendering
   const topCats = categories.filter((c) => !c.parentGuid);
@@ -1028,6 +1056,15 @@ export default function AdminOrderClient({
               {changingStatus ? "..." : "📦 Собрать самому"}
             </button>
           )}
+          {canRevert && prevStatus && (
+            <button
+              onClick={() => changeStatus(prevStatus)}
+              disabled={changingStatus}
+              className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all disabled:opacity-50"
+            >
+              {changingStatus ? "..." : `↩ Вернуть: ${STATUS_LABELS[prevStatus] ?? prevStatus}`}
+            </button>
+          )}
         </div>
       )}
 
@@ -1056,7 +1093,7 @@ export default function AdminOrderClient({
           {/* Edit mode bar */}
           {!editMode ? (
             <div className="no-print mb-4 flex flex-wrap gap-2">
-              {["consultation", "assembly"].includes(order.status) && (
+              {!["cancelled", "exported"].includes(order.status) && (
                 <button
                   onClick={startEdit}
                   className="rounded-xl border px-4 py-2 text-sm font-bold hover:bg-slate-50"
@@ -1091,6 +1128,27 @@ export default function AdminOrderClient({
                   >
                     + Добавить из каталога
                   </button>
+                  {/* Percentage discount */}
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min="1"
+                      max="99"
+                      value={discountPct}
+                      onChange={(e) => setDiscountPct(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && applyDiscount()}
+                      placeholder="%"
+                      className="w-16 rounded-xl border px-2 py-2 text-center text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                    />
+                    <button
+                      onClick={applyDiscount}
+                      disabled={!discountPct || parseFloat(discountPct) <= 0}
+                      className="rounded-xl border border-purple-300 bg-purple-50 px-3 py-2 text-sm font-bold text-purple-700 hover:bg-purple-100 disabled:opacity-40 whitespace-nowrap"
+                      title="Применить процентную скидку ко всем ценам"
+                    >
+                      Скидка %
+                    </button>
+                  </div>
                   <button
                     onClick={saveEdit}
                     disabled={saving}

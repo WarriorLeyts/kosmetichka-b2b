@@ -266,11 +266,28 @@ function OrderChat({ orderId }: { orderId: number }) {
   );
 }
 
+type EditableItem = {
+  id: number;
+  productName: string;
+  quantity: number;
+  price: number;
+  imagePath?: string | null;
+  variantImageUrl?: string | null;
+  variantName?: string | null;
+  removed: boolean;
+};
+
 function OrderCard({ order: initialOrder }: { order: Order }) {
   const [order, setOrder] = useState(initialOrder);
   const [expanded, setExpanded] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState("");
+
+  // ── Inline edit (pending only) ──
+  const [editMode, setEditMode] = useState(false);
+  const [editItems, setEditItems] = useState<EditableItem[]>([]);
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const label = STATUS_LABELS[order.status] ?? order.status;
   const colorClass = STATUS_COLORS[order.status] ?? "bg-slate-100 text-slate-700";
@@ -291,6 +308,67 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
       setConfirmError("Ошибка сети");
     } finally {
       setConfirming(false);
+    }
+  }
+
+  function startEdit() {
+    setEditItems(
+      order.items.map((i) => ({
+        id: i.id,
+        productName: i.productName,
+        quantity: i.quantity,
+        price: i.price,
+        imagePath: i.imagePath ?? null,
+        variantImageUrl: i.variantImageUrl ?? null,
+        variantName: i.variantName ?? null,
+        removed: false,
+      }))
+    );
+    setEditMode(true);
+    setSaveError("");
+  }
+
+  function cancelEdit() {
+    setEditMode(false);
+    setEditItems([]);
+    setSaveError("");
+  }
+
+  async function saveEdit() {
+    const updates = editItems
+      .filter((i) => !i.removed)
+      .map((i) => ({ id: i.id, quantity: i.quantity }));
+    const removeIds = editItems.filter((i) => i.removed).map((i) => i.id);
+
+    if (updates.length === 0) {
+      setSaveError("В заказе должна остаться хотя бы одна позиция");
+      return;
+    }
+
+    setSaving(true);
+    setSaveError("");
+    try {
+      const res = await fetch(`/api/orders/${order.id}/items`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: updates, removeIds }),
+      });
+      const data = await res.json();
+      if (res.ok && data.order) {
+        setOrder((prev) => ({
+          ...prev,
+          total: data.order.total,
+          items: data.order.items,
+        }));
+        setEditMode(false);
+        setEditItems([]);
+      } else {
+        setSaveError(data.error || "Ошибка сохранения");
+      }
+    } catch {
+      setSaveError("Ошибка сети");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -343,48 +421,149 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
 
       {expanded && (
         <div className="border-t px-5 py-4">
-          <div className="flex flex-col gap-3">
-            {order.items.map((item) => {
-              // variantImageUrl already has /1c/ prefix — use directly
-              // imagePath is a raw path — needs /api/1c/ prepended
-              const imgSrc = item.variantImageUrl
-                ? (item.variantImageUrl.startsWith("http")
-                    ? item.variantImageUrl
-                    : `${IMAGES_BASE}${item.variantImageUrl}`)
-                : item.imagePath
-                ? getProductImageUrl(item.imagePath)
-                : null;
-              return (
-              <div key={item.id} className="flex items-center gap-3">
-                {imgSrc ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={imgSrc}
-                    alt={item.productName}
-                    className="h-12 w-12 rounded-lg object-contain border bg-white p-0.5"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                  />
-                ) : (
-                  <div className="h-12 w-12 rounded-lg border bg-slate-100 flex items-center justify-center text-xl">{"\u{1F9F4}"}</div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-slate-800 truncate">{item.productName}</p>
-                  {item.variantName && (
-                    <p className="text-xs font-semibold text-purple-600">🎨 {item.variantName}</p>
-                  )}
-                  {item.barcode && <p className="text-xs text-slate-400">{item.barcode}</p>}
-                </div>
-                <div className="text-right text-sm text-slate-700 shrink-0">
-                  <p>{item.quantity} {"шт."}</p>
-                  <p className="text-slate-500">{formatMoney(item.total)}</p>
+
+          {/* Edit mode UI */}
+          {editMode ? (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="font-bold text-amber-800 text-sm">Редактирование заказа</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={cancelEdit}
+                    className="rounded-xl border px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-amber-100"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    onClick={saveEdit}
+                    disabled={saving}
+                    className="rounded-xl bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {saving ? "Сохранение..." : "✓ Сохранить"}
+                  </button>
                 </div>
               </div>
-              );
-            })}
-          </div>
+              {saveError && (
+                <div className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600 border border-red-200">
+                  {saveError}
+                </div>
+              )}
+              <div className="flex flex-col gap-2">
+                {editItems.map((item, idx) => {
+                  const imgSrc = item.variantImageUrl
+                    ? (item.variantImageUrl.startsWith("http") ? item.variantImageUrl : `${IMAGES_BASE}${item.variantImageUrl}`)
+                    : item.imagePath
+                    ? getProductImageUrl(item.imagePath)
+                    : null;
+                  if (item.removed) {
+                    return (
+                      <div key={item.id} className="flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 opacity-60">
+                        <span className="flex-1 text-xs line-through text-red-600 truncate">{item.productName}</span>
+                        <button
+                          onClick={() => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, removed: false } : i))}
+                          className="text-xs text-red-600 hover:underline shrink-0"
+                        >
+                          Восстановить
+                        </button>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={item.id} className="flex items-center gap-2 rounded-xl border bg-white p-2">
+                      {imgSrc ? (
+                        <img src={imgSrc} alt={item.productName} className="h-10 w-10 rounded-lg border object-contain p-0.5 shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      ) : (
+                        <div className="h-10 w-10 rounded-lg border bg-slate-100 flex items-center justify-center text-lg shrink-0">🧴</div>
+                      )}
+                      <span className="flex-1 text-xs font-medium truncate">{item.productName}</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, quantity: Math.max(1, Number(e.target.value)) } : i))}
+                        className="w-14 rounded-lg border px-2 py-1 text-center text-sm"
+                      />
+                      <span className="text-xs text-slate-400 shrink-0">шт.</span>
+                      <span className="text-xs font-semibold text-slate-700 shrink-0 min-w-[60px] text-right">
+                        {formatMoney(item.price * item.quantity)}
+                      </span>
+                      <button
+                        onClick={() => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, removed: true } : i))}
+                        className="rounded-lg border px-2 py-1 text-xs text-red-500 hover:bg-red-50 shrink-0"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 text-right text-sm font-bold text-slate-700">
+                Итого:{" "}
+                {formatMoney(
+                  editItems.filter((i) => !i.removed).reduce((sum, i) => sum + i.price * i.quantity, 0)
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Edit button for pending orders */
+            order.status === "pending" && (
+              <div className="mb-3">
+                <button
+                  onClick={startEdit}
+                  className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 transition"
+                >
+                  ✏️ Редактировать заказ
+                </button>
+              </div>
+            )
+          )}
 
-          {order.comment && (
-            <p className="mt-3 text-sm text-slate-500 italic">{"Комментарий: "}{order.comment}</p>
+          {/* Items list (shown when not in edit mode) */}
+          {!editMode && (
+            <>
+              <div className="flex flex-col gap-3">
+                {order.items.map((item) => {
+                  // variantImageUrl already has /1c/ prefix — use directly
+                  // imagePath is a raw path — needs /api/1c/ prepended
+                  const imgSrc = item.variantImageUrl
+                    ? (item.variantImageUrl.startsWith("http")
+                        ? item.variantImageUrl
+                        : `${IMAGES_BASE}${item.variantImageUrl}`)
+                    : item.imagePath
+                    ? getProductImageUrl(item.imagePath)
+                    : null;
+                  return (
+                    <div key={item.id} className="flex items-center gap-3">
+                      {imgSrc ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={imgSrc}
+                          alt={item.productName}
+                          className="h-12 w-12 rounded-lg object-contain border bg-white p-0.5"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      ) : (
+                        <div className="h-12 w-12 rounded-lg border bg-slate-100 flex items-center justify-center text-xl">{"\u{1F9F4}"}</div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm text-slate-800 truncate">{item.productName}</p>
+                        {item.variantName && (
+                          <p className="text-xs font-semibold text-purple-600">🎨 {item.variantName}</p>
+                        )}
+                        {item.barcode && <p className="text-xs text-slate-400">{item.barcode}</p>}
+                      </div>
+                      <div className="text-right text-sm text-slate-700 shrink-0">
+                        <p>{item.quantity} {"шт."}</p>
+                        <p className="text-slate-500">{formatMoney(item.total)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {order.comment && (
+                <p className="mt-3 text-sm text-slate-500 italic">{"Комментарий: "}{order.comment}</p>
+              )}
+            </>
           )}
 
           <OrderChat orderId={order.id} />

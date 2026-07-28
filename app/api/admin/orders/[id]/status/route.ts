@@ -11,13 +11,13 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Отменён",
 };
 
-// Valid transitions
+// Valid transitions (includes backwards for revert functionality)
 const TRANSITIONS: Record<string, string[]> = {
   pending: ["assembly", "cancelled"],
   approved: ["assembly", "payment", "cancelled"], // legacy status
-  assembly: ["consultation", "payment", "cancelled"],
+  assembly: ["pending", "approved", "consultation", "payment", "cancelled"],
   consultation: ["assembly", "payment", "cancelled"],
-  payment: ["exported", "cancelled"],
+  payment: ["assembly", "consultation", "exported", "cancelled"],
   exported: [],
   cancelled: [],
 };
@@ -44,8 +44,11 @@ export async function POST(
     );
   }
 
-  // If moving back to assembly — delete existing checks so picker re-checks
-  if (toStatus === "assembly" && order.status === "consultation") {
+  // If moving back to assembly (or reverting from assembly) — delete existing checks so picker re-checks
+  const movingToEarlierStage =
+    (toStatus === "assembly") ||
+    (toStatus === "pending" || toStatus === "approved");
+  if (movingToEarlierStage) {
     const items = await prisma.orderItem.findMany({ where: { orderId: order.id } });
     await prisma.orderItemCheck.deleteMany({
       where: { orderItemId: { in: items.map((i) => i.id) } },
@@ -53,7 +56,7 @@ export async function POST(
   }
 
   // Reset customer confirmation if order moves back to a state requiring re-review
-  const resetConfirm = toStatus === "assembly" || toStatus === "consultation";
+  const resetConfirm = toStatus === "assembly" || toStatus === "consultation" || toStatus === "pending" || toStatus === "approved";
 
   const [updatedOrder] = await prisma.$transaction([
     prisma.order.update({
