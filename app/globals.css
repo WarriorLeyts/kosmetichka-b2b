@@ -753,17 +753,22 @@ color: var(--text);
 font-weight: 800;
 }
 
-/* Muted row: non-active price tiers */
+/* Muted row: non-active price tiers — visible but clearly secondary */
 .price-row-muted {
-opacity: 0.38;
+opacity: 0.55;
 }
 
-/* Active row: the tier currently applied */
+/* Active row: label + value both highlighted */
+.price-row-active span {
+color: #8b3dff;
+font-weight: 700;
+}
 .price-row-active b {
 background: var(--gradient);
 -webkit-background-clip: text;
 -webkit-text-fill-color: transparent;
-font-size: 13px;
+font-size: 14px;
+font-weight: 900;
 }
 
 .accent-price {
