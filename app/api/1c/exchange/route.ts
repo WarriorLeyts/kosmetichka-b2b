@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type") ?? "";
   const mode = searchParams.get("mode") ?? "";
+  console.log(`[exchange] GET type=${type} mode=${mode}`);
 
   // ── checkauth ────────────────────────────────────────────────────────────
   if (mode === "checkauth") {
@@ -88,6 +89,7 @@ export async function GET(request: NextRequest) {
   if (type === "sale" && mode === "query") {
     // Reuse orders route logic inline
     const { prisma } = await import("@/lib/prisma");
+    console.log(`[exchange] sale query: fetching orders with payment/approved status`);
 
     const PRICE_TYPE_LABELS: Record<string, string> = {
       wholesale: "Опт",
@@ -200,6 +202,7 @@ export async function POST(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode") ?? "";
   const type = searchParams.get("type") ?? "";
+  console.log(`[exchange] POST type=${type} mode=${mode}`);
 
   if (!checkAuth(request)) return txt("failure\nНе авторизован");
 
