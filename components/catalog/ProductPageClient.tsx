@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Heart, ShoppingCart } from "lucide-react";
+import { Bell, Heart, ShoppingCart } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
 import { useFavoriteStore } from "@/store/favoriteStore";
 import { useAuthStore } from "@/store/authStore";
+import { useWishlistStore } from "@/store/wishlistStore";
 import { ProductGallery } from "./ProductGallery";
 import { ProductCard } from "./ProductCard";
 import { TopBar } from "./TopBar";
@@ -132,6 +133,27 @@ export function ProductPageClient({
   );
 
   const customer = useAuthStore((s) => s.customer);
+
+  // ── Wishlist ──────────────────────────────────────────────────────────────
+  const fetchWishlist   = useWishlistStore((s) => s.fetchWishlist);
+  const toggleWishlist  = useWishlistStore((s) => s.toggle);
+  const isInWishlist    = useWishlistStore((s) => s.has(product.id));
+  const [wishlistToast, setWishlistToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchWishlist();
+  }, [fetchWishlist]);
+
+  async function handleWishlistToggle() {
+    const result = await toggleWishlist(product.id);
+    if (result === "unauthorized") {
+      setWishlistToast("Войдите в аккаунт, чтобы добавить в лист ожидания");
+      setTimeout(() => setWishlistToast(null), 3500);
+    } else if (result === "added") {
+      setWishlistToast("Уведомим вас, когда товар появится в наличии");
+      setTimeout(() => setWishlistToast(null), 3000);
+    }
+  }
 
   const stock      = getStockLabel(product.stock);
   const isOutOfStock = (product.stock ?? 0) <= 0;
@@ -309,6 +331,21 @@ export function ProductPageClient({
                     </button>
                   )}
 
+                  {/* Bell button — only for out-of-stock */}
+                  {isOutOfStock && (
+                    <button
+                      onClick={handleWishlistToggle}
+                      title={isInWishlist ? "Убрать из листа ожидания" : "Уведомить о появлении"}
+                      className={`flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border transition ${
+                        isInWishlist
+                          ? "border-indigo-200 bg-indigo-50 text-indigo-600"
+                          : "border-slate-200 bg-white text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
+                      }`}
+                    >
+                      <Bell size={18} fill={isInWishlist ? "currentColor" : "none"} />
+                    </button>
+                  )}
+
                   <button
                     onClick={() => toggleFavorite(product)}
                     className={`flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border transition ${
@@ -320,6 +357,13 @@ export function ProductPageClient({
                     <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
                   </button>
                 </div>
+
+                {/* Wishlist toast */}
+                {wishlistToast && (
+                  <div className="mt-3 rounded-xl bg-indigo-50 border border-indigo-100 px-4 py-2.5 text-sm font-semibold text-indigo-700">
+                    🔔 {wishlistToast}
+                  </div>
+                )}
               </div>
 
               {/* Quick characteristics */}
