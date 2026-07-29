@@ -634,6 +634,7 @@ padding: 13px;
 min-height: 300px;
 display: flex;
 flex-direction: column;
+box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -679,6 +680,7 @@ font-weight: 700;
 height: 36px;
 margin: 0 0 6px;
 font-size: 12.5px;
+font-weight: 700;
 line-height: 1.2;
 
 overflow: hidden;
@@ -783,8 +785,8 @@ background: var(--gradient);
 }
 
 .card-actions {
-display: grid;
-grid-template-columns: 1fr 40px;
+display: flex;
+align-items: center;
 gap: 8px;
 
 margin-top: auto;
@@ -794,12 +796,15 @@ padding-top: 8px;
 .cart-button {
 height: 38px;
 font-size: 12px;
+flex: 1;
 }
 
 .favorite-button {
-height: 38px;
+height: 42px;
+width: 42px;
+flex-shrink: 0;
 border: 1px solid var(--border);
-border-radius: 12px;
+border-radius: 14px;
 background: white;
 color: var(--pink);
 cursor: pointer;

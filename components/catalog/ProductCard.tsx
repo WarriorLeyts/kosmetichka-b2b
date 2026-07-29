@@ -210,7 +210,17 @@ export function ProductCard({ product, addToCart }: Props) {
 
         <div className="card-actions">
           {isOutOfStock ? (
-            <button className="cart-button" disabled style={{ opacity: 0.45, cursor: "not-allowed" }}>
+            <button
+              className="cart-button"
+              disabled
+              style={{
+                background: "#e9eef4",
+                color: "#94a3b8",
+                boxShadow: "none",
+                cursor: "not-allowed",
+                flex: 1,
+              }}
+            >
               <ShoppingCart size={15} />
               Нет в наличии
             </button>
@@ -260,7 +270,7 @@ export function ProductCard({ product, addToCart }: Props) {
                 title={isInWishlist ? "В листе ожидания" : "Уведомить о появлении"}
                 onClick={handleWishlistToggle}
               >
-                <Bell size={16} fill={isInWishlist ? "currentColor" : "none"} />
+                <Bell size={20} fill={isInWishlist ? "currentColor" : "none"} />
               </button>
             )}
             <button
@@ -270,7 +280,7 @@ export function ProductCard({ product, addToCart }: Props) {
                 toggleFavorite(product);
               }}
             >
-              <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
+              <Heart size={20} fill={isFavorite ? "currentColor" : "none"} />
             </button>
           </div>
         </div>
