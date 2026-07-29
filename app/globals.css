@@ -74,6 +74,15 @@ input,
 select,
 textarea {
 font-family: inherit;
+color: #1e293b;
+}
+
+/* Ensure placeholder text is always visible on all browsers incl. Android */
+input::placeholder,
+textarea::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+  -webkit-text-fill-color: #94a3b8;
 }
 
 /* Prevent iOS Safari from auto-zooming when tapping any input/textarea/select.
