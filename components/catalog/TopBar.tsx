@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, User, Heart, ShoppingCart, Menu, ClipboardList, X, ChevronRight } from "lucide-react";
+import { Search, User, Heart, ShoppingCart, Menu, ClipboardList, X, ChevronRight, Bell } from "lucide-react";
 import { effectivePriceType, rawCartTotal } from "@/lib/pricing";
 import { useCartStore } from "@/store/cartStore";
 import { useFavoriteStore } from "@/store/favoriteStore";
@@ -231,6 +231,10 @@ export function TopBar({
                     <ClipboardList size={16} />
                     Мои заказы
                     {totalBadge > 0 && <span className="topbar-menu-badge">{totalBadge}</span>}
+                  </Link>
+                  <Link href="/wishlist" onClick={() => setMenuOpen(false)} className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-500">
+                    <Bell size={16} />
+                    Лист ожидания
                   </Link>
                   <button onClick={logout} className="flex w-full cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-red-500 hover:bg-red-50">
                     Выйти
