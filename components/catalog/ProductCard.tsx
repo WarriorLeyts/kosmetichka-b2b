@@ -251,27 +251,28 @@ export function ProductCard({ product, addToCart }: Props) {
             </button>
           )}
 
-          {/* Колокольчик — только для товаров без наличия */}
-          {isOutOfStock && (
+          {/* Иконки: колокольчик (только без наличия) + избранное */}
+          <div className="flex flex-shrink-0 items-center gap-1.5">
+            {isOutOfStock && (
+              <button
+                className={`favorite-button ${isInWishlist ? "active" : ""}`}
+                style={isInWishlist ? { borderColor: "#c7d2fe", background: "#eef2ff", color: "#4f46e5" } : { color: "#94a3b8" }}
+                title={isInWishlist ? "В листе ожидания" : "Уведомить о появлении"}
+                onClick={handleWishlistToggle}
+              >
+                <Bell size={16} fill={isInWishlist ? "currentColor" : "none"} />
+              </button>
+            )}
             <button
-              className={`favorite-button ${isInWishlist ? "active" : ""}`}
-              style={isInWishlist ? { borderColor: "#c7d2fe", background: "#eef2ff", color: "#4f46e5" } : { color: "#94a3b8" }}
-              title={isInWishlist ? "В листе ожидания" : "Уведомить о появлении"}
-              onClick={handleWishlistToggle}
+              className={`favorite-button ${isFavorite ? "active" : ""}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFavorite(product);
+              }}
             >
-              <Bell size={16} fill={isInWishlist ? "currentColor" : "none"} />
+              <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
             </button>
-          )}
-
-          <button
-            className={`favorite-button ${isFavorite ? "active" : ""}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleFavorite(product);
-            }}
-          >
-            <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
-          </button>
+          </div>
         </div>
       </article>
 
