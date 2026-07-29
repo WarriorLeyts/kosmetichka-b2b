@@ -18,7 +18,7 @@ type WishlistProduct = {
 type WishlistItem = {
   id: number;
   productId: number;
-  createdAt: string;
+  createdAt: Date | string;
   product: WishlistProduct;
 };
 
