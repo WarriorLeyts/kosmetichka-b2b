@@ -198,7 +198,7 @@ export function ProductPageClient({
           <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-400">
             <button
               onClick={() => router.back()}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 shadow-sm hover:border-pink-200 hover:bg-pink-50 hover:text-pink-500 transition"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 px-4 py-2 text-sm font-black text-white shadow-md transition hover:opacity-90"
             >
               ← Назад в каталог
             </button>
