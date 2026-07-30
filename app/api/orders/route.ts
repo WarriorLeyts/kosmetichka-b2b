@@ -4,6 +4,16 @@ import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 import { sendMail } from "@/lib/mail";
 
+/** Escape user-supplied strings before embedding in HTML emails */
+function escHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 export async function POST(request: Request) {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
@@ -58,7 +68,11 @@ export async function POST(request: Request) {
         (p) => p.priceType === "retail"
       );
 
-      const price = Math.round(matchedPrice?.price ?? fallbackPrice?.price ?? 0);
+      const rawPrice = matchedPrice?.price ?? fallbackPrice?.price;
+      if (!rawPrice || rawPrice <= 0) {
+        throw new Error(`Цена для товара «${product.name}» не найдена. Обратитесь к менеджеру.`);
+      }
+      const price = Math.round(rawPrice);
       const quantity = Number(item.quantity) || 0;
 
       return {
@@ -95,7 +109,11 @@ export async function POST(request: Request) {
   // Уведомление администратору о новом заказе
   const adminEmail = process.env.ADMIN_EMAIL;
   if (adminEmail) {
-    const clientName = customer.companyName || customer.name || customer.phone || `#${customer.id}`;
+    const clientName = escHtml(
+      customer.companyName || customer.name || customer.phone || `#${customer.id}`
+    );
+    const clientPhone = customer.phone ? escHtml(customer.phone) : null;
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://kosmetichka-opt.ru";
     sendMail({
       to: adminEmail,
       subject: `Новый заказ #${order.id} — ${clientName}`,
@@ -103,9 +121,9 @@ export async function POST(request: Request) {
         <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#fff;">
           <h2 style="margin:0 0 16px;font-size:20px;color:#1e293b;">🛍️ Новый заказ #${order.id}</h2>
           <p style="margin:0 0 8px;color:#475569;"><b>Клиент:</b> ${clientName}</p>
-          ${customer.phone ? `<p style="margin:0 0 8px;color:#475569;"><b>Телефон:</b> ${customer.phone}</p>` : ""}
+          ${clientPhone ? `<p style="margin:0 0 8px;color:#475569;"><b>Телефон:</b> ${clientPhone}</p>` : ""}
           <p style="margin:0 0 24px;color:#475569;"><b>Сумма:</b> ${order.total} ₽</p>
-          <a href="${process.env.NEXT_PUBLIC_BASE_URL || "https://kosmetichka-opt.ru"}/admin/orders/${order.id}"
+          <a href="${baseUrl}/admin/orders/${order.id}"
              style="display:inline-block;padding:12px 28px;background:#6366f1;color:#fff;font-weight:700;text-decoration:none;border-radius:12px;">
             Открыть заказ
           </a>

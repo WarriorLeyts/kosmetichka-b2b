@@ -4,23 +4,39 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { createToken } from "@/lib/auth";
 
-// In-memory rate limiter: max 10 attempts per IP per 15 minutes
-const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const MAX_ATTEMPTS = 10;
+const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = loginAttempts.get(ip);
-  if (!entry || entry.resetAt < now) {
-    loginAttempts.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
+/**
+ * DB-based rate limiter — survives server restarts and multi-instance deploys.
+ * Returns false if the IP has exceeded the attempt limit within the window.
+ */
+async function checkRateLimit(ip: string): Promise<boolean> {
+  const now = new Date();
+
+  const existing = await prisma.loginAttempt.findUnique({ where: { ip } });
+
+  if (!existing || existing.resetAt < now) {
+    // First attempt or window expired — start a fresh window
+    await prisma.loginAttempt.upsert({
+      where: { ip },
+      update: { count: 1, resetAt: new Date(now.getTime() + WINDOW_MS) },
+      create: { ip, count: 1, resetAt: new Date(now.getTime() + WINDOW_MS) },
+    });
     return true;
   }
-  if (entry.count >= 10) return false;
-  entry.count++;
+
+  if (existing.count >= MAX_ATTEMPTS) return false;
+
+  await prisma.loginAttempt.update({
+    where: { ip },
+    data: { count: { increment: 1 } },
+  });
   return true;
 }
 
-function clearAttempts(ip: string) {
-  loginAttempts.delete(ip);
+async function clearAttempts(ip: string) {
+  await prisma.loginAttempt.deleteMany({ where: { ip } }).catch(() => {});
 }
 
 export async function POST(request: Request) {
@@ -29,7 +45,7 @@ export async function POST(request: Request) {
     request.headers.get("x-real-ip") ||
     "unknown";
 
-  if (!checkRateLimit(ip)) {
+  if (!(await checkRateLimit(ip))) {
     return NextResponse.json(
       { error: "Слишком много попыток входа. Подождите 15 минут." },
       { status: 429 }
@@ -77,7 +93,7 @@ export async function POST(request: Request) {
     );
   }
 
-  clearAttempts(ip); // успешный вход — сбрасываем счётчик
+  await clearAttempts(ip); // успешный вход — сбрасываем счётчик
 
 const token = await createToken({
   id: customer.id,

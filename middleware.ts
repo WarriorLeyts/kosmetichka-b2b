@@ -4,14 +4,17 @@ import { jwtVerify } from "jose";
 function resolveJwtSecret(): string {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
 
-  if (process.env.NODE_ENV === "production") {
+  const isDeployed =
+    process.env.NODE_ENV === "production" || !!process.env.NEXT_PUBLIC_SITE_URL;
+
+  if (isDeployed) {
     throw new Error(
-      "JWT_SECRET is not set. Refusing to start with an insecure default."
+      "JWT_SECRET is not set. Add JWT_SECRET to your environment variables before deploying."
     );
   }
 
   console.warn(
-    "[middleware] JWT_SECRET is not set in .env — using a fixed dev-only secret. Set JWT_SECRET before deploying to production."
+    "[middleware] JWT_SECRET is not set in .env — using a dev-only fallback. Set JWT_SECRET before deploying to production."
   );
 
   return "dev-secret-kosmetichka-change-in-production";
@@ -63,7 +66,7 @@ export async function middleware(request: NextRequest) {
 
   // --- Customer routes: require auth_token ---
   // /catalog is intentionally public — guests can browse with retail prices
-  const customerRoutes = ["/orders", "/profile"];
+  const customerRoutes = ["/orders", "/profile", "/wishlist"];
   const isCustomerRoute = customerRoutes.some(
     (r) => pathname === r || pathname.startsWith(r + "/")
   );
@@ -84,5 +87,13 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/picker/:path*", "/orders/:path*", "/orders", "/profile"],
+  matcher: [
+    "/admin/:path*",
+    "/picker/:path*",
+    "/orders/:path*",
+    "/orders",
+    "/profile",
+    "/wishlist",
+    "/wishlist/:path*",
+  ],
 };
