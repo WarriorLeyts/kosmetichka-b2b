@@ -22,10 +22,9 @@ type Variant = { id: number; imageUrl: string; name: string };
 type Props = {
   product: any;
   addToCart: (product: any) => void;
-  onProductClick?: (product: any) => void;
 };
 
-export function ProductCard({ product, addToCart, onProductClick }: Props) {
+export function ProductCard({ product, addToCart }: Props) {
   const imagePath = product.images?.[0]?.path
     ? resolveImageUrl(product.images[0].path)
     : null;
@@ -65,14 +64,13 @@ export function ProductCard({ product, addToCart, onProductClick }: Props) {
   const [zoomedImg, setZoomedImg] = useState<string | null>(null);
 
   function handleCardClick() {
-    if (onProductClick) {
-      // Open quick view — instant, no navigation
-      onProductClick(product);
-      return;
-    }
-    // Fallback: navigate to product page (save scroll position first)
     try { sessionStorage.setItem("catalog_scroll", String(window.scrollY)); } catch {}
     router.push(`/product/${product.id}`);
+  }
+
+  // Prefetch product page on hover so it loads instantly on click
+  function handleMouseEnter() {
+    router.prefetch(`/product/${product.id}`);
   }
 
   async function handleAddToCart(e: React.MouseEvent) {
@@ -131,6 +129,7 @@ export function ProductCard({ product, addToCart, onProductClick }: Props) {
       <article
         className="product-card cursor-pointer"
         onClick={handleCardClick}
+        onMouseEnter={handleMouseEnter}
       >
         <div className="product-image-box">
           <SafeImage src={imagePath} alt={product.name} placeholderIconSize={18} />
