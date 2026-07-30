@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ProductPageClient } from "@/components/catalog/ProductPageClient";
@@ -10,18 +11,31 @@ type Props = {
   }>;
 };
 
+/**
+ * Cached per-request DB fetch — React deduplicates identical calls within
+ * the same render pass, so generateMetadata and the page component share
+ * one DB round-trip instead of two.
+ */
+const getProduct = cache(async (id: number) => {
+  return prisma.product.findUnique({
+    where: { id },
+    include: {
+      category: true,
+      brand: true,
+      images: true,
+      prices: true,
+      variants: {
+        include: { image: true },
+        orderBy: { sortOrder: "asc" },
+      },
+    },
+  });
+});
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
 
-  const product = await prisma.product.findUnique({
-    where: { id: Number(id) },
-    select: {
-      name: true,
-      description: true,
-      images: { take: 1 },
-      brand: { select: { name: true } },
-    },
-  });
+  const product = await getProduct(Number(id));
 
   if (!product) return {};
 
@@ -52,19 +66,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ProductPage({ params }: Props) {
   const { id } = await params;
 
-  const product = await prisma.product.findUnique({
-    where: { id: Number(id) },
-    include: {
-      category: true,
-      brand: true,
-      images: true,
-      prices: true,
-      variants: {
-        include: { image: true },
-        orderBy: { sortOrder: "asc" },
-      },
-    },
-  });
+  // getProduct is memoised by React.cache — no second DB hit if generateMetadata ran first
+  const product = await getProduct(Number(id));
 
   if (!product) {
     notFound();

@@ -15,6 +15,8 @@ type CartNotification = {
   image: string | null;
 };
 
+type VariantEntry = { id: number; name: string; imageUrl: string };
+
 type CartStore = {
   cart: CartItem[];
   isCartOpen: boolean;
@@ -26,7 +28,9 @@ type CartStore = {
   clearNotification: () => void;
 
   addToCart: (product: any) => void;
-  addToCartWithVariant: (product: any, variant: { id: number; name: string; imageUrl: string }) => void;
+  addToCartWithVariant: (product: any, variant: VariantEntry) => void;
+  /** Adds multiple variant quantities in a single Zustand set() — no re-render per item */
+  addVariantsBatch: (product: any, entries: Array<{ variant: VariantEntry; quantity: number }>) => void;
   increaseQuantity: (cartKey: string) => void;
   decreaseQuantity: (cartKey: string) => void;
   removeFromCart: (cartKey: string) => void;
@@ -111,6 +115,43 @@ export const useCartStore = create<CartStore>()(
           ],
           notification,
         });
+      },
+
+      addVariantsBatch: (product, entries) => {
+        const cart = [...get().cart];
+
+        for (const { variant, quantity } of entries) {
+          const key = `${product.id}_v${variant.id}`;
+          const idx = cart.findIndex((item) => item.cartKey === key);
+
+          if (idx >= 0) {
+            cart[idx] = { ...cart[idx], quantity: cart[idx].quantity + quantity };
+          } else {
+            cart.push({
+              ...product,
+              cartKey: key,
+              quantity,
+              variantId: variant.id,
+              variantName: variant.name,
+              variantImageUrl: variant.imageUrl,
+            });
+          }
+        }
+
+        const totalQty = entries.reduce((s, e) => s + e.quantity, 0);
+        const first = entries[0]?.variant;
+        const notification: CartNotification = {
+          id: Date.now(),
+          message:
+            entries.length === 1
+              ? `${product.name} (${first?.name}) ×${entries[0].quantity} — в корзине`
+              : `${product.name}: ${totalQty} шт. добавлено в корзину`,
+          image:
+            first?.imageUrl ||
+            (product.images?.[0]?.path ? "/1c/" + product.images[0].path : null),
+        };
+
+        set({ cart, notification });
       },
 
       increaseQuantity: (cartKey) => {

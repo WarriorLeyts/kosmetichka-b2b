@@ -91,11 +91,11 @@ export async function GET(request: Request) {
 
   if (!needsPriceJoin) {
     const orderBy =
-      sort === "name" || quick.includes("new")
-        ? sort === "name"
-          ? { name: "asc" as const }
-          : { createdAt: "desc" as const }
-        : { name: "asc" as const };
+      sort === "name"
+        ? { name: "asc" as const }
+        : quick.includes("new")
+        ? { createdAt: "desc" as const }
+        : { updatedAt: "desc" as const }; // popularity: recently restocked/updated first
 
     const [products, total] = await Promise.all([
       prisma.product.findMany({

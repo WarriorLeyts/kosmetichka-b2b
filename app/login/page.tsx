@@ -62,8 +62,9 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-4">
           <input
             type="text"
+            inputMode="email"
             placeholder="Email или телефон"
-            autoComplete="username"
+            autoComplete="email"
             className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none focus:border-pink-300"
             value={email}
             onChange={(e) => setEmail(e.target.value)}

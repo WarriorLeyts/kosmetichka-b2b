@@ -283,6 +283,7 @@ model SmsCode {
   createdAt DateTime @default(now())
 
   @@index([phone])
+  @@index([expiresAt])
   @@index([phone, expiresAt])
 }
 
