@@ -64,6 +64,8 @@ model Product {
   images   ProductImage[]
   variants ProductVariant[]
 
+  wishlistItems WishlistItem[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -121,7 +123,8 @@ model Customer {
 
   role String @default("customer")
 
-  orders Order[]
+  orders        Order[]
+  wishlistItems WishlistItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -281,6 +284,32 @@ model SmsCode {
 
   @@index([phone])
   @@index([phone, expiresAt])
+}
+
+model WishlistItem {
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  productId  Int
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  notified   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([customerId, productId])
+  @@index([customerId])
+  @@index([productId])
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([token])
 }
 
 // Persistent login rate-limiter — survives server restarts and multi-instance deploys
