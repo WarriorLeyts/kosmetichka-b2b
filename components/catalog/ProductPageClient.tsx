@@ -338,8 +338,8 @@ export function ProductPageClient({
                     onClick={() => { toggleFavorite(product); setFavAnim(true); }}
                     className={`flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border transition ${
                       isFavorite
-                        ? "border-pink-200 bg-pink-50 text-pink-500"
-                        : "border-slate-200 bg-white text-pink-400 hover:bg-pink-50"
+                        ? "border-pink-300 bg-pink-50 text-pink-500"
+                        : "border-pink-200 bg-white text-pink-500 hover:bg-pink-50"
                     }`}
                   >
                     <Heart
