@@ -200,6 +200,7 @@ export function ProductPageClient({
             <button
               onClick={() => router.back()}
               className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 px-4 py-2 text-sm font-black text-white shadow-md transition hover:opacity-90"
+              style={{ color: "#fff" }}
             >
               ← Назад в каталог
             </button>
@@ -318,6 +319,7 @@ export function ProductPageClient({
                       <button
                         onClick={openCart}
                         className="flex h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 text-sm font-black text-white shadow-md transition hover:opacity-90"
+                        style={{ color: "#fff" }}
                       >
                         <ShoppingCart size={16} />
                         В корзине
@@ -328,6 +330,7 @@ export function ProductPageClient({
                       onClick={handleAddToCart}
                       disabled={loadingVariants}
                       className="flex h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 text-sm font-black text-white shadow-md transition hover:opacity-90 disabled:opacity-70"
+                      style={{ color: "#fff" }}
                     >
                       <ShoppingCart size={16} />
                       {loadingVariants ? "…" : "В корзину"}
