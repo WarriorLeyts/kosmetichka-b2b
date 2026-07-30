@@ -1,73 +1,61 @@
 import { create } from "zustand";
 
 type WishlistStore = {
-  productIds: Set<number>;
-  initialized: boolean;
-  fetchWishlist: () => Promise<void>;
-  toggle: (productId: number) => Promise<"added" | "removed" | "unauthorized">;
-  has: (productId: number) => boolean;
+  productIds: number[];
+  loaded: boolean;
+  /** Load wishlist from server (call once after auth) */
+  load: () => Promise<void>;
+  /** Toggle wishlist membership for a product; returns true if added */
+  toggle: (productId: number) => Promise<boolean>;
+  isInWishlist: (productId: number) => boolean;
+  clear: () => void;
 };
 
 export const useWishlistStore = create<WishlistStore>((set, get) => ({
-  productIds: new Set(),
-  initialized: false,
+  productIds: [],
+  loaded: false,
 
-  fetchWishlist: async () => {
-    if (get().initialized) return;
+  load: async () => {
     try {
       const res = await fetch("/api/wishlist");
-      if (res.ok) {
-        const data = await res.json();
-        set({ productIds: new Set(data.productIds), initialized: true });
-      }
-    } catch {
-      // silent
-    }
+      if (!res.ok) return;
+      const data = await res.json();
+      set({ productIds: data.productIds ?? [], loaded: true });
+    } catch {}
   },
 
   toggle: async (productId: number) => {
-    const { productIds } = get();
-    const isIn = productIds.has(productId);
+    const current = get().productIds;
+    const inList = current.includes(productId);
 
     // Optimistic update
-    const next = new Set(productIds);
-    if (isIn) {
-      next.delete(productId);
-    } else {
-      next.add(productId);
-    }
-    set({ productIds: next });
+    set({
+      productIds: inList
+        ? current.filter((id) => id !== productId)
+        : [...current, productId],
+    });
 
-    if (isIn) {
-      const res = await fetch(`/api/wishlist?productId=${productId}`, { method: "DELETE" });
-      if (!res.ok) {
-        // rollback
-        const rb = new Set(get().productIds);
-        rb.add(productId);
-        set({ productIds: rb });
-      }
-      return "removed";
-    } else {
+    try {
       const res = await fetch("/api/wishlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productId }),
       });
-      if (res.status === 401) {
-        // rollback + signal unauthorized
-        const rb = new Set(get().productIds);
-        rb.delete(productId);
-        set({ productIds: rb });
-        return "unauthorized";
-      }
       if (!res.ok) {
-        const rb = new Set(get().productIds);
-        rb.delete(productId);
-        set({ productIds: rb });
+        // Roll back
+        set({ productIds: current });
+        return inList;
       }
-      return "added";
+      const data = await res.json();
+      return data.added as boolean;
+    } catch {
+      // Roll back
+      set({ productIds: current });
+      return inList;
     }
   },
 
-  has: (productId: number) => get().productIds.has(productId),
+  isInWishlist: (productId: number) => get().productIds.includes(productId),
+
+  clear: () => set({ productIds: [], loaded: false }),
 }));

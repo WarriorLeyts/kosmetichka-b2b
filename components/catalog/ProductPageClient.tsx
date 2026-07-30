@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Heart, ShoppingCart } from "lucide-react";
+import { Bell, Heart, ShoppingCart } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
 import { useFavoriteStore } from "@/store/favoriteStore";
 import { useAuthStore } from "@/store/authStore";
@@ -11,6 +11,7 @@ import { ProductCard } from "./ProductCard";
 import { TopBar } from "./TopBar";
 import { getStockLabel } from "@/lib/utils";
 import { resolveCustomerPriceType, priceFor, priceTypeLabel } from "@/lib/pricing";
+import { useWishlistStore } from "@/store/wishlistStore";
 
 type Variant = { id: number; imageUrl: string; name: string };
 
@@ -133,6 +134,8 @@ export function ProductPageClient({
   );
 
   const customer = useAuthStore((s) => s.customer);
+  const isInWishlist = useWishlistStore((s) => s.isInWishlist(product.id));
+  const toggleWishlist = useWishlistStore((s) => s.toggle);
 
   const stock      = getStockLabel(product.stock);
   const isOutOfStock = (product.stock ?? 0) <= 0;
@@ -269,13 +272,28 @@ export function ProductPageClient({
                 {/* Stepper / cart buttons */}
                 <div className="mt-5 flex gap-2">
                   {isOutOfStock ? (
-                    <button
-                      disabled
-                      className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-200 text-sm font-black text-slate-400 cursor-not-allowed"
-                    >
-                      <ShoppingCart size={16} />
-                      Нет в наличии
-                    </button>
+                    <>
+                      <button
+                        disabled
+                        className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-200 text-sm font-black text-slate-400 cursor-not-allowed"
+                      >
+                        <ShoppingCart size={16} />
+                        Нет в наличии
+                      </button>
+                      {customer && (
+                        <button
+                          onClick={() => toggleWishlist(product.id)}
+                          title={isInWishlist ? "Убрать из листа ожидания" : "Уведомить о наличии"}
+                          className={`flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border transition ${
+                            isInWishlist
+                              ? "border-indigo-200 bg-indigo-50 text-indigo-500"
+                              : "border-slate-200 bg-white text-slate-400 hover:bg-indigo-50 hover:text-indigo-500"
+                          }`}
+                        >
+                          <Bell size={18} fill={isInWishlist ? "currentColor" : "none"} />
+                        </button>
+                      )}
+                    </>
                   ) : cartQty > 0 ? (
                     <>
                       <div className="flex items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 h-12">

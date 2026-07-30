@@ -1,8 +1,9 @@
 "use client";
 
-import { Heart, ShoppingCart } from "lucide-react";
+import { Bell, Heart, ShoppingCart } from "lucide-react";
 import { useFavoriteStore } from "@/store/favoriteStore";
 import { useAuthStore } from "@/store/authStore";
+import { useWishlistStore } from "@/store/wishlistStore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SafeImage } from "./SafeImage";
@@ -41,6 +42,8 @@ export function ProductCard({ product, addToCart }: Props) {
   );
   const router = useRouter();
   const customer = useAuthStore((state) => state.customer);
+  const isInWishlist = useWishlistStore((s) => s.isInWishlist(product.id));
+  const toggleWishlist = useWishlistStore((s) => s.toggle);
 
   const cartItems = useCartStore((s) => s.cart);
   const stock = getStockLabel(product.stock);
@@ -197,10 +200,25 @@ export function ProductCard({ product, addToCart }: Props) {
 
         <div className="card-actions">
           {isOutOfStock ? (
-            <button className="cart-button" disabled style={{ opacity: 0.45, cursor: "not-allowed" }}>
-              <ShoppingCart size={15} />
-              Нет в наличии
-            </button>
+            <div className="flex flex-1 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+              <button className="cart-button flex-1" disabled style={{ opacity: 0.45, cursor: "not-allowed" }}>
+                <ShoppingCart size={15} />
+                Нет в наличии
+              </button>
+              {customer && (
+                <button
+                  title={isInWishlist ? "Убрать из листа ожидания" : "Уведомить о наличии"}
+                  onClick={(e) => { e.stopPropagation(); toggleWishlist(product.id); }}
+                  className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border transition ${
+                    isInWishlist
+                      ? "border-indigo-200 bg-indigo-50 text-indigo-500"
+                      : "border-slate-200 bg-white text-slate-400 hover:bg-indigo-50 hover:text-indigo-500"
+                  }`}
+                >
+                  <Bell size={15} fill={isInWishlist ? "currentColor" : "none"} />
+                </button>
+              )}
+            </div>
           ) : cartQty > 0 ? (
             <div className="flex flex-1 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white">

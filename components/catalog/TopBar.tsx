@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useOrdersNotifStore } from "@/store/ordersNotifStore";
+import { useWishlistStore } from "@/store/wishlistStore";
 
 type Category = {
   id: number;
@@ -48,8 +49,17 @@ export function TopBar({
   const pendingCount = useOrdersNotifStore((s) => s.pendingCount);
   const newMessageOrderIds = useOrdersNotifStore((s) => s.newMessageOrderIds);
   const totalBadge = pendingCount + newMessageOrderIds.length;
+  const loadWishlist = useWishlistStore((s) => s.load);
+  const wishlistLoaded = useWishlistStore((s) => s.loaded);
 
   useEffect(() => { fetchCustomer(); }, [fetchCustomer]);
+
+  // Load wishlist IDs once the customer is known
+  useEffect(() => {
+    if (customer && !wishlistLoaded) {
+      loadWishlist();
+    }
+  }, [customer, wishlistLoaded, loadWishlist]);
 
   // Account dropdown
   const [menuOpen, setMenuOpen] = useState(false);

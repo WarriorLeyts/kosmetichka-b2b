@@ -59,8 +59,12 @@ export function CatalogClient({
       if (savedScroll && savedState) {
         const state = JSON.parse(savedState);
 
-        // Mark as restored so the filter-change effect doesn't overwrite
-        isRestored.current = true;
+        // Only skip re-fetch if the cached state looks consistent
+        // (products present AND total > 0). If total=0 with products it means
+        // the cache was saved during a broken state — do a fresh load instead.
+        if ((state.products?.length ?? 0) > 0 && (state.total ?? 0) > 0) {
+          isRestored.current = true;
+        }
 
         setProducts(state.products ?? []);
         setTotal(state.total ?? 0);
