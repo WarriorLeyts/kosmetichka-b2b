@@ -22,9 +22,10 @@ type Variant = { id: number; imageUrl: string; name: string };
 type Props = {
   product: any;
   addToCart: (product: any) => void;
+  onProductClick?: (product: any) => void;
 };
 
-export function ProductCard({ product, addToCart }: Props) {
+export function ProductCard({ product, addToCart, onProductClick }: Props) {
   const imagePath = product.images?.[0]?.path
     ? resolveImageUrl(product.images[0].path)
     : null;
@@ -64,7 +65,12 @@ export function ProductCard({ product, addToCart }: Props) {
   const [zoomedImg, setZoomedImg] = useState<string | null>(null);
 
   function handleCardClick() {
-    // Save current scroll so catalog restores position on back-navigation
+    if (onProductClick) {
+      // Open quick view — instant, no navigation
+      onProductClick(product);
+      return;
+    }
+    // Fallback: navigate to product page (save scroll position first)
     try { sessionStorage.setItem("catalog_scroll", String(window.scrollY)); } catch {}
     router.push(`/product/${product.id}`);
   }

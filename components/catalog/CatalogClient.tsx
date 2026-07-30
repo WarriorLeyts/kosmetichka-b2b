@@ -7,6 +7,7 @@ import { TopBar } from "./TopBar";
 import { CatalogSidebar } from "./CatalogSidebar";
 import { CatalogHeader } from "./CatalogHeader";
 import { ProductGrid } from "./ProductGrid";
+import { ProductQuickView } from "./ProductQuickView";
 import { useCartStore } from "@/store/cartStore";
 
 function getDescendantGuids(categories: any[], parentGuid: string): string[] {
@@ -43,6 +44,7 @@ export function CatalogClient({
   const [loadingProducts, setLoadingProducts] = useState(false);
 
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [quickViewProduct, setQuickViewProduct] = useState<any | null>(null);
 
   const addToCart = useCartStore((state) => state.addToCart);
 
@@ -276,7 +278,11 @@ export function CatalogClient({
           <CatalogHeader total={total} sort={sort} setSort={setSort} />
 
           <div className="relative">
-            <ProductGrid products={products} addToCart={addToCart} />
+            <ProductGrid
+              products={products}
+              addToCart={addToCart}
+              onProductClick={(p) => setQuickViewProduct(p)}
+            />
           </div>
 
           {loadingProducts && products.length === 0 && (
@@ -299,5 +305,10 @@ export function CatalogClient({
         </section>
       </div>
     </main>
+
+    <ProductQuickView
+      product={quickViewProduct}
+      onClose={() => setQuickViewProduct(null)}
+    />
   );
 }
