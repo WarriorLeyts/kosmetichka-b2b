@@ -198,15 +198,10 @@ export function ProductPageClient({
           <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-400">
             <button
               onClick={() => router.back()}
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-100 hover:text-pink-500 transition"
-              title="Вернуться в каталог"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600 shadow-sm hover:border-pink-200 hover:bg-pink-50 hover:text-pink-500 transition"
             >
-              ← Назад
+              ← Назад в каталог
             </button>
-            <span className="text-slate-300">|</span>
-            <Link href="/" className="hover:text-pink-500">Главная</Link>
-            <span>/</span>
-            <Link href="/catalog" className="hover:text-pink-500">Каталог</Link>
             {product.brand?.name && (
               <>
                 <span>/</span>
