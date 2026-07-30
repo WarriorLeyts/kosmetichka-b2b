@@ -115,18 +115,20 @@ export async function POST(request: Request) {
   // Уведомление покупателю о принятом заказе
   if (customer.email) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://kosmetichka-opt.ru";
-    const itemsHtml = order.items
-      ? (await prisma.orderItem.findMany({ where: { orderId: order.id }, orderBy: { id: "asc" } }))
-          .map(
-            (it: any) =>
-              `<tr>
-                <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;">${escHtml(it.productName)}${it.variantName ? ` <span style="color:#6366f1;">(${escHtml(it.variantName)})</span>` : ""}</td>
-                <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.quantity}</td>
-                <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">${it.total.toLocaleString("ru-RU")} ₽</td>
-              </tr>`
-          )
-          .join("")
-      : "";
+    const orderItems = await prisma.orderItem.findMany({
+      where: { orderId: order.id },
+      orderBy: { id: "asc" },
+    });
+    const itemsHtml = orderItems
+      .map(
+        (it) =>
+          `<tr>
+            <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;">${escHtml(it.productName)}${it.variantName ? ` <span style="color:#6366f1;">(${escHtml(it.variantName)})</span>` : ""}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.quantity}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">${it.total.toLocaleString("ru-RU")} ₽</td>
+          </tr>`
+      )
+      .join("");
 
     sendMail({
       to: customer.email,
