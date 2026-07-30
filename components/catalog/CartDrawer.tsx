@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useCartStore } from "@/store/cartStore";
 import { useAuthStore } from "@/store/authStore";
 import { Button } from "../ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SafeImage } from "./SafeImage";
 import {
   effectivePriceType,
@@ -42,6 +42,25 @@ export function CartDrawer() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [orderResult, setOrderResult] = useState<{ orderId: number } | null>(null);
+
+  // Animation state: keep drawer mounted during closing animation
+  const [visible, setVisible] = useState(isCartOpen);
+  const [closing, setClosing] = useState(false);
+
+  useEffect(() => {
+    if (isCartOpen) {
+      setVisible(true);
+      setClosing(false);
+    } else if (visible) {
+      setClosing(true);
+      const t = setTimeout(() => {
+        setVisible(false);
+        setClosing(false);
+      }, 270);
+      return () => clearTimeout(t);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCartOpen]);
 
   async function checkout() {
     setLoading(true);
@@ -80,11 +99,17 @@ export function CartDrawer() {
     closeCart();
   }
 
-  if (!isCartOpen) return null;
+  if (!visible) return null;
 
   return (
-    <div className="cart-overlay" onClick={closeAndReset}>
-      <aside className="cart-drawer" onClick={(e) => e.stopPropagation()}>
+    <div
+      className={`cart-overlay ${closing ? "cart-overlay--closing" : "cart-overlay--open"}`}
+      onClick={closeAndReset}
+    >
+      <aside
+        className={`cart-drawer ${closing ? "cart-drawer--closing" : "cart-drawer--open"}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {orderResult ? (
           <div className="order-confirm">
             <div className="order-confirm-icon">

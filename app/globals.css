@@ -3133,3 +3133,128 @@ align-items: flex-start;
   transform: rotate(90deg);
   color: #e82c87;
 }
+
+/* ═══════════════════════════════════════════════════════
+   MICRO-ANIMATIONS
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Cart drawer: slide in from right ── */
+@keyframes cart-drawer-in {
+  from { transform: translateX(108%); }
+  to   { transform: translateX(0); }
+}
+@keyframes cart-drawer-out {
+  from { transform: translateX(0); }
+  to   { transform: translateX(108%); }
+}
+@keyframes cart-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes cart-overlay-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+.cart-overlay--open {
+  animation: cart-overlay-in 0.22s ease both;
+}
+.cart-overlay--closing {
+  animation: cart-overlay-out 0.26s ease both;
+}
+.cart-drawer--open {
+  animation: cart-drawer-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.cart-drawer--closing {
+  animation: cart-drawer-out 0.26s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+/* ── Favorite heart: elastic pop ── */
+@keyframes fav-pop {
+  0%   { transform: scale(1); }
+  20%  { transform: scale(1.55); }
+  50%  { transform: scale(0.82); }
+  75%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+.fav-pop {
+  animation: fav-pop 0.48s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* ── Bell: ring shake ── */
+@keyframes bell-ring {
+  0%   { transform: rotate(0deg) scale(1); }
+  12%  { transform: rotate(-18deg) scale(1.3); }
+  28%  { transform: rotate(16deg) scale(1.15); }
+  44%  { transform: rotate(-12deg) scale(1.05); }
+  60%  { transform: rotate(8deg); }
+  76%  { transform: rotate(-5deg); }
+  90%  { transform: rotate(2deg); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+.bell-ring {
+  animation: bell-ring 0.52s ease both;
+}
+
+/* ── Badge bump: pop when cart/favorite count changes ── */
+@keyframes badge-bump {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.65); }
+  65%  { transform: scale(0.88); }
+  85%  { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+.badge-bump {
+  animation: badge-bump 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* ── Primary button: press tap effect ── */
+.cart-button:active,
+.checkout-button:active,
+.catalog-button:active,
+.apply-button:active {
+  transform: scale(0.95) translateY(1px) !important;
+  box-shadow: 0 4px 12px rgba(232, 44, 135, 0.15) !important;
+  transition: transform 0.08s ease, box-shadow 0.08s ease !important;
+}
+
+/* ── Qty +/– and remove: press pop ── */
+.cart-qty button:active {
+  transform: scale(0.82);
+  transition: transform 0.09s ease;
+}
+.cart-remove:active {
+  transform: scale(0.82);
+  color: #ef4444;
+  transition: transform 0.09s ease, color 0.09s ease;
+}
+
+/* ── Favorite button: subtle glow ring on active ── */
+.favorite-button {
+  transition: transform 0.2s ease, background 0.2s ease,
+              border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.favorite-button:active {
+  transform: scale(0.88);
+  transition: transform 0.08s ease !important;
+}
+.favorite-button.active {
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.18);
+}
+
+/* ── Wishlist bell button: active press ── */
+.wishlist-bell:active {
+  transform: scale(0.85);
+  transition: transform 0.08s ease !important;
+}
+
+/* ── Product card add-to-cart: press down briefly ── */
+.product-card .cart-button:active {
+  transform: scale(0.95) !important;
+}
+
+/* ── Stepper +/– in product card ── */
+.product-card button[onClick]:active {
+  transform: scale(0.88);
+  transition: transform 0.08s ease;
+}

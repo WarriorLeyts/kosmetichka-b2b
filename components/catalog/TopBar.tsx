@@ -276,7 +276,10 @@ export function TopBar({
               <div className="relative">
                 <ShoppingCart size={18} />
                 {cartCount > 0 && (
-                  <span className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-pink-500 text-[10px] font-black text-white">
+                  <span
+                    key={cartCount}
+                    className="badge-bump absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-pink-500 text-[10px] font-black text-white"
+                  >
                     {cartCount > 99 ? "99+" : cartCount}
                   </span>
                 )}

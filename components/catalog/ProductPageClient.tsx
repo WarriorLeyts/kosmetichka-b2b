@@ -134,6 +134,7 @@ export function ProductPageClient({
   const isFavorite     = useFavoriteStore((s) =>
     s.favorites.some((item) => item.id === product.id)
   );
+  const [favAnim, setFavAnim] = useState(false);
 
   const customer = useAuthStore((s) => s.customer);
   const isInWishlist = useWishlistStore((s) => s.isInWishlist(product.id));
@@ -334,14 +335,19 @@ export function ProductPageClient({
                   )}
 
                   <button
-                    onClick={() => toggleFavorite(product)}
+                    onClick={() => { toggleFavorite(product); setFavAnim(true); }}
                     className={`flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border transition ${
                       isFavorite
                         ? "border-pink-200 bg-pink-50 text-pink-500"
                         : "border-slate-200 bg-white text-pink-400 hover:bg-pink-50"
                     }`}
                   >
-                    <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
+                    <Heart
+                      size={18}
+                      fill={isFavorite ? "currentColor" : "none"}
+                      className={favAnim ? "fav-pop" : ""}
+                      onAnimationEnd={() => setFavAnim(false)}
+                    />
                   </button>
                 </div>
               </div>

@@ -52,6 +52,10 @@ export function ProductCard({ product, addToCart }: Props) {
   const activePriceType = effectivePriceType(cartItems, customer);
   const mainPrice = priceFor(product, activePriceType);
 
+  // Animation states
+  const [favAnim, setFavAnim] = useState(false);
+  const [bellAnim, setBellAnim] = useState(false);
+
   // Variant picker state
   const [variants, setVariants] = useState<Variant[] | null>(null);
   const [loadingVariants, setLoadingVariants] = useState(false);
@@ -214,14 +218,23 @@ export function ProductCard({ product, addToCart }: Props) {
               {customer && (
                 <button
                   title={isInWishlist ? "Убрать из листа ожидания" : "Уведомить о наличии"}
-                  onClick={(e) => { e.stopPropagation(); toggleWishlist(product.id); }}
-                  className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border transition ${
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleWishlist(product.id);
+                    setBellAnim(true);
+                  }}
+                  className={`wishlist-bell flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border transition ${
                     isInWishlist
                       ? "border-indigo-200 bg-indigo-50 text-indigo-500"
                       : "border-slate-200 bg-white text-slate-400 hover:bg-indigo-50 hover:text-indigo-500"
                   }`}
                 >
-                  <Bell size={15} fill={isInWishlist ? "currentColor" : "none"} />
+                  <Bell
+                    size={15}
+                    fill={isInWishlist ? "currentColor" : "none"}
+                    className={bellAnim ? "bell-ring" : ""}
+                    onAnimationEnd={() => setBellAnim(false)}
+                  />
                 </button>
               )}
             </div>
@@ -267,9 +280,15 @@ export function ProductCard({ product, addToCart }: Props) {
             onClick={(e) => {
               e.stopPropagation();
               toggleFavorite(product);
+              setFavAnim(true);
             }}
           >
-            <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
+            <Heart
+              size={16}
+              fill={isFavorite ? "currentColor" : "none"}
+              className={favAnim ? "fav-pop" : ""}
+              onAnimationEnd={() => setFavAnim(false)}
+            />
           </button>
         </div>
       </article>
