@@ -62,13 +62,14 @@ export function ProductCard({ product, addToCart }: Props) {
   const [showPicker, setShowPicker] = useState(false);
   const [variantQtys, setVariantQtys] = useState<Record<number, number>>({});
   const [zoomedImg, setZoomedImg] = useState<string | null>(null);
+  const [navigating, setNavigating] = useState(false);
 
   function handleCardClick() {
+    setNavigating(true);
     try { sessionStorage.setItem("catalog_scroll", String(window.scrollY)); } catch {}
     router.push(`/product/${product.id}`);
   }
 
-  // Prefetch product page on hover so it loads instantly on click
   function handleMouseEnter() {
     router.prefetch(`/product/${product.id}`);
   }
@@ -130,7 +131,25 @@ export function ProductCard({ product, addToCart }: Props) {
         className="product-card cursor-pointer"
         onClick={handleCardClick}
         onMouseEnter={handleMouseEnter}
+        style={{ position: "relative" }}
       >
+        {/* Loading overlay — shown immediately on click while page loads */}
+        {navigating && (
+          <div style={{
+            position: "absolute", inset: 0, zIndex: 10,
+            borderRadius: "inherit",
+            background: "rgba(255,255,255,0.65)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            backdropFilter: "blur(1px)",
+          }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: "50%",
+              border: "3px solid #e2e8f0",
+              borderTopColor: "#ec4899",
+              animation: "spin 0.7s linear infinite",
+            }} />
+          </div>
+        )}
         <div className="product-image-box">
           <SafeImage src={imagePath} alt={product.name} placeholderIconSize={18} />
         </div>
