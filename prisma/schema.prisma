@@ -52,8 +52,9 @@ model Product {
   barcode     String?
   description String? @db.Text
 
-  stock  Float?
-  prices ProductPrice[]
+  stock       Float?
+  minOrderQty Int    @default(1)
+  prices      ProductPrice[]
 
   brandGuid String?
   brand     Brand?  @relation(fields: [brandGuid], references: [guid])

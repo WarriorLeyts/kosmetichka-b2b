@@ -17,6 +17,18 @@ type CartNotification = {
 
 type VariantEntry = { id: number; name: string; imageUrl: string };
 
+type RepeatOrderItem = {
+  productId: number;
+  productName: string;
+  quantity: number;
+  price: number;
+  barcode?: string | null;
+  variantId?: number | null;
+  variantName?: string | null;
+  variantImageUrl?: string | null;
+  imagePath?: string | null;
+};
+
 type CartStore = {
   cart: CartItem[];
   isCartOpen: boolean;
@@ -31,6 +43,8 @@ type CartStore = {
   addToCartWithVariant: (product: any, variant: VariantEntry) => void;
   /** Adds multiple variant quantities in a single Zustand set() — no re-render per item */
   addVariantsBatch: (product: any, entries: Array<{ variant: VariantEntry; quantity: number }>) => void;
+  /** Repeats a previous order — merges all items into current cart in one set() */
+  repeatOrder: (items: RepeatOrderItem[]) => void;
   increaseQuantity: (cartKey: string) => void;
   decreaseQuantity: (cartKey: string) => void;
   removeFromCart: (cartKey: string) => void;
@@ -152,6 +166,46 @@ export const useCartStore = create<CartStore>()(
         };
 
         set({ cart, notification });
+      },
+
+      repeatOrder: (items) => {
+        const cart = [...get().cart];
+
+        for (const item of items) {
+          const key = item.variantId
+            ? `${item.productId}_v${item.variantId}`
+            : String(item.productId);
+          const idx = cart.findIndex((c) => c.cartKey === key);
+
+          if (idx >= 0) {
+            cart[idx] = { ...cart[idx], quantity: cart[idx].quantity + item.quantity };
+          } else {
+            cart.push({
+              id: item.productId,
+              name: item.productName,
+              cartKey: key,
+              quantity: item.quantity,
+              // Map price so cartTotal() can compute the running total
+              wholesalePrice: item.price,
+              retailPrice: item.price,
+              barcode: item.barcode ?? null,
+              variantId: item.variantId ?? undefined,
+              variantName: item.variantName ?? null,
+              variantImageUrl: item.variantImageUrl ?? null,
+              images: item.imagePath ? [{ path: item.imagePath }] : [],
+            });
+          }
+        }
+
+        set({
+          cart,
+          isCartOpen: true,
+          notification: {
+            id: Date.now(),
+            message: `${items.length} позиций добавлено в корзину`,
+            image: null,
+          },
+        });
       },
 
       increaseQuantity: (cartKey) => {

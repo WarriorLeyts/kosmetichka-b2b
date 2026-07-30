@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useCartStore } from "@/store/cartStore";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Ожидает подтверждения",
@@ -282,6 +283,8 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
   const [expanded, setExpanded] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState("");
+  const [repeating, setRepeating] = useState(false);
+  const repeatOrder = useCartStore((s) => s.repeatOrder);
 
   // ── Inline edit (pending only) ──
   const [editMode, setEditMode] = useState(false);
@@ -567,6 +570,52 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
           )}
 
           <OrderChat orderId={order.id} />
+
+          {/* ── Action buttons ── */}
+          <div className="mt-4 flex flex-wrap gap-2 border-t pt-4">
+            {/* Invoice */}
+            <a
+              href={`/orders/${order.id}/invoice`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+            >
+              🧾 Накладная
+            </a>
+
+            {/* Excel export */}
+            <a
+              href={`/api/orders/${order.id}/export`}
+              download
+              className="flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition"
+            >
+              📊 Скачать Excel
+            </a>
+
+            {/* Repeat order */}
+            <button
+              onClick={() => {
+                setRepeating(true);
+                repeatOrder(
+                  order.items.map((i) => ({
+                    productId: i.productId,
+                    productName: i.productName,
+                    quantity: i.quantity,
+                    price: i.price,
+                    barcode: i.barcode,
+                    variantName: i.variantName,
+                    variantImageUrl: i.variantImageUrl,
+                    imagePath: i.imagePath,
+                  }))
+                );
+                setTimeout(() => setRepeating(false), 1500);
+              }}
+              disabled={repeating}
+              className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 transition disabled:opacity-60"
+            >
+              {repeating ? "✓ Добавлено!" : "🔁 Повторить заказ"}
+            </button>
+          </div>
         </div>
       )}
     </div>

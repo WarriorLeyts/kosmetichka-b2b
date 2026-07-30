@@ -197,7 +197,7 @@ export function TopBar({
             router.push(search.trim() ? `/catalog?search=${encodeURIComponent(search.trim())}` : "/catalog");
           }}
         >
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по товарам..." />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Название, штрихкод, артикул..." />
           <Button type="submit" className="w-16 h-full flex items-center justify-center rounded-l-none">
             <Search className="h-5 w-5" />
           </Button>

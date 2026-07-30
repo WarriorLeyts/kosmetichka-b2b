@@ -1,9 +1,8 @@
 "use client";
 
-import { Bell, Heart, ShoppingCart } from "lucide-react";
+import { Heart, ShoppingCart } from "lucide-react";
 import { useFavoriteStore } from "@/store/favoriteStore";
 import { useAuthStore } from "@/store/authStore";
-import { useWishlistStore } from "@/store/wishlistStore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SafeImage } from "./SafeImage";
@@ -15,7 +14,7 @@ import {
 } from "@/lib/pricing";
 import { resolveImageUrl } from "@/lib/image";
 import { useCartStore } from "@/store/cartStore";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 type Variant = { id: number; imageUrl: string; name: string };
 
@@ -42,23 +41,6 @@ export function ProductCard({ product, addToCart }: Props) {
   );
   const router = useRouter();
   const customer = useAuthStore((state) => state.customer);
-
-  // ── Wishlist ────────────────────────────────────────────────────────────
-  const fetchWishlist  = useWishlistStore((s) => s.fetchWishlist);
-  const toggleWishlist = useWishlistStore((s) => s.toggle);
-  const isInWishlist   = useWishlistStore((s) => s.has(product.id));
-
-  useEffect(() => {
-    fetchWishlist();
-  }, [fetchWishlist]);
-
-  async function handleWishlistToggle(e: React.MouseEvent) {
-    e.stopPropagation();
-    const result = await toggleWishlist(product.id);
-    if (result === "unauthorized") {
-      router.push("/login");
-    }
-  }
 
   const cartItems = useCartStore((s) => s.cart);
   const stock = getStockLabel(product.stock);
@@ -144,6 +126,11 @@ export function ProductCard({ product, addToCart }: Props) {
             {product.category?.name || product.barcode || "—"}
           </span>
           <strong className={stock.className}>{stock.text}</strong>
+          {((product as any).minOrderQty ?? 1) > 1 && (
+            <span className="text-xs font-semibold text-indigo-500">
+              Мин. {(product as any).minOrderQty} шт.
+            </span>
+          )}
         </div>
 
         {/* Гость или Скидка: Розница + Скидка */}
@@ -210,17 +197,7 @@ export function ProductCard({ product, addToCart }: Props) {
 
         <div className="card-actions">
           {isOutOfStock ? (
-            <button
-              className="cart-button"
-              disabled
-              style={{
-                background: "#e9eef4",
-                color: "#94a3b8",
-                boxShadow: "none",
-                cursor: "not-allowed",
-                flex: 1,
-              }}
-            >
+            <button className="cart-button" disabled style={{ opacity: 0.45, cursor: "not-allowed" }}>
               <ShoppingCart size={15} />
               Нет в наличии
             </button>
@@ -261,28 +238,15 @@ export function ProductCard({ product, addToCart }: Props) {
             </button>
           )}
 
-          {/* Иконки: колокольчик (только без наличия) + избранное */}
-          <div className="flex flex-shrink-0 items-center gap-1.5">
-            {isOutOfStock && (
-              <button
-                className={`favorite-button ${isInWishlist ? "active" : ""}`}
-                style={isInWishlist ? { borderColor: "#c7d2fe", background: "#eef2ff", color: "#4f46e5" } : { color: "#94a3b8" }}
-                title={isInWishlist ? "В листе ожидания" : "Уведомить о появлении"}
-                onClick={handleWishlistToggle}
-              >
-                <Bell size={20} fill={isInWishlist ? "currentColor" : "none"} />
-              </button>
-            )}
-            <button
-              className={`favorite-button ${isFavorite ? "active" : ""}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleFavorite(product);
-              }}
-            >
-              <Heart size={20} fill={isFavorite ? "currentColor" : "none"} />
-            </button>
-          </div>
+          <button
+            className={`favorite-button ${isFavorite ? "active" : ""}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavorite(product);
+            }}
+          >
+            <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
+          </button>
         </div>
       </article>
 

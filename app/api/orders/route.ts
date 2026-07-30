@@ -75,6 +75,12 @@ export async function POST(request: Request) {
       const price = Math.round(rawPrice);
       const quantity = Number(item.quantity) || 0;
 
+      // MOQ check
+      const minQty = (product as any).minOrderQty ?? 1;
+      if (quantity < minQty) {
+        throw new Error(`Минимальное количество для «${product.name}» — ${minQty} шт.`);
+      }
+
       return {
         productId: product.id,
         productName: product.name,
@@ -104,6 +110,53 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Не удалось создать заказ" }, { status: 400 });
+  }
+
+  // Уведомление покупателю о принятом заказе
+  if (customer.email) {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://kosmetichka-opt.ru";
+    const itemsHtml = order.items
+      ? (await prisma.orderItem.findMany({ where: { orderId: order.id }, orderBy: { id: "asc" } }))
+          .map(
+            (it: any) =>
+              `<tr>
+                <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;">${escHtml(it.productName)}${it.variantName ? ` <span style="color:#6366f1;">(${escHtml(it.variantName)})</span>` : ""}</td>
+                <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.quantity}</td>
+                <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">${it.total.toLocaleString("ru-RU")} ₽</td>
+              </tr>`
+          )
+          .join("")
+      : "";
+
+    sendMail({
+      to: customer.email,
+      subject: `Ваш заказ #${order.id} принят — Косметичка`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#fff;">
+          <h2 style="margin:0 0 8px;font-size:22px;color:#1e293b;">✅ Заказ #${order.id} принят!</h2>
+          <p style="color:#475569;margin:0 0 20px;">Спасибо! Менеджер свяжется с вами в ближайшее время.</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:8px;text-align:left;color:#64748b;font-weight:600;">Товар</th>
+                <th style="padding:8px;text-align:center;color:#64748b;font-weight:600;">Кол-во</th>
+                <th style="padding:8px;text-align:right;color:#64748b;font-weight:600;">Сумма</th>
+              </tr>
+            </thead>
+            <tbody>${itemsHtml}</tbody>
+          </table>
+          <div style="border-top:2px solid #1e293b;padding-top:12px;text-align:right;">
+            <strong style="font-size:16px;color:#1e293b;">Итого: ${order.total.toLocaleString("ru-RU")} ₽</strong>
+          </div>
+          <div style="margin-top:24px;">
+            <a href="${baseUrl}/orders/${order.id}/invoice"
+               style="display:inline-block;padding:10px 24px;background:#6366f1;color:#fff;font-weight:700;text-decoration:none;border-radius:12px;font-size:14px;">
+              Скачать счёт
+            </a>
+          </div>
+          <p style="margin-top:20px;font-size:12px;color:#94a3b8;">kosmetichka-opt.ru</p>
+        </div>`,
+    }).catch(console.error);
   }
 
   // Уведомление администратору о новом заказе
