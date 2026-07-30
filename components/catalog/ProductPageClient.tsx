@@ -192,6 +192,16 @@ export function ProductPageClient({
       {/* ── Global TopBar ──────────────────────────────────────────────── */}
       <TopBar search={search} setSearch={setSearch} />
 
+      {/* ── Mobile floating back button — always visible while scrolling ── */}
+      <button
+        onClick={() => router.back()}
+        className="fixed bottom-20 left-4 z-40 flex md:hidden items-center gap-1.5 rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 px-4 py-2.5 text-sm font-black text-white shadow-xl transition active:scale-95"
+        style={{ color: "#fff" }}
+        aria-label="Назад в каталог"
+      >
+        ← Назад
+      </button>
+
       <div className="min-h-screen bg-slate-50">
 
         {/* ── Breadcrumbs ──────────────────────────────────────────────── */}
