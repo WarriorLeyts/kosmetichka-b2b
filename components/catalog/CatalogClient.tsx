@@ -233,7 +233,6 @@ export function CatalogClient({
   ]);
 
   return (
-    <>
     <main className="catalog-page">
       <TopBar
         search={search}
