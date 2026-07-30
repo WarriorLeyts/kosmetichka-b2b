@@ -59,6 +59,12 @@ export function ProductCard({ product, addToCart }: Props) {
   const [variantQtys, setVariantQtys] = useState<Record<number, number>>({});
   const [zoomedImg, setZoomedImg] = useState<string | null>(null);
 
+  function handleCardClick() {
+    // Save current scroll so catalog restores position on back-navigation
+    try { sessionStorage.setItem("catalog_scroll", String(window.scrollY)); } catch {}
+    router.push(`/product/${product.id}`);
+  }
+
   async function handleAddToCart(e: React.MouseEvent) {
     e.stopPropagation();
     setLoadingVariants(true);
@@ -114,7 +120,7 @@ export function ProductCard({ product, addToCart }: Props) {
     <>
       <article
         className="product-card cursor-pointer"
-        onClick={() => router.push(`/product/${product.id}`)}
+        onClick={handleCardClick}
       >
         <div className="product-image-box">
           <SafeImage src={imagePath} alt={product.name} placeholderIconSize={18} />

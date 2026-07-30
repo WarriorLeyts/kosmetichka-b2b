@@ -194,6 +194,14 @@ export function ProductPageClient({
         {/* ── Breadcrumbs ──────────────────────────────────────────────── */}
         <div className="mx-auto max-w-7xl px-4 pt-5 pb-3 md:px-6 md:pt-6">
           <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-400">
+            <button
+              onClick={() => router.back()}
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-slate-500 hover:bg-slate-100 hover:text-pink-500 transition"
+              title="Вернуться в каталог"
+            >
+              ← Назад
+            </button>
+            <span className="text-slate-300">|</span>
             <Link href="/" className="hover:text-pink-500">Главная</Link>
             <span>/</span>
             <Link href="/catalog" className="hover:text-pink-500">Каталог</Link>
