@@ -11,6 +11,8 @@ type Props = {
   placeholderText?: string;
   placeholderIconSize?: number;
   onClick?: (event: React.MouseEvent) => void;
+  /** "lazy" (default) defers off-screen images; use "eager" for the LCP hero image */
+  loading?: "lazy" | "eager";
 };
 
 /**
@@ -27,6 +29,7 @@ export function SafeImage({
   placeholderText = "Фото товара",
   placeholderIconSize = 20,
   onClick,
+  loading = "lazy",
 }: Props) {
   const [failed, setFailed] = useState(false);
 
@@ -45,6 +48,8 @@ export function SafeImage({
       alt={alt}
       className={className}
       onClick={onClick}
+      loading={loading}
+      decoding="async"
       onError={() => setFailed(true)}
     />
   );

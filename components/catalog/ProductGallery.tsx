@@ -97,6 +97,7 @@ export function ProductGallery({ images, productName }: Props) {
             alt={productName}
             className="max-h-[230px] max-w-full object-contain md:max-h-[390px]"
             placeholderIconSize={28}
+            loading="eager"
           />
           {safeImages.length > 1 && (
             <span className="absolute bottom-3 right-3 rounded-lg bg-black/40 px-2 py-0.5 text-xs font-semibold text-white">
