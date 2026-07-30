@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell, Heart, ShoppingCart } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
 import { useFavoriteStore } from "@/store/favoriteStore";
@@ -63,6 +64,7 @@ export function ProductPageClient({
   relatedProducts: any[];
 }) {
   const [search, setSearch] = useState("");
+  const router = useRouter();
 
   const addToCart        = useCartStore((s) => s.addToCart);
   const addVariantsBatch = useCartStore((s) => s.addVariantsBatch);
