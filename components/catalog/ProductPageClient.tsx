@@ -344,7 +344,8 @@ export function ProductPageClient({
                   >
                     <Heart
                       size={18}
-                      fill={isFavorite ? "currentColor" : "none"}
+                      fill={isFavorite ? "#ec4899" : "none"}
+                      stroke="#ec4899"
                       className={favAnim ? "fav-pop" : ""}
                       onAnimationEnd={() => setFavAnim(false)}
                     />
