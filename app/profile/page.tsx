@@ -27,6 +27,15 @@ async function updateProfile(formData: FormData) {
   const password = String(formData.get("password") || "");
   const passwordConfirm = String(formData.get("passwordConfirm") || "");
 
+  // Check email uniqueness if changed
+  if (email) {
+    const current = await prisma.customer.findUnique({ where: { id }, select: { email: true } });
+    if (email !== current?.email) {
+      const emailTaken = await prisma.customer.findFirst({ where: { email, NOT: { id } } });
+      if (emailTaken) redirect("/profile?error=email_taken");
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: any = { name, companyName, phone, email, city, address };
 
@@ -48,6 +57,7 @@ async function updateProfile(formData: FormData) {
 const ERROR_MESSAGES: Record<string, string> = {
   password_mismatch: "Пароли не совпадают",
   password_too_short: "Пароль должен быть не короче 6 символов",
+  email_taken: "Этот email уже используется другим аккаунтом",
 };
 
 export default async function ProfilePage({

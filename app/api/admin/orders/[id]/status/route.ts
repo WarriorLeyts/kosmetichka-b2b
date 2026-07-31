@@ -59,18 +59,19 @@ export async function POST(
   ]);
 
   // Уведомление покупателю о смене статуса
-  const notifyStatuses = ["payment", "cancelled", "assembly"];
+  const notifyStatuses = ["payment", "cancelled", "assembly", "exported"];
   if (notifyStatuses.includes(toStatus)) {
     const fullOrder = await prisma.order.findUnique({
       where: { id: Number(id) },
       include: { customer: { select: { email: true, name: true, companyName: true } } },
     });
+    const label = ORDER_STATUS_LABELS[toStatus] ?? toStatus;
+    const clientName = fullOrder?.customer?.companyName || fullOrder?.customer?.name || "Клиент";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://kosmetichka-opt.ru";
+
     const email = fullOrder?.customer?.email;
     if (email) {
-      const label = ORDER_STATUS_LABELS[toStatus] ?? toStatus;
-      const clientName = fullOrder.customer.companyName || fullOrder.customer.name || "Клиент";
       const statusColor = toStatus === "cancelled" ? "#ef4444" : toStatus === "payment" ? "#10b981" : "#6366f1";
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://kosmetichka-opt.ru";
       sendMail({
         to: email,
         subject: `Заказ #${id} — статус изменён на «${label}»`,

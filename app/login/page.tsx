@@ -105,12 +105,17 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm font-semibold text-slate-500">
-          Нет аккаунта?{" "}
-          <Link href="/register" className="text-pink-500 hover:underline">
-            Зарегистрироваться
+        <div className="mt-6 flex flex-col items-center gap-2 text-sm font-semibold text-slate-500">
+          <Link href="/forgot-password" className="text-slate-400 hover:text-pink-500 hover:underline">
+            Забыли пароль?
           </Link>
-        </p>
+          <span>
+            Нет аккаунта?{" "}
+            <Link href="/register" className="text-pink-500 hover:underline">
+              Зарегистрироваться
+            </Link>
+          </span>
+        </div>
       </div>
     </main>
   );

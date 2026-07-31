@@ -37,8 +37,14 @@ export function ProductCard({ product, addToCart }: Props) {
   const increaseQuantity = useCartStore((s) => s.increaseQuantity);
   const decreaseQuantity = useCartStore((s) => s.decreaseQuantity);
   const openCart = useCartStore((s) => s.openCart);
+  const productCartKey = String(product.id);
   const cartQty = useCartStore(
-    (s) => s.cart.find((i) => i.cartKey === String(product.id))?.quantity ?? 0
+    (s) => s.cart
+      .filter((i) => i.cartKey === productCartKey || i.cartKey.startsWith(`${productCartKey}_v`))
+      .reduce((sum, i) => sum + i.quantity, 0)
+  );
+  const hasVariantsInCart = useCartStore(
+    (s) => s.cart.some((i) => i.cartKey.startsWith(`${productCartKey}_v`))
   );
   const router = useRouter();
   const customer = useAuthStore((state) => state.customer);
@@ -264,29 +270,38 @@ export function ProductCard({ product, addToCart }: Props) {
             </div>
           ) : cartQty > 0 ? (
             <div className="flex flex-1 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <button
-                  onClick={() => decreaseQuantity(String(product.id))}
-                  className="flex h-9 w-9 items-center justify-center text-lg font-bold text-slate-600 hover:bg-slate-100 active:scale-90"
-                >
-                  −
-                </button>
-                <span className="min-w-[28px] text-center text-sm font-black text-slate-800">
-                  {cartQty}
-                </span>
-                <button
-                  onClick={() => increaseQuantity(String(product.id))}
-                  className="flex h-9 w-9 items-center justify-center text-lg font-bold text-slate-600 hover:bg-slate-100 active:scale-90"
-                >
-                  +
-                </button>
-              </div>
-              <button
-                onClick={openCart}
-                className="cart-button flex-1"
-              >
-                В корзине
-              </button>
+              {hasVariantsInCart ? (
+                <>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowPicker(true); }}
+                    className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 h-9 text-sm font-bold text-slate-700 hover:bg-slate-50"
+                  >
+                    <span className="text-blue-600">{cartQty}</span> шт.
+                  </button>
+                  <button onClick={openCart} className="cart-button flex-1">В корзине</button>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <button
+                      onClick={() => decreaseQuantity(productCartKey)}
+                      className="flex h-9 w-9 items-center justify-center text-lg font-bold text-slate-600 hover:bg-slate-100 active:scale-90"
+                    >
+                      −
+                    </button>
+                    <span className="min-w-[28px] text-center text-sm font-black text-slate-800">
+                      {cartQty}
+                    </span>
+                    <button
+                      onClick={() => increaseQuantity(productCartKey)}
+                      className="flex h-9 w-9 items-center justify-center text-lg font-bold text-slate-600 hover:bg-slate-100 active:scale-90"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <button onClick={openCart} className="cart-button flex-1">В корзине</button>
+                </>
+              )}
             </div>
           ) : (
             <button

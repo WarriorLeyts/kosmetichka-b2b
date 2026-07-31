@@ -52,6 +52,7 @@ const PRICE_TYPE_OPTIONS = [
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -160,7 +161,7 @@ export default function RegisterPage() {
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, phone, email, password, captchaToken, smsCode, priceType }),
+      body: JSON.stringify({ name, companyName, phone, email, password, captchaToken, smsCode, priceType }),
     });
 
     const text = await res.text();
@@ -184,6 +185,7 @@ export default function RegisterPage() {
     );
 
     setName("");
+    setCompanyName("");
     setPhone("");
     setEmail("");
     setPassword("");
@@ -219,10 +221,17 @@ export default function RegisterPage() {
             <input
               required
               type="text"
-              placeholder="Имя / Название компании"
+              placeholder="Ваше имя"
               className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none focus:border-pink-300"
               value={name}
               onChange={(e) => setName(e.target.value)}
+            />
+            <input
+              type="text"
+              placeholder="Название компании (необязательно)"
+              className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none focus:border-pink-300"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
             />
 
             {/* ─── Телефон + кнопка «Получить код» ──────────────── */}
@@ -267,14 +276,14 @@ export default function RegisterPage() {
                   required
                   type="text"
                   inputMode="numeric"
-                  maxLength={4}
-                  placeholder="• • • •"
-                  className="h-12 w-full rounded-2xl border border-pink-300 bg-pink-50 px-4 text-center text-2xl font-black tracking-[0.5em] outline-none focus:border-pink-400"
+                  maxLength={6}
+                  placeholder="• • • • • •"
+                  className="h-12 w-full rounded-2xl border border-pink-300 bg-pink-50 px-4 text-center text-2xl font-black tracking-[0.4em] outline-none focus:border-pink-400"
                   value={smsCode}
                   onChange={(e) => setSmsCode(e.target.value.replace(/\D/g, ""))}
                 />
                 <p className="mt-1 text-center text-xs font-semibold text-slate-400">
-                  Введите 4-значный код из SMS
+                  Введите 6-значный код из SMS
                 </p>
               </div>
             )}

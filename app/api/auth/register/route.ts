@@ -31,7 +31,7 @@ async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
 const AUTO_APPROVE_TYPES = new Set(["retail", "discount"]);
 
 export async function POST(request: Request) {
-  const { name, phone, email, password, captchaToken, smsCode, priceType: rawPriceType } = await request.json();
+  const { name, companyName, phone, email, password, captchaToken, smsCode, priceType: rawPriceType } = await request.json();
   const priceType = ["retail", "discount", "wholesale", "big_wholesale"].includes(rawPriceType)
     ? rawPriceType
     : "wholesale";
@@ -146,6 +146,7 @@ export async function POST(request: Request) {
   const customer = await prisma.customer.create({
     data: {
       name,
+      companyName: companyName?.trim() || null,
       phone: cleanPhone,
       email: cleanEmail,
       password: hashedPassword,

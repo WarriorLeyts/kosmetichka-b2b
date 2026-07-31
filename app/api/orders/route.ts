@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 import { sendMail } from "@/lib/mail";
+import { effectivePriceType } from "@/lib/pricing";
 
 /** Escape user-supplied strings before embedding in HTML emails */
 function escHtml(str: string): string {
@@ -55,6 +56,25 @@ export async function POST(request: Request) {
 
   const productById = new Map(products.map((product) => [product.id, product]));
 
+  // Build flat product representations for effectivePriceType calculation
+  const cartForPricing = items.map((item: any) => {
+    const product = productById.get(Number(item.id));
+    const priceMap: Record<string, number> = {};
+    for (const pp of product?.prices ?? []) {
+      priceMap[pp.priceType] = Number(pp.price);
+    }
+    return {
+      wholesalePrice: priceMap["wholesale"] ?? 0,
+      bigWholesalePrice: priceMap["big_wholesale"] ?? 0,
+      discountPrice: priceMap["discount"] ?? 0,
+      retailPrice: priceMap["retail"] ?? 0,
+      quantity: Number(item.quantity) || 1,
+    };
+  });
+
+  // Compute effective price type based on actual cart total (handles auto-upgrade)
+  const appliedPriceType = effectivePriceType(cartForPricing, customer);
+
   let order;
 
   try {
@@ -66,7 +86,7 @@ export async function POST(request: Request) {
       }
 
       const matchedPrice = product.prices.find(
-        (p) => p.priceType === customer.priceType
+        (p) => p.priceType === appliedPriceType
       );
       const fallbackPrice = product.prices.find(
         (p) => p.priceType === "retail"

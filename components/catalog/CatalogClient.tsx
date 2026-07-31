@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { SlidersHorizontal } from "lucide-react";
 import { TopBar } from "./TopBar";
 import { CatalogSidebar } from "./CatalogSidebar";
@@ -26,15 +26,39 @@ export function CatalogClient({
   brands: any[];
 }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
-  const [categoryId, setCategoryId] = useState<number | null>(null);
-  const [brandGuids, setBrandGuids] = useState<string[]>([]);
-  const [onlyStock, setOnlyStock] = useState(false);
-  const [priceMin, setPriceMin] = useState<number | null>(null);
-  const [priceMax, setPriceMax] = useState<number | null>(null);
-  const [sort, setSort] = useState("popularity");
+  const [categoryId, setCategoryId] = useState<number | null>(() => {
+    const v = searchParams.get("categoryId");
+    return v ? Number(v) : null;
+  });
+  const [brandGuids, setBrandGuids] = useState<string[]>(() => searchParams.getAll("brandGuid"));
+  const [onlyStock, setOnlyStock] = useState(() => searchParams.get("onlyStock") === "true");
+  const [priceMin, setPriceMin] = useState<number | null>(() => {
+    const v = searchParams.get("priceMin");
+    return v ? Number(v) : null;
+  });
+  const [priceMax, setPriceMax] = useState<number | null>(() => {
+    const v = searchParams.get("priceMax");
+    return v ? Number(v) : null;
+  });
+  const [sort, setSort] = useState(() => searchParams.get("sort") || "popularity");
 
   const [priceBounds, setPriceBounds] = useState({ min: 0, max: 10000 });
+
+  // Sync filters to URL for shareable links
+  const syncUrl = useCallback(() => {
+    const params = new URLSearchParams();
+    if (search.trim()) params.set("search", search.trim());
+    if (categoryId !== null) params.set("categoryId", String(categoryId));
+    brandGuids.forEach((g) => params.append("brandGuid", g));
+    if (onlyStock) params.set("onlyStock", "true");
+    if (priceMin !== null) params.set("priceMin", String(priceMin));
+    if (priceMax !== null) params.set("priceMax", String(priceMax));
+    if (sort !== "popularity") params.set("sort", sort);
+    const qs = params.toString();
+    router.replace(qs ? `/catalog?${qs}` : "/catalog", { scroll: false });
+  }, [search, categoryId, brandGuids, onlyStock, priceMin, priceMax, sort, router]);
 
   const [products, setProducts] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -188,6 +212,8 @@ export function CatalogClient({
       isRestored.current = false;
       return;
     }
+
+    syncUrl();
 
     const timer = setTimeout(() => {
       loadProducts(true);
