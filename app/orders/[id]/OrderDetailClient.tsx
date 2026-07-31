@@ -7,6 +7,7 @@ import { RotateCcw, FileText, ArrowLeft } from "lucide-react";
 
 type OrderItem = {
   id: number;
+  productId: number;
   productName: string;
   variantName: string | null;
   barcode: string | null;
@@ -51,7 +52,7 @@ export default function OrderDetailClient({ order }: { order: Order }) {
   function handleRepeat() {
     repeatOrder(
       order.items.map((item) => ({
-        productId: item.id,
+        productId: item.productId,
         productName: item.productName,
         quantity: item.quantity,
         price: item.price,

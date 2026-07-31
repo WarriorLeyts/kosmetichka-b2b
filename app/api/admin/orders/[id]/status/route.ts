@@ -59,7 +59,7 @@ export async function POST(
   ]);
 
   // Уведомление покупателю о смене статуса
-  const notifyStatuses = ["payment", "cancelled", "assembly", "exported"];
+  const notifyStatuses = ["payment", "cancelled", "assembly", "exported", "consultation"];
   if (notifyStatuses.includes(toStatus)) {
     const fullOrder = await prisma.order.findUnique({
       where: { id: Number(id) },

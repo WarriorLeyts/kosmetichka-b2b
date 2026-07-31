@@ -68,7 +68,7 @@ export async function POST(request: Request) {
       bigWholesalePrice: priceMap["big_wholesale"] ?? 0,
       discountPrice: priceMap["discount"] ?? 0,
       retailPrice: priceMap["retail"] ?? 0,
-      quantity: Number(item.quantity) || 1,
+      quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
     };
   });
 
@@ -97,7 +97,12 @@ export async function POST(request: Request) {
         throw new Error(`Цена для товара «${product.name}» не найдена. Обратитесь к менеджеру.`);
       }
       const price = Math.round(rawPrice);
-      const quantity = Number(item.quantity) || 0;
+      const quantity = Math.floor(Number(item.quantity));
+
+      // Explicit non-positive guard (Number(-1) || 0 returns -1, so must check explicitly)
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new Error(`Некорректное количество для «${product.name}»`);
+      }
 
       // MOQ check
       const minQty = (product as any).minOrderQty ?? 1;

@@ -37,6 +37,7 @@ export default async function OrderDetailPage({
     createdAt: order.createdAt.toISOString(),
     items: order.items.map((item) => ({
       id: item.id,
+      productId: item.productId,
       productName: item.productName,
       variantName: item.variantName,
       barcode: item.barcode,

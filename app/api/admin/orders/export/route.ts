@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import { ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
 
 function xml(value: any) {
   return String(value ?? "")
@@ -11,11 +12,7 @@ function xml(value: any) {
     .replaceAll("'", "&apos;");
 }
 
-export async function GET() {
-  if (!(await requireAdmin())) {
-    return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
-  }
-
+async function buildXml() {
   const orders = await prisma.order.findMany({
     where: {
       status: { in: ["approved", "payment"] },
@@ -34,9 +31,7 @@ export async function GET() {
   const documents = orders
     .map((order) => {
       const createdAt = new Date(order.createdAt);
-
       const orderDate = createdAt.toISOString().slice(0, 10);
-
       const orderTime = createdAt.toLocaleTimeString("ru-RU", {
         hour: "2-digit",
         minute: "2-digit",
@@ -120,21 +115,59 @@ export async function GET() {
     })
     .join("");
 
-  const xmlFile = `<?xml version="1.0" encoding="UTF-8"?>
+  return {
+    xmlFile: `<?xml version="1.0" encoding="UTF-8"?>
 <КоммерческаяИнформация ВерсияСхемы="2.05" ДатаФормирования="${today}">
 ${documents}
-</КоммерческаяИнформация>`;
-  
-await prisma.order.updateMany({
-  where: {
-    id: {
-      in: orders.map((order) => order.id),
+</КоммерческаяИнформация>`,
+    orderIds: orders.map((o) => o.id),
+  };
+}
+
+/** GET — preview XML only, does NOT change any statuses */
+export async function GET() {
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+  }
+
+  const { xmlFile } = await buildXml();
+
+  return new NextResponse(xmlFile, {
+    headers: {
+      "Content-Type": "application/xml; charset=utf-8",
+      "Content-Disposition": 'attachment; filename="Orders.xml"',
     },
-  },
-  data: {
-    status: "exported",
-  },
-});
+  });
+}
+
+/** POST — generate XML, mark orders as "exported", return the file */
+export async function POST() {
+  const user = await requireAdmin();
+  if (!user) {
+    return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+  }
+
+  const { xmlFile, orderIds } = await buildXml();
+
+  if (orderIds.length > 0) {
+    await prisma.$transaction([
+      prisma.order.updateMany({
+        where: { id: { in: orderIds } },
+        data: { status: "exported" },
+      }),
+      ...orderIds.map((orderId) =>
+        prisma.orderStatusLog.create({
+          data: {
+            orderId,
+            fromStatus: "approved",
+            toStatus: "exported",
+            userId: user.id as number,
+          },
+        })
+      ),
+    ]);
+  }
+
   return new NextResponse(xmlFile, {
     headers: {
       "Content-Type": "application/xml; charset=utf-8",

@@ -8,9 +8,31 @@ import crypto from "crypto";
 const COOKIE_NAME = "1C_SESS";
 const DATA_DIR = path.join(process.cwd(), "data", "1c");
 
-/** In-memory store of valid session tokens → expiry timestamp */
-const activeSessions = new Map<string, number>();
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SESSIONS_FILE = path.join(process.cwd(), "data", "1c", ".sessions.json");
+
+function loadSessions(): Map<string, number> {
+  try {
+    const raw = fs.readFileSync(SESSIONS_FILE, "utf8");
+    const obj = JSON.parse(raw) as Record<string, number>;
+    const now = Date.now();
+    // Filter out expired entries while loading
+    const entries = Object.entries(obj).filter(([, exp]) => exp > now);
+    return new Map(entries);
+  } catch {
+    return new Map();
+  }
+}
+
+function saveSessions(sessions: Map<string, number>): void {
+  try {
+    fs.mkdirSync(path.dirname(SESSIONS_FILE), { recursive: true });
+    const obj = Object.fromEntries(sessions);
+    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(obj));
+  } catch (e) {
+    console.error("[exchange] failed to save sessions:", e);
+  }
+}
 
 function generateSessionToken(): string {
   return crypto.randomBytes(24).toString("hex");
@@ -23,13 +45,17 @@ function txt(body: string) {
 }
 
 function checkAuth(request: NextRequest): boolean {
-  // Cookie-based (after checkauth) — validate against in-memory session map
+  // Cookie-based (after checkauth) — validate against file-persisted session store
   const cookie = request.cookies.get(COOKIE_NAME);
   if (cookie?.value) {
-    const expiry = activeSessions.get(cookie.value);
+    const sessions = loadSessions();
+    const expiry = sessions.get(cookie.value);
     if (expiry && expiry > Date.now()) return true;
     // Clean up expired token
-    if (expiry) activeSessions.delete(cookie.value);
+    if (expiry) {
+      sessions.delete(cookie.value);
+      saveSessions(sessions);
+    }
   }
 
   // Basic auth (used for checkauth step)
@@ -65,9 +91,11 @@ export async function GET(request: NextRequest) {
     if (!checkAuth(request)) {
       return txt("failure\nНеверный логин или пароль");
     }
-    // Generate a fresh random token for this session
+    // Generate a fresh random token and persist it to disk
     const sessionToken = generateSessionToken();
-    activeSessions.set(sessionToken, Date.now() + SESSION_TTL_MS);
+    const sessions = loadSessions();
+    sessions.set(sessionToken, Date.now() + SESSION_TTL_MS);
+    saveSessions(sessions);
 
     const response = txt(`success\n${COOKIE_NAME}\n${sessionToken}`);
     response.cookies.set(COOKIE_NAME, sessionToken, {
