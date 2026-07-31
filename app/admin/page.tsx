@@ -99,7 +99,7 @@ export default async function AdminDashboardPage() {
     }),
     // Total approved customers
     prisma.customer.count({
-      where: { status: "approved" },
+      where: { isApproved: true },
     }),
   ]);
 
