@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useCartStore } from "./cartStore";
 
 type Customer = {
   id: number;
@@ -40,6 +41,9 @@ export const useAuthStore = create<AuthStore>((set) => ({
     await fetch("/api/auth/logout", {
       method: "POST",
     });
+
+    // Clear cart so the next user on this device doesn't see leftover items
+    useCartStore.getState().clearCart();
 
     set({
       customer: null,

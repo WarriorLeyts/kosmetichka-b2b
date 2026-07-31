@@ -1,177 +1,118 @@
-import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
+import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
-function getSecret() {
-  return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
-}
-
-async function getAdminUser() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token")?.value;
-  if (!token) return null;
-  try {
-    const { payload } = await jwtVerify(token, getSecret());
-    const role = payload.role as string;
-    if (!["admin", "manager"].includes(role)) return null;
-    return { id: payload.id as number, role };
-  } catch {
-    return null;
-  }
-}
-
-async function bitrixPost(webhookUrl: string, method: string, params: Record<string, unknown>) {
-  const url = `${webhookUrl}/${method}.json`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  if (!res.ok) throw new Error(`Bitrix HTTP ${res.status}`);
-  return res.json();
-}
-
-async function resolveBitrixDealId(orderId: number): Promise<number | null> {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    select: { bitrixDealId: true },
-  });
-  return order?.bitrixDealId ?? null;
-}
+import { sendMail } from "@/lib/mail";
 
 export async function GET(
-  _req: NextRequest,
+  _: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getAdminUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const user = await requireAdmin();
+  if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
 
   const { id } = await params;
-  const orderId = Number(id);
-  if (isNaN(orderId)) {
-    return NextResponse.json({ error: "Invalid order id" }, { status: 400 });
-  }
 
-  // Sync from Bitrix if configured
-  const webhookUrl = process.env.BITRIX_WEBHOOK_URL;
-  if (webhookUrl) {
-    try {
-      const dealId = await resolveBitrixDealId(orderId);
-      if (dealId) {
-        const result = await bitrixPost(webhookUrl, "crm.timeline.comment.list", {
-          filter: { ENTITY_TYPE: "deal", ENTITY_ID: dealId },
-          order: { ID: "ASC" },
-        });
-        const comments: Array<{ ID: string; COMMENT: string }> = result?.result ?? [];
-        for (const comment of comments) {
-          const text = comment.COMMENT ?? "";
-          // Skip system/emoji prefixed messages
-          if (text.startsWith("[🛒") || text.startsWith("[:f09f9b92:]")) continue;
-
-          const existing = await prisma.orderMessage.findUnique({
-            where: { bitrixCommentId: String(comment.ID) },
-          });
-          if (!existing) {
-            await prisma.orderMessage.create({
-              data: {
-                orderId,
-                text,
-                isFromPicker: true,
-                source: "customer",
-                bitrixCommentId: String(comment.ID),
-              },
-            });
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Bitrix sync error:", err);
-    }
-  }
-
-  const messages = await prisma.orderMessage.findMany({
-    where: { orderId, source: "customer" },
+  const msgs = await prisma.orderMessage.findMany({
+    where: { orderId: Number(id), source: "customer" },
     orderBy: { createdAt: "asc" },
-    select: { id: true, text: true, isFromPicker: true, createdAt: true },
+    select: { id: true, text: true, userId: true, createdAt: true },
   });
 
   return NextResponse.json({
-    messages: messages.map((m) => ({
+    messages: msgs.map((m) => ({
       id: m.id,
       text: m.text,
-      isFromPicker: m.isFromPicker,
+      isFromManager: m.userId !== null,
       createdAt: m.createdAt.toISOString(),
     })),
   });
 }
 
 export async function POST(
-  req: NextRequest,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getAdminUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const user = await requireAdmin();
+  if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
 
   const { id } = await params;
   const orderId = Number(id);
-  if (isNaN(orderId)) {
-    return NextResponse.json({ error: "Invalid order id" }, { status: 400 });
+
+  const { text } = await request.json();
+  if (!text || typeof text !== "string" || text.trim().length === 0) {
+    return NextResponse.json({ error: "Пустое сообщение" }, { status: 400 });
+  }
+  if (text.length > 4000) {
+    return NextResponse.json({ error: "Сообщение слишком длинное" }, { status: 400 });
   }
 
-  const body = await req.json();
-  const text: string = body.text?.trim();
-  if (!text) {
-    return NextResponse.json({ error: "text is required" }, { status: 400 });
-  }
-
-  const message = await prisma.orderMessage.create({
+  const msg = await prisma.orderMessage.create({
     data: {
       orderId,
-      userId: user.id,
-      text,
-      isFromPicker: true,
+      text: text.trim(),
       source: "customer",
+      userId: user.id as number,
     },
-    select: { id: true, text: true, isFromPicker: true, createdAt: true },
   });
 
-  // Post to Bitrix if configured
-  const webhookUrl = process.env.BITRIX_WEBHOOK_URL;
-  if (webhookUrl) {
+  // UX-2: Email notification to customer when manager replies
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { customer: { select: { email: true, name: true, companyName: true } } },
+  });
+
+  const email = order?.customer?.email;
+  if (email) {
+    const clientName = order?.customer?.companyName || order?.customer?.name || "Клиент";
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://kosmetichka-opt.ru";
+
+    // Humanise JSON card messages before embedding in email
+    let displayText = text.trim();
     try {
-      const dealId = await resolveBitrixDealId(orderId);
-      if (dealId) {
-        const result = await bitrixPost(webhookUrl, "crm.timeline.comment.add", {
-          fields: {
-            ENTITY_TYPE: "deal",
-            ENTITY_ID: dealId,
-            COMMENT: text,
-          },
-        });
-        const bitrixCommentId = result?.result ? String(result.result) : null;
-        if (bitrixCommentId) {
-          await prisma.orderMessage.update({
-            where: { id: message.id },
-            data: { bitrixCommentId },
-          });
-        }
-      }
-    } catch (err) {
-      console.error("Bitrix post error:", err);
+      const parsed = JSON.parse(displayText);
+      if (parsed?._t === "img") displayText = "📷 Менеджер прислал фото";
+      else if (parsed?._t === "product")
+        displayText = `📦 Менеджер добавил товар: ${parsed.name ?? ""}`;
+      else if (parsed?._t === "product-problem")
+        displayText = `⚠️ Проблема с товаром: ${parsed.name ?? ""}`;
+    } catch {
+      // not JSON — use plain text as-is
     }
+
+    const escaped = displayText
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    sendMail({
+      to: email,
+      subject: `Новое сообщение по заказу #${orderId} — Косметичка`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#fff;">
+          <h2 style="margin:0 0 16px;font-size:20px;color:#1e293b;">💬 Новое сообщение от менеджера</h2>
+          <p style="margin:0 0 8px;color:#475569;">Здравствуйте, ${clientName}!</p>
+          <p style="margin:0 0 20px;color:#475569;">
+            По заказу <b>#${orderId}</b> пришёл ответ менеджера:
+          </p>
+          <div style="background:#f8fafc;border-left:4px solid #6366f1;padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:24px;">
+            <p style="margin:0;color:#1e293b;white-space:pre-wrap;">${escaped}</p>
+          </div>
+          <a href="${baseUrl}/orders/${orderId}"
+             style="display:inline-block;padding:12px 28px;background:#6366f1;color:#fff;font-weight:700;text-decoration:none;border-radius:12px;">
+            Открыть чат
+          </a>
+          <p style="margin-top:20px;font-size:12px;color:#94a3b8;">kosmetichka-opt.ru</p>
+        </div>
+      `,
+    }).catch(console.error);
   }
 
   return NextResponse.json({
     message: {
-      id: message.id,
-      text: message.text,
-      isFromPicker: message.isFromPicker,
-      createdAt: message.createdAt.toISOString(),
+      id: msg.id,
+      text: msg.text,
+      isFromManager: true,
+      createdAt: msg.createdAt.toISOString(),
     },
   });
 }

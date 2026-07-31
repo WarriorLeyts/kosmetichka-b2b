@@ -99,6 +99,31 @@ export default async function AdminStatsPage() {
     .sort((a, b) => b[1].qty - a[1].qty)
     .slice(0, 10);
 
+  // Top customers (all time, excl. cancelled)
+  const topCustomerGroups = await prisma.order.groupBy({
+    by: ["customerId"],
+    _sum: { total: true },
+    _count: { id: true },
+    where: { status: { not: "cancelled" } },
+    orderBy: { _sum: { total: "desc" } },
+    take: 10,
+  });
+
+  const topCustomerIds = topCustomerGroups.map((g) => g.customerId);
+  const topCustomerData = await prisma.customer.findMany({
+    where: { id: { in: topCustomerIds } },
+    select: { id: true, name: true, companyName: true, priceType: true },
+  });
+  const customerById = new Map(topCustomerData.map((c) => [c.id, c]));
+
+  // Global avg order value (excl. cancelled)
+  const allTimeAgg = await prisma.order.aggregate({
+    _avg: { total: true },
+    _count: { id: true },
+    where: { status: { not: "cancelled" } },
+  });
+  const avgOrderValue = Math.round(allTimeAgg._avg.total ?? 0);
+
   // Check issues stats — parse rich JSON status format
   const checkRows = await prisma.orderItemCheck.findMany({
     select: { status: true },
@@ -134,7 +159,7 @@ export default async function AdminStatsPage() {
       </div>
 
       {/* Today cards */}
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
         <div className="rounded-2xl border bg-white p-4">
           <div className="text-2xl font-black">{todayCount}</div>
           <div className="text-sm text-slate-500">Заказов сегодня</div>
@@ -152,6 +177,10 @@ export default async function AdminStatsPage() {
             {todayIssues}
           </div>
           <div className="text-sm text-slate-500">С проблемами сегодня</div>
+        </div>
+        <div className="rounded-2xl border bg-white p-4">
+          <div className="text-2xl font-black">{avgOrderValue.toLocaleString("ru-RU")} ₽</div>
+          <div className="text-sm text-slate-500">Средний чек</div>
         </div>
       </div>
 
@@ -212,6 +241,68 @@ export default async function AdminStatsPage() {
               })}
           </div>
         </div>
+      </div>
+
+      {/* Top customers */}
+      <div className="mb-6 rounded-2xl border bg-white p-4">
+        <h2 className="mb-4 font-bold text-slate-700">Топ клиентов (все время)</h2>
+        {topCustomerGroups.length === 0 ? (
+          <div className="text-sm text-slate-400">Нет данных</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs text-slate-400">
+                  <th className="pb-2 pr-4 font-semibold">#</th>
+                  <th className="pb-2 pr-4 font-semibold">Клиент</th>
+                  <th className="pb-2 pr-4 font-semibold text-right">Заказов</th>
+                  <th className="pb-2 pr-4 font-semibold text-right">Средний чек</th>
+                  <th className="pb-2 font-semibold text-right">Итого</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topCustomerGroups.map((g, idx) => {
+                  const c = customerById.get(g.customerId);
+                  const displayName = c?.companyName || c?.name || `#${g.customerId}`;
+                  const orderCount = g._count.id;
+                  const totalSpent = g._sum.total ?? 0;
+                  const avg = orderCount > 0 ? Math.round(totalSpent / orderCount) : 0;
+                  const priceLabels: Record<string, string> = {
+                    wholesale: "Опт",
+                    big_wholesale: "Кр. опт",
+                    retail: "Розница",
+                    discount: "Скидка",
+                  };
+                  return (
+                    <tr key={g.customerId} className="border-b last:border-0 hover:bg-slate-50">
+                      <td className="py-2.5 pr-4 text-slate-300 font-black">{idx + 1}</td>
+                      <td className="py-2.5 pr-4">
+                        <Link
+                          href={`/admin/customers/${g.customerId}`}
+                          className="font-semibold text-slate-800 hover:text-indigo-600 truncate max-w-[200px] block"
+                        >
+                          {displayName}
+                        </Link>
+                        {c?.priceType && (
+                          <span className="text-xs text-slate-400">
+                            {priceLabels[c.priceType] ?? c.priceType}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 pr-4 text-right font-semibold">{orderCount}</td>
+                      <td className="py-2.5 pr-4 text-right text-slate-500">
+                        {avg.toLocaleString("ru-RU")} ₽
+                      </td>
+                      <td className="py-2.5 text-right font-bold text-indigo-600">
+                        {totalSpent.toLocaleString("ru-RU")} ₽
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="mb-6 grid gap-4 md:grid-cols-2">
