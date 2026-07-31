@@ -67,6 +67,13 @@ export async function POST(request: Request) {
 
   const smsPhone = toSmsAeroPhone(phone || "");
 
+  if (!smsPhone) {
+    return NextResponse.json(
+      { error: "Неверный формат номера телефона" },
+      { status: 400 }
+    );
+  }
+
   const smsRecord = await prisma.smsCode.findFirst({
     where: {
       phone: smsPhone,
