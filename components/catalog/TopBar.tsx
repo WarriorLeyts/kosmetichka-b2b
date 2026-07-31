@@ -51,15 +51,24 @@ export function TopBar({
   const totalBadge = pendingCount + newMessageOrderIds.length;
   const loadWishlist = useWishlistStore((s) => s.load);
   const wishlistLoaded = useWishlistStore((s) => s.loaded);
+  const wishlistProducts = useWishlistStore((s) => s.products);
+  const syncFavoritesFromWishlist = useFavoriteStore((s) => s.syncFromWishlist);
 
   useEffect(() => { fetchCustomer(); }, [fetchCustomer]);
 
-  // Load wishlist IDs once the customer is known
+  // Load wishlist once the customer is known
   useEffect(() => {
     if (customer && !wishlistLoaded) {
       loadWishlist();
     }
   }, [customer, wishlistLoaded, loadWishlist]);
+
+  // Sync cross-device favorites from server wishlist after load
+  useEffect(() => {
+    if (wishlistLoaded && wishlistProducts.length > 0) {
+      syncFavoritesFromWishlist(wishlistProducts);
+    }
+  }, [wishlistLoaded, wishlistProducts, syncFavoritesFromWishlist]);
 
   // Account dropdown
   const [menuOpen, setMenuOpen] = useState(false);

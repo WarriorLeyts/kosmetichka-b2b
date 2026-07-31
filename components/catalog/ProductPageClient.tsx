@@ -66,6 +66,21 @@ export function ProductPageClient({
   const [search, setSearch] = useState("");
   const router = useRouter();
 
+  function goBack() {
+    // If there's a previous page in the same app session, go back.
+    // Otherwise (user came from email/external link), send to catalog.
+    try {
+      const ref = document.referrer;
+      if (ref && new URL(ref).origin === window.location.origin) {
+        router.back();
+      } else {
+        router.push("/catalog");
+      }
+    } catch {
+      router.push("/catalog");
+    }
+  }
+
   const addToCart        = useCartStore((s) => s.addToCart);
   const addVariantsBatch = useCartStore((s) => s.addVariantsBatch);
   const increaseQty      = useCartStore((s) => s.increaseQuantity);
@@ -194,7 +209,7 @@ export function ProductPageClient({
 
       {/* ── Mobile floating back button — always visible while scrolling ── */}
       <button
-        onClick={() => router.back()}
+        onClick={() => goBack()}
         className="fixed bottom-20 left-4 z-40 flex md:hidden items-center gap-1.5 rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 px-4 py-2.5 text-sm font-black text-white shadow-xl transition active:scale-95"
         style={{ color: "#fff" }}
         aria-label="Назад в каталог"
@@ -208,7 +223,7 @@ export function ProductPageClient({
         <div className="mx-auto max-w-7xl px-4 pt-5 pb-3 md:px-6 md:pt-6">
           <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-400">
             <button
-              onClick={() => router.back()}
+              onClick={() => goBack()}
               className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 px-4 py-2 text-sm font-black text-white shadow-md transition hover:opacity-90"
               style={{ color: "#fff" }}
             >
@@ -348,7 +363,12 @@ export function ProductPageClient({
                   )}
 
                   <button
-                    onClick={() => { toggleFavorite(product); setFavAnim(true); }}
+                    onClick={() => {
+                      toggleFavorite(product);
+                      setFavAnim(true);
+                      // Sync to server so favorites persist across devices
+                      if (customer) toggleWishlist(product.id);
+                    }}
                     className={`flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border transition ${
                       isFavorite
                         ? "border-pink-300 bg-pink-50 text-pink-500"

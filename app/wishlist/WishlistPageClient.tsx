@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Bell, Trash2 } from "lucide-react";
 
@@ -18,6 +18,7 @@ type WishlistProduct = {
 type WishlistItem = {
   id: number;
   productId: number;
+  notified: boolean;
   createdAt: Date | string;
   product: WishlistProduct;
 };
@@ -43,6 +44,32 @@ export function WishlistPageClient({ items: initialItems }: { items: WishlistIte
     setRemoving(null);
   }
 
+  // Mark items as "notified" when shown as back-in-stock for the first time
+  // so the badge doesn't re-appear on every visit.
+  useEffect(() => {
+    const toNotify = items.filter(
+      (i) => (i.product.stock ?? 0) > 0 && !i.notified
+    );
+    if (toNotify.length === 0) return;
+
+    // Mark in local state immediately
+    setItems((prev) =>
+      prev.map((i) =>
+        toNotify.some((n) => n.id === i.id) ? { ...i, notified: true } : i
+      )
+    );
+
+    // Persist to server (fire-and-forget)
+    toNotify.forEach((i) => {
+      fetch("/api/wishlist", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: i.productId, notified: true }),
+      }).catch(() => {});
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (items.length === 0) {
     return (
       <div className="rounded-2xl border bg-white p-10 text-center shadow-sm">
@@ -65,6 +92,9 @@ export function WishlistPageClient({ items: initialItems }: { items: WishlistIte
         const imageUrl = product.images[0] ? resolveImageUrl(product.images[0].path) : null;
         const price = getPrice(product.prices);
         const inStock = (product.stock ?? 0) > 0;
+        // "Появился в наличии!" only when stock appeared AFTER item was added
+        // (notified=false means we haven't shown this badge yet for this restock event)
+        const isNewlyInStock = inStock && !item.notified;
 
         return (
           <div
@@ -104,9 +134,13 @@ export function WishlistPageClient({ items: initialItems }: { items: WishlistIte
                     {price.toLocaleString("ru-RU")} ₽
                   </span>
                 )}
-                {inStock ? (
-                  <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-bold text-green-600">
-                    Появился в наличии!
+                {isNewlyInStock ? (
+                  <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-bold text-green-600 animate-pulse">
+                    🎉 Появился в наличии!
+                  </span>
+                ) : inStock ? (
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-600">
+                    В наличии
                   </span>
                 ) : (
                   <span className="flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-bold text-indigo-500">

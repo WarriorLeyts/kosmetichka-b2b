@@ -4,6 +4,8 @@ import { useCartStore } from "@/store/cartStore";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { RotateCcw, FileText, ArrowLeft } from "lucide-react";
+import { OrderChat } from "@/components/orders/OrderChat";
+import { CancelOrderButton } from "@/components/orders/CancelOrderButton";
 
 type OrderItem = {
   id: number;
@@ -138,8 +140,15 @@ export default function OrderDetailClient({ order }: { order: Order }) {
           </div>
         )}
 
+        {/* Chat with manager */}
+        {!["exported", "cancelled"].includes(order.status) && (
+          <div className="mb-4">
+            <OrderChat orderId={order.id} />
+          </div>
+        )}
+
         {/* Actions */}
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={handleRepeat}
             className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 py-3 font-bold text-white"
@@ -155,6 +164,13 @@ export default function OrderDetailClient({ order }: { order: Order }) {
             Счёт
           </Link>
         </div>
+
+        {/* Cancel — only for cancellable statuses */}
+        {["pending", "approved"].includes(order.status) && (
+          <div className="mt-3">
+            <CancelOrderButton orderId={order.id} />
+          </div>
+        )}
       </div>
     </div>
   );

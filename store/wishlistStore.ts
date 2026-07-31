@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 type WishlistStore = {
   productIds: number[];
+  products: any[];
   loaded: boolean;
   /** Load wishlist from server (call once after auth) */
   load: () => Promise<void>;
@@ -13,6 +14,7 @@ type WishlistStore = {
 
 export const useWishlistStore = create<WishlistStore>((set, get) => ({
   productIds: [],
+  products: [],
   loaded: false,
 
   load: async () => {
@@ -20,7 +22,11 @@ export const useWishlistStore = create<WishlistStore>((set, get) => ({
       const res = await fetch("/api/wishlist");
       if (!res.ok) return;
       const data = await res.json();
-      set({ productIds: data.productIds ?? [], loaded: true });
+      set({
+        productIds: data.productIds ?? [],
+        products: data.products ?? [],
+        loaded: true,
+      });
     } catch {}
   },
 
@@ -57,5 +63,5 @@ export const useWishlistStore = create<WishlistStore>((set, get) => ({
 
   isInWishlist: (productId: number) => get().productIds.includes(productId),
 
-  clear: () => set({ productIds: [], loaded: false }),
+  clear: () => set({ productIds: [], products: [], loaded: false }),
 }));

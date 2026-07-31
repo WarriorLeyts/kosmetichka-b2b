@@ -320,6 +320,8 @@ export function ProductCard({ product, addToCart }: Props) {
               e.stopPropagation();
               toggleFavorite(product);
               setFavAnim(true);
+              // Sync to server wishlist so favorites persist across devices
+              if (customer) toggleWishlist(product.id);
             }}
           >
             <Heart
