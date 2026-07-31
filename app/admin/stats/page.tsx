@@ -125,8 +125,16 @@ export default async function AdminStatsPage() {
   const avgOrderValue = Math.round(allTimeAgg._avg.total ?? 0);
 
   // Check issues stats — parse rich JSON status format
+  // Only look at checks from the last 90 days (avoids full table scan)
+  const checkCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
   const checkRows = await prisma.orderItemCheck.findMany({
+    where: {
+      orderItem: {
+        order: { createdAt: { gte: checkCutoff } },
+      },
+    },
     select: { status: true },
+    take: 10_000, // safety cap
   });
 
   function expandCheckStatus(raw: string): string[] {

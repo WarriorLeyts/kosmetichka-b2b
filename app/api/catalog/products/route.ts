@@ -116,90 +116,120 @@ export async function GET(request: Request) {
     });
   }
 
-  // Two-phase path: grab the lightweight matching set, look up
-  // wholesale/discount prices for just those products, then filter/sort/
-  // paginate in memory. Fine for a catalog of a few thousand SKUs; would
-  // need a denormalized price column (or raw SQL) if it grows much larger.
+  // Price-aware path: push price range and sale filters down to the DB
+  // by pre-fetching eligible guids from ProductPrice, then adding them as
+  // a guid-IN constraint on the main product query.
+  //
+  // Only price SORT still requires an in-memory sort step (because the sort
+  // key lives in a separate relation), but even then the candidate set is
+  // already price-filtered before it reaches memory.
+
+  // ── Step 1: resolve price-range filter via ProductPrice table ────────────
+  let priceRangeGuids: string[] | null = null;
+  if (priceMin !== null || priceMax !== null) {
+    const priceWhere: any = { priceType: "wholesale" };
+    if (priceMin !== null && priceMax !== null) {
+      priceWhere.price = { gte: priceMin, lte: priceMax };
+    } else if (priceMin !== null) {
+      priceWhere.price = { gte: priceMin };
+    } else {
+      priceWhere.price = { lte: priceMax! };
+    }
+    const rows = await prisma.productPrice.findMany({
+      where: priceWhere,
+      select: { productGuid: true },
+    });
+    priceRangeGuids = rows.map((r) => r.productGuid);
+  }
+
+  // ── Step 2: resolve sale filter via ProductPrice table ───────────────────
+  let saleGuids: string[] | null = null;
+  if (quick.includes("sale")) {
+    const rows = await prisma.productPrice.findMany({
+      where: { priceType: "discount" },
+      select: { productGuid: true },
+    });
+    saleGuids = rows.map((r) => r.productGuid);
+  }
+
+  // ── Step 3: merge guid constraints and inject into product where ─────────
+  if (priceRangeGuids !== null || saleGuids !== null) {
+    let merged: string[];
+    if (priceRangeGuids !== null && saleGuids !== null) {
+      const saleSet = new Set(saleGuids);
+      merged = priceRangeGuids.filter((g) => saleSet.has(g));
+    } else {
+      merged = (priceRangeGuids ?? saleGuids)!;
+    }
+    where.guid = { in: merged };
+  }
+
+  // ── Step 4a: no price sort → fully DB-paginated ──────────────────────────
+  const needsPriceSort = sort === "price_asc" || sort === "price_desc";
+
+  if (!needsPriceSort) {
+    const orderBy =
+      sort === "name"
+        ? { name: "asc" as const }
+        : quick.includes("new")
+        ? { createdAt: "desc" as const }
+        : { updatedAt: "desc" as const };
+
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        include,
+        orderBy,
+      }),
+      prisma.product.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      products: products.map(applyPrices),
+      total,
+      page,
+      hasMore: page * limit < total,
+    });
+  }
+
+  // ── Step 4b: price sort → lightweight in-memory sort, but only on the
+  //            already price-filtered candidate set ─────────────────────────
   const matched = await prisma.product.findMany({
     where,
-    select: { id: true, guid: true, name: true, createdAt: true },
+    select: { id: true, guid: true },
   });
 
   if (matched.length === 0) {
     return NextResponse.json({ products: [], total: 0, page, hasMore: false });
   }
 
-  const guids = matched.map((p) => p.guid);
+  const matchedGuids = matched.map((p) => p.guid);
+  const sortPrices = await prisma.productPrice.findMany({
+    where: { productGuid: { in: matchedGuids }, priceType: "wholesale" },
+    select: { productGuid: true, price: true },
+  });
+  const priceByGuid = new Map(sortPrices.map((r) => [r.productGuid, r.price]));
 
-  const prices = await prisma.productPrice.findMany({
-    where: {
-      productGuid: { in: guids },
-      priceType: { in: ["wholesale", "discount"] },
-    },
+  matched.sort((a, b) => {
+    const pa = priceByGuid.get(a.guid) ?? Infinity;
+    const pb = priceByGuid.get(b.guid) ?? Infinity;
+    return sort === "price_asc" ? pa - pb : pb - pa;
   });
 
-  const priceByGuid = new Map<
-    string,
-    { wholesale?: number; hasDiscount: boolean }
-  >();
-
-  for (const price of prices) {
-    const entry = priceByGuid.get(price.productGuid) || {
-      hasDiscount: false,
-    };
-
-    if (price.priceType === "wholesale") entry.wholesale = price.price;
-    if (price.priceType === "discount") entry.hasDiscount = true;
-
-    priceByGuid.set(price.productGuid, entry);
-  }
-
-  const filtered = matched.filter((product) => {
-    const info = priceByGuid.get(product.guid);
-
-    if (quick.includes("sale") && !info?.hasDiscount) return false;
-
-    if (priceMin !== null || priceMax !== null) {
-      const price = info?.wholesale;
-
-      if (price === undefined) return false;
-      if (priceMin !== null && price < priceMin) return false;
-      if (priceMax !== null && price > priceMax) return false;
-    }
-
-    return true;
-  });
-
-  filtered.sort((a, b) => {
-    if (sort === "price_asc" || sort === "price_desc") {
-      const priceA = priceByGuid.get(a.guid)?.wholesale ?? Infinity;
-      const priceB = priceByGuid.get(b.guid)?.wholesale ?? Infinity;
-
-      return sort === "price_asc" ? priceA - priceB : priceB - priceA;
-    }
-
-    if (sort === "popularity" && quick.includes("new")) {
-      return (
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-    }
-
-    return a.name.localeCompare(b.name, "ru");
-  });
-
-  const total = filtered.length;
-  const start = (page - 1) * limit;
-  const pageIds = filtered.slice(start, start + limit).map((p) => p.id);
+  const total = matched.length;
+  const pageIds = matched.slice((page - 1) * limit, page * limit).map((p) => p.id);
 
   const products = await prisma.product.findMany({
     where: { id: { in: pageIds } },
     include,
   });
 
-  const productById = new Map(products.map((product) => [product.id, product]));
+  const productById = new Map(products.map((p) => [p.id, p]));
   const ordered = pageIds
     .map((id) => productById.get(id))
-    .filter((product): product is NonNullable<typeof product> => Boolean(product));
+    .filter((p): p is NonNullable<typeof p> => Boolean(p));
 
   return NextResponse.json({
     products: ordered.map(applyPrices),
