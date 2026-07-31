@@ -1,16 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-// Normalize phone to 7XXXXXXXXXX (11 digits, starts with 7) for SMS AERO
-function toSmsAeroPhone(value: string): string | null {
-  const digits = String(value).replace(/\D/g, "");
-
-  if (digits.length === 11 && digits.startsWith("7")) return digits;
-  if (digits.length === 11 && digits.startsWith("8")) return "7" + digits.slice(1);
-  if (digits.length === 10) return "7" + digits;
-
-  return null;
-}
+import { toSmsAeroPhone } from "@/lib/phone";
 
 function generateCode(): string {
   return String(Math.floor(1000 + Math.random() * 9000));

@@ -3,15 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useCartStore } from "@/store/cartStore";
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Ожидает подтверждения",
-  approved: "Подтверждён",
-  assembly: "Сборка",
-  consultation: "На консультации",
-  payment: "К оплате",
-  exported: "Выполнен",
-  cancelled: "Отменён",
-};
+import { ORDER_STATUS_LABELS_CUSTOMER as STATUS_LABELS } from "@/lib/orderStatus";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800 border border-amber-200",

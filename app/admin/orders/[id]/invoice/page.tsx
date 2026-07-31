@@ -6,15 +6,7 @@ import PrintButton from "@/components/admin/PrintButton";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Ожидание",
-  approved: "Подтверждён",
-  assembly: "Сборка",
-  consultation: "Консультация",
-  payment: "К оплате",
-  exported: "Выгружен в 1С",
-  cancelled: "Отменён",
-};
+import { ORDER_STATUS_LABELS as STATUS_LABELS } from "@/lib/orderStatus";
 
 export default async function InvoicePage({
   params,

@@ -3,29 +3,7 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { createToken } from "@/lib/auth";
-
-function normalizePhone(value: string | null | undefined) {
-  if (!value) return "";
-
-  const digits = String(value).replace(/\D/g, "");
-
-  if (digits.length === 11 && digits.startsWith("7")) {
-    return "8" + digits.slice(1);
-  }
-
-  return digits;
-}
-
-// For SMS AERO format (7XXXXXXXXXX)
-function toSmsAeroPhone(value: string): string {
-  const digits = String(value).replace(/\D/g, "");
-
-  if (digits.length === 11 && digits.startsWith("7")) return digits;
-  if (digits.length === 11 && digits.startsWith("8")) return "7" + digits.slice(1);
-  if (digits.length === 10) return "7" + digits;
-
-  return digits;
-}
+import { normalizePhone, toSmsAeroPhone } from "@/lib/phone";
 
 async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
   const serverKey = process.env.SMARTCAPTCHA_SERVER_KEY;

@@ -5,16 +5,7 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-/** Parse JSON or plain check status into individual status strings */
-function parseCheckStatuses(raw: string): string[] {
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed.map((e) => (typeof e === "string" ? e : e.s)).filter(Boolean);
-    }
-  } catch {}
-  return [raw];
-}
+import { parseCheckStatuses } from "@/lib/checkStatus";
 
 async function getCurrentUserId(): Promise<number | null> {
   const cookieStore = await cookies();

@@ -7,15 +7,8 @@ const PAGE_SIZE = 50;
 
 export const dynamic = "force-dynamic";
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Ожидание",
-  approved: "Подтверждён",
-  assembly: "Сборка",
-  consultation: "Консультация",
-  payment: "К оплате",
-  exported: "Выгружен в 1С",
-  cancelled: "Отменён",
-};
+import { ORDER_STATUS_LABELS as STATUS_LABELS } from "@/lib/orderStatus";
+import { parseCheckStatuses } from "@/lib/checkStatus";
 
 const STATUS_CLASSES: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-700",
@@ -27,16 +20,6 @@ const STATUS_CLASSES: Record<string, string> = {
   cancelled: "bg-red-100 text-red-700",
 };
 
-/** Parse rich JSON check status into individual status strings */
-function parseCheckStatuses(raw: string): string[] {
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed.map((e) => (typeof e === "string" ? e : e.s)).filter(Boolean);
-    }
-  } catch {}
-  return [raw];
-}
 
 export default async function AdminOrdersPage({
   searchParams,

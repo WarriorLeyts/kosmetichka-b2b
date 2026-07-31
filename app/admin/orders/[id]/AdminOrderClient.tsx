@@ -118,15 +118,8 @@ type CatalogCategory = {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Ожидание",
-  approved: "Подтверждён",
-  assembly: "Сборка",
-  consultation: "Консультация",
-  payment: "К оплате",
-  exported: "Выгружен",
-  cancelled: "Отменён",
-};
+import { ORDER_STATUS_LABELS as STATUS_LABELS, ORDER_STATUS_ACTIONS as TRANSITIONS } from "@/lib/orderStatus";
+import { parseCheckStatuses } from "@/lib/checkStatus";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800 border-yellow-300",
@@ -148,30 +141,6 @@ const CHECK_LABELS: Record<string, { label: string; color: string }> = {
 
 const PIPELINE = ["pending", "approved", "assembly", "consultation", "payment", "exported"];
 
-const TRANSITIONS: Record<string, { label: string; to: string; style: string }[]> = {
-  pending: [
-    { label: "▶ Передать на сборку", to: "assembly", style: "bg-blue-600 hover:bg-blue-700 text-white" },
-    { label: "✕ Отменить заказ", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
-  ],
-  approved: [
-    { label: "▶ Передать на сборку", to: "assembly", style: "bg-blue-600 hover:bg-blue-700 text-white" },
-    { label: "✓ К оплате", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
-    { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
-  ],
-  assembly: [
-    { label: "💬 На консультацию", to: "consultation", style: "bg-orange-100 hover:bg-orange-200 text-orange-700" },
-    { label: "✓ К оплате", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
-    { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
-  ],
-  consultation: [
-    { label: "↩ Вернуть на сборку", to: "assembly", style: "bg-blue-100 hover:bg-blue-200 text-blue-700" },
-    { label: "✓ Подтвердить к оплате", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
-    { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
-  ],
-  payment: [
-    { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
-  ],
-};
 
 // Which statuses we can revert TO from a given status (must match backend)
 const BACKWARDS: Record<string, string[]> = {
@@ -184,18 +153,6 @@ const BACKWARDS: Record<string, string[]> = {
 
 type CheckEntry = { status: string; qty?: number };
 
-function parseCheckStatuses(status: string | null): string[] {
-  if (!status) return [];
-  try {
-    const parsed = JSON.parse(status);
-    if (Array.isArray(parsed)) {
-      return parsed.map((entry) =>
-        typeof entry === "string" ? entry : entry.s
-      );
-    }
-  } catch {}
-  return [status];
-}
 
 function parseCheckEntries(status: string | null): CheckEntry[] {
   if (!status) return [];

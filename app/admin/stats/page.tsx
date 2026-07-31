@@ -1,19 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { ORDER_STATUS_LABELS } from "@/lib/orderStatus";
+import { parseCheckStatuses } from "@/lib/checkStatus";
 
 export const dynamic = "force-dynamic";
 
-function getStatusLabel(status: string) {
-  switch (status) {
-    case "pending": return "Ожидание";
-    case "assembly": return "Сборка";
-    case "consultation": return "Консультация";
-    case "payment": return "К оплате";
-    case "exported": return "Выгружен";
-    case "cancelled": return "Отменён";
-    default: return status;
-  }
-}
 
 function getStatusColor(status: string) {
   switch (status) {
@@ -137,19 +128,9 @@ export default async function AdminStatsPage() {
     take: 10_000, // safety cap
   });
 
-  function expandCheckStatus(raw: string): string[] {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed.map((e) => (typeof e === "string" ? e : e.s)).filter(Boolean);
-      }
-    } catch {}
-    return [raw];
-  }
-
   const checkStatusCounts: Record<string, number> = {};
   for (const row of checkRows) {
-    for (const s of expandCheckStatus(row.status)) {
+    for (const s of parseCheckStatuses(row.status)) {
       checkStatusCounts[s] = (checkStatusCounts[s] ?? 0) + 1;
     }
   }
@@ -231,7 +212,7 @@ export default async function AdminStatsPage() {
                 return (
                   <div key={g.status} className="flex items-center gap-3">
                     <div className="w-24 text-sm font-semibold text-slate-600">
-                      {getStatusLabel(g.status)}
+                      {ORDER_STATUS_LABELS[g.status] ?? g.status}
                     </div>
                     <div className="flex-1 rounded-full bg-slate-100" style={{ height: 20 }}>
                       <div

@@ -2,25 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendMail } from "@/lib/mail";
-
-const STATUS_LABELS: Record<string, string> = {
-  assembly: "Сборка",
-  consultation: "Консультация",
-  payment: "К оплате",
-  exported: "Выгружен",
-  cancelled: "Отменён",
-};
-
-// Valid transitions (includes backwards for revert functionality)
-const TRANSITIONS: Record<string, string[]> = {
-  pending: ["assembly", "cancelled"],
-  approved: ["assembly", "payment", "cancelled"], // legacy status
-  assembly: ["pending", "approved", "consultation", "payment", "cancelled"],
-  consultation: ["assembly", "payment", "cancelled"],
-  payment: ["assembly", "consultation", "exported", "cancelled"],
-  exported: [],
-  cancelled: [],
-};
+import { ORDER_STATUS_LABELS, ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
 
 export async function POST(
   request: Request,
@@ -85,7 +67,7 @@ export async function POST(
     });
     const email = fullOrder?.customer?.email;
     if (email) {
-      const label = STATUS_LABELS[toStatus] ?? toStatus;
+      const label = ORDER_STATUS_LABELS[toStatus] ?? toStatus;
       const clientName = fullOrder.customer.companyName || fullOrder.customer.name || "Клиент";
       const statusColor = toStatus === "cancelled" ? "#ef4444" : toStatus === "payment" ? "#10b981" : "#6366f1";
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://kosmetichka-opt.ru";
