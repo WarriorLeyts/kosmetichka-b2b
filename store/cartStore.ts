@@ -244,9 +244,17 @@ export const useCartStore = create<CartStore>()(
         return get().cart.reduce((sum, item) => sum + item.quantity, 0);
       },
 
+      // Приблизительная сумма по розничной цене (для точного расчёта используйте
+      // rawCartTotal(cart, priceType) из lib/pricing.ts с учётом типа клиента)
       cartTotal: () => {
         return get().cart.reduce((sum, item) => {
-          const price = Number(item.wholesalePrice || item.retailPrice || 0);
+          const price = Number(
+            item.retailPrice ||
+            item.discountPrice ||
+            item.wholesalePrice ||
+            item.bigWholesalePrice ||
+            0
+          );
           return sum + price * item.quantity;
         }, 0);
       },

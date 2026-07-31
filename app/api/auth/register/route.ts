@@ -106,22 +106,23 @@ export async function POST(request: Request) {
     );
   }
 
-  // Помечаем код как использованный
-  await prisma.smsCode.update({
-    where: { id: smsRecord.id },
-    data: { used: true },
-  });
-
   // ─── Основная логика регистрации ─────────────────────────────
   const cleanPhone = normalizePhone(phone);
   const cleanEmail = String(email || "").trim().toLowerCase();
 
+  // Валидируем поля ДО инвалидации SMS-кода — иначе код сгорает при неполной форме
   if (!name || !cleanPhone || !cleanEmail || !password) {
     return NextResponse.json(
       { error: "Заполните имя, телефон, email и пароль" },
       { status: 400 }
     );
   }
+
+  // Помечаем код как использованный (только после успешной валидации полей)
+  await prisma.smsCode.update({
+    where: { id: smsRecord.id },
+    data: { used: true },
+  });
 
   const exists = await prisma.customer.findFirst({
     where: {

@@ -3,6 +3,90 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Send, MessageSquare, ChevronDown, ChevronUp, X } from "lucide-react";
 
+const IMAGES_BASE = process.env.NEXT_PUBLIC_IMAGES_BASE_URL ?? "https://kosmetichka-opt.ru";
+
+function getProductImageUrl(imagePath: string | null): string | null {
+  if (!imagePath) return null;
+  if (imagePath.startsWith("http")) return imagePath;
+  return `${IMAGES_BASE}/api/1c/${imagePath}`;
+}
+
+/** Рендерит текст сообщения: обычный текст или структурированные JSON-карточки от менеджера */
+function renderMsgContent(text: string) {
+  try {
+    const obj = JSON.parse(text);
+    // Фото из чата
+    if (obj?._t === "img" && obj.url) {
+      return (
+        <a href={obj.url} target="_blank" rel="noreferrer">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={obj.url}
+            alt="фото"
+            className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer hover:opacity-90"
+          />
+        </a>
+      );
+    }
+    // Карточка товара (менеджер добавил из каталога)
+    if (obj?._t === "product") {
+      const imgUrl = getProductImageUrl(obj.imagePath ?? null);
+      return (
+        <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-52 shadow-sm">
+          {imgUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imgUrl}
+              alt={obj.name}
+              className="w-full h-24 object-contain bg-slate-50 p-1"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          )}
+          <div className="p-2">
+            <p className="font-semibold text-sm leading-snug">{obj.name}</p>
+            {obj.price > 0 && (
+              <p className="text-xs text-slate-500 mt-0.5">
+                {Number(obj.price).toLocaleString("ru-RU")} ₽
+              </p>
+            )}
+          </div>
+        </div>
+      );
+    }
+    // Карточка проблемного товара (от сборщика)
+    if (obj?._t === "product-problem") {
+      const imgUrl = getProductImageUrl(obj.imagePath ?? null);
+      return (
+        <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-56 shadow-sm">
+          {imgUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imgUrl}
+              alt={obj.name}
+              className="w-full h-28 object-contain bg-slate-50 p-1"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+          )}
+          <div className="p-2">
+            <p className="font-semibold text-sm leading-snug mb-1">{obj.name}</p>
+            {obj.price > 0 && (
+              <p className="text-xs text-slate-500 mb-2">
+                {Number(obj.price).toLocaleString("ru-RU")} ₽
+              </p>
+            )}
+            <div className="rounded-lg bg-orange-50 border border-orange-200 px-2 py-1.5">
+              <p className="text-xs font-semibold text-orange-700">⚠️ {obj.problem}</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  } catch {
+    // Не JSON — рендерим как обычный текст
+  }
+  return <span style={{ whiteSpace: "pre-wrap" }}>{text}</span>;
+}
+
 type Message = {
   id: number;
   text: string;
@@ -14,100 +98,6 @@ type Props = {
   orderId: number;
   onOpenChange?: (open: boolean) => void;
 };
-
-function getImageUrl(imagePath: string | null): string | null {
-  if (!imagePath) return null;
-  if (imagePath.startsWith("http")) return imagePath;
-  return `https://kosmetichka-opt.ru/api/1c/${imagePath}`;
-}
-
-function renderBubble(text: string) {
-  try {
-    const obj = JSON.parse(text);
-
-    if (obj?._t === "img" && obj.url) {
-      return (
-        <a href={obj.url} target="_blank" rel="noreferrer">
-          <img
-            src={obj.url}
-            alt="фото"
-            className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer hover:opacity-90"
-          />
-        </a>
-      );
-    }
-
-    if (obj?._t === "product-problem") {
-      const imgUrl = getImageUrl(obj.imagePath ?? null);
-      return (
-        <div style={{
-          borderRadius: 14,
-          border: "1px solid #e2e8f0",
-          background: "#fff",
-          overflow: "hidden",
-          width: 210,
-          boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
-        }}>
-          {imgUrl && (
-            <a href={imgUrl} target="_blank" rel="noreferrer" style={{ display: "block" }}>
-              <img
-                src={imgUrl}
-                alt={obj.name}
-                style={{ width: "100%", height: 110, objectFit: "contain", background: "#f8fafc", padding: 4, display: "block", cursor: "pointer" }}
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
-            </a>
-          )}
-          <div style={{ padding: "8px 10px" }}>
-            <p style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3, margin: "0 0 4px" }}>{obj.name}</p>
-            {obj.price > 0 && (
-              <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 8px" }}>
-                {Number(obj.price).toLocaleString("ru-RU")} ₽
-              </p>
-            )}
-            <div style={{ borderRadius: 8, background: "#fff7ed", border: "1px solid #fed7aa", padding: "6px 8px" }}>
-              <p style={{ fontSize: 12, fontWeight: 600, color: "#c2410c", margin: 0 }}>⚠️ {obj.problem}</p>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (obj?._t === "product") {
-      const imgUrl = getImageUrl(obj.imagePath ?? null);
-      return (
-        <div style={{
-          borderRadius: 14,
-          border: "1px solid #e2e8f0",
-          background: "#fff",
-          overflow: "hidden",
-          width: 200,
-          boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
-        }}>
-          {imgUrl && (
-            <a href={imgUrl} target="_blank" rel="noreferrer" style={{ display: "block" }}>
-              <img
-                src={imgUrl}
-                alt={obj.name}
-                style={{ width: "100%", height: 96, objectFit: "contain", background: "#f8fafc", padding: 4, display: "block", cursor: "pointer" }}
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
-            </a>
-          )}
-          <div style={{ padding: "8px 10px" }}>
-            <p style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3, margin: "0 0 4px" }}>{obj.name}</p>
-            {obj.price > 0 && (
-              <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>
-                {Number(obj.price).toLocaleString("ru-RU")} ₽
-              </p>
-            )}
-          </div>
-        </div>
-      );
-    }
-  } catch {}
-  return <span style={{ whiteSpace: "pre-wrap" }}>{text}</span>;
-}
 
 export function OrderChat({ orderId, onOpenChange }: Props) {
   const [open, setOpen] = useState(false);
@@ -258,7 +248,7 @@ export function OrderChat({ orderId, onOpenChange }: Props) {
                   <div className="order-chat-msg-avatar">{"М"}</div>
                 )}
                 <div className="order-chat-msg-body">
-                  <div className="order-chat-bubble">{renderBubble(msg.text)}</div>
+                  <div className="order-chat-bubble">{renderMsgContent(msg.text)}</div>
                   <div className="order-chat-time">
                     {new Date(msg.createdAt).toLocaleString("ru-RU", {
                       day: "numeric",

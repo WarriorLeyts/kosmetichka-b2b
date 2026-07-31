@@ -109,7 +109,8 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "Не удалось создать заказ" }, { status: 400 });
+    const message = error instanceof Error ? error.message : "Не удалось создать заказ";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 
   // Уведомление покупателю о принятом заказе

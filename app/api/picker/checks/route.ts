@@ -102,7 +102,12 @@ export async function POST(request: Request) {
   }
 
   // Issues → consultation; all OK → payment
+  // Обрабатываем все три формата: statusData (rich), statuses (array), status (legacy)
   const hasIssues = items.some((i) => {
+    if (i.statusData !== undefined) {
+      // Rich-формат: [{s:"expired",q:2}, "bad_condition", ...] или ["ok"]
+      return !(i.statusData.length === 1 && i.statusData[0] === "ok");
+    }
     const statuses = i.statuses ?? (i.status ? [i.status] : ["ok"]);
     return statuses.some((s) => s !== "ok");
   });
