@@ -66,6 +66,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Неверный формат номера телефона" }, { status: 400 });
     }
 
+    // Rate limit: не более 10 SMS в час с одного IP
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
+
+    const SMS_IP_MAX = 10;
+    const SMS_IP_WINDOW_MS = 60 * 60 * 1000; // 1 час
+    const smsIpKey = `sms_${ip}`;
+    const now = new Date();
+
+    const ipAttempt = await prisma.loginAttempt.findUnique({ where: { ip: smsIpKey } });
+
+    if (ipAttempt && ipAttempt.resetAt > now) {
+      if (ipAttempt.count >= SMS_IP_MAX) {
+        return NextResponse.json(
+          { error: "Слишком много запросов. Попробуйте через час." },
+          { status: 429 }
+        );
+      }
+      await prisma.loginAttempt.update({
+        where: { ip: smsIpKey },
+        data: { count: { increment: 1 } },
+      });
+    } else {
+      await prisma.loginAttempt.upsert({
+        where: { ip: smsIpKey },
+        update: { count: 1, resetAt: new Date(now.getTime() + SMS_IP_WINDOW_MS) },
+        create: { ip: smsIpKey, count: 1, resetAt: new Date(now.getTime() + SMS_IP_WINDOW_MS) },
+      });
+    }
+
     // Rate limit: не чаще 1 раза в 60 секунд на номер
     const recent = await prisma.smsCode.findFirst({
       where: {

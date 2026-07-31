@@ -25,6 +25,24 @@ const secret = new TextEncoder().encode(resolveJwtSecret());
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
+  // --- Admin API routes: require admin or manager role, return JSON 401 ---
+  if (pathname.startsWith("/api/admin/")) {
+    const token = request.cookies.get("admin_token")?.value;
+
+    if (!token) {
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+
+    try {
+      const { payload } = await jwtVerify(token, secret);
+      if (payload.role !== "admin" && payload.role !== "manager") {
+        return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
+      }
+    } catch {
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+    }
+  }
+
   // --- Admin routes: require admin or manager role ---
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
     const token = request.cookies.get("admin_token")?.value;
@@ -88,6 +106,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/api/admin/:path*",
     "/admin/:path*",
     "/picker/:path*",
     "/orders/:path*",

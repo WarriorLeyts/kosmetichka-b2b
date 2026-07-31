@@ -2,11 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { exec } from "child_process";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 
 // Auth: any login + SYNC_API_KEY as password (set in .env)
 const COOKIE_NAME = "1C_SESS";
-const SESSION_TOKEN = "kosmetichka_1c_active";
 const DATA_DIR = path.join(process.cwd(), "data", "1c");
+
+/** In-memory store of valid session tokens → expiry timestamp */
+const activeSessions = new Map<string, number>();
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function generateSessionToken(): string {
+  return crypto.randomBytes(24).toString("hex");
+}
 
 function txt(body: string) {
   return new NextResponse(body + "\n", {
@@ -15,9 +23,14 @@ function txt(body: string) {
 }
 
 function checkAuth(request: NextRequest): boolean {
-  // Cookie-based (after checkauth)
+  // Cookie-based (after checkauth) — validate against in-memory session map
   const cookie = request.cookies.get(COOKIE_NAME);
-  if (cookie?.value === SESSION_TOKEN) return true;
+  if (cookie?.value) {
+    const expiry = activeSessions.get(cookie.value);
+    if (expiry && expiry > Date.now()) return true;
+    // Clean up expired token
+    if (expiry) activeSessions.delete(cookie.value);
+  }
 
   // Basic auth (used for checkauth step)
   const auth = request.headers.get("Authorization");
@@ -52,8 +65,12 @@ export async function GET(request: NextRequest) {
     if (!checkAuth(request)) {
       return txt("failure\nНеверный логин или пароль");
     }
-    const response = txt(`success\n${COOKIE_NAME}\n${SESSION_TOKEN}`);
-    response.cookies.set(COOKIE_NAME, SESSION_TOKEN, {
+    // Generate a fresh random token for this session
+    const sessionToken = generateSessionToken();
+    activeSessions.set(sessionToken, Date.now() + SESSION_TTL_MS);
+
+    const response = txt(`success\n${COOKIE_NAME}\n${sessionToken}`);
+    response.cookies.set(COOKIE_NAME, sessionToken, {
       httpOnly: true,
       path: "/",
       maxAge: 60 * 60 * 24, // 24h

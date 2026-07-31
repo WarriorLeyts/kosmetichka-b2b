@@ -34,6 +34,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Корзина пустая" }, { status: 400 });
   }
 
+  if (items.length > 500) {
+    return NextResponse.json({ error: "Слишком много позиций в заказе (максимум 500)" }, { status: 400 });
+  }
+
   const customer = await prisma.customer.findUnique({
     where: { id: Number(payload.id) },
   });
