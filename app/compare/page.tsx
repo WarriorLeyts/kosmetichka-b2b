@@ -49,25 +49,25 @@ function getCellValue(
       return product.categoryName || <span className="text-slate-300">—</span>;
     case "price": {
       // Build price tiers using the same fallback logic as priceFor()
-      const tiers: { label: string; key: PriceType; value: number }[] = [
+      const tiers = [
         {
           label: "Розница",
-          key: "retail",
+          key: "retail" as PriceType,
           value: Number(product.retailPrice ?? 0),
         },
         {
           label: "Скидка",
-          key: "discount",
+          key: "discount" as PriceType,
           value: Number(product.discountPrice ?? product.retailPrice ?? 0),
         },
         {
           label: "Опт",
-          key: "wholesale",
+          key: "wholesale" as PriceType,
           value: Number(product.wholesalePrice ?? 0),
         },
         {
           label: "Кр. опт",
-          key: "big_wholesale",
+          key: "big_wholesale" as PriceType,
           value: Number(
             product.bigWholesalePrice ?? product.wholesalePrice ?? 0
           ),
