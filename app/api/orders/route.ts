@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
 import { sendMail } from "@/lib/mail";
 import { effectivePriceType } from "@/lib/pricing";
+import { orderCreationLimiter } from "@/lib/rateLimit";
 
 /** Escape user-supplied strings before embedding in HTML emails */
 function escHtml(str: string): string {
@@ -27,6 +28,18 @@ export async function POST(request: Request) {
 
   if (!payload?.id) {
     return NextResponse.json({ error: "Ошибка авторизации" }, { status: 401 });
+  }
+
+  // Rate limit: max 10 orders per customer per hour
+  const rlResult = orderCreationLimiter.check(`order:${payload.id}`);
+  if (!rlResult.ok) {
+    return NextResponse.json(
+      { error: "Слишком много заказов. Попробуйте позже." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil((rlResult.resetAt - Date.now()) / 1000)) },
+      }
+    );
   }
 
   const { items, comment } = await request.json();

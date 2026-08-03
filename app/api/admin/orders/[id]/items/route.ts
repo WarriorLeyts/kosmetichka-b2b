@@ -76,26 +76,28 @@ export async function PUT(request: NextRequest, { params }: Props) {
     await prisma.orderItem.deleteMany({ where: { id: { in: validRemoveIds } } });
   }
 
-  for (const u of updates) {
-    if (removeIds.includes(u.id)) continue;
-    const qty = Math.max(1, Math.round(u.quantity));
-    const price = Math.max(0, Math.round(u.price));
-    await prisma.orderItem.update({
-      where: { id: u.id },
-      data: {
-        quantity: qty,
-        price,
-        total: qty * price,
-        ...(u.variantName !== undefined ? { variantName: u.variantName ?? null } : {}),
-        ...(u.variantImageUrl !== undefined ? { variantImageUrl: u.variantImageUrl ?? null } : {}),
-      },
+  // Batch all updates and creates into a single transaction — O(1) round trips instead of O(n)
+  const updateOps = updates
+    .filter((u) => !removeIds.includes(u.id))
+    .map((u) => {
+      const qty = Math.max(1, Math.round(u.quantity));
+      const price = Math.max(0, Math.round(u.price));
+      return prisma.orderItem.update({
+        where: { id: u.id },
+        data: {
+          quantity: qty,
+          price,
+          total: qty * price,
+          ...(u.variantName !== undefined ? { variantName: u.variantName ?? null } : {}),
+          ...(u.variantImageUrl !== undefined ? { variantImageUrl: u.variantImageUrl ?? null } : {}),
+        },
+      });
     });
-  }
 
-  for (const ni of newItems) {
+  const createOps = newItems.map((ni) => {
     const qty = Math.max(1, Math.round(ni.quantity));
     const price = Math.max(0, Math.round(ni.price));
-    await prisma.orderItem.create({
+    return prisma.orderItem.create({
       data: {
         orderId,
         productId: ni.productId,
@@ -108,6 +110,10 @@ export async function PUT(request: NextRequest, { params }: Props) {
         variantImageUrl: ni.variantImageUrl ?? null,
       },
     });
+  });
+
+  if (updateOps.length > 0 || createOps.length > 0) {
+    await prisma.$transaction([...updateOps, ...createOps]);
   }
 
   const remaining = await prisma.orderItem.findMany({ where: { orderId } });

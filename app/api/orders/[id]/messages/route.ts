@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { messageLimiter } from "@/lib/rateLimit";
 
 async function getCustomer() {
   const cookieStore = await cookies();
@@ -64,6 +65,18 @@ export async function POST(
   }
   if (text.length > 2000) {
     return NextResponse.json({ error: "Сообщение слишком длинное" }, { status: 400 });
+  }
+
+  // Rate limit: max 30 messages per customer per 10 minutes
+  const rlResult = messageLimiter.check(`msg:${customer.id}`);
+  if (!rlResult.ok) {
+    return NextResponse.json(
+      { error: "Слишком много сообщений. Подождите немного." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil((rlResult.resetAt - Date.now()) / 1000)) },
+      }
+    );
   }
 
   const msg = await prisma.orderMessage.create({

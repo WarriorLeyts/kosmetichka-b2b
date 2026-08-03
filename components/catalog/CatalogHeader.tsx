@@ -5,7 +5,7 @@ type Props = {
 };
 
 const SORT_OPTIONS = [
-  { value: "popularity", label: "По популярности" },
+  { value: "popularity", label: "Недавно обновлённые" },
   { value: "price_asc", label: "Сначала дешевые" },
   { value: "price_desc", label: "Сначала дорогие" },
   { value: "name", label: "По названию" },

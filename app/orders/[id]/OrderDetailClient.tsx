@@ -166,7 +166,7 @@ export default function OrderDetailClient({ order }: { order: Order }) {
         </div>
 
         {/* Cancel — only for cancellable statuses */}
-        {["pending", "approved"].includes(order.status) && (
+        {order.status === "pending" && (
           <div className="mt-3">
             <CancelOrderButton orderId={order.id} />
           </div>

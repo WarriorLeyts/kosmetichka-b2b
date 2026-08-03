@@ -24,29 +24,32 @@ export async function POST(request: NextRequest) {
   const updated: number[] = [];
   const skipped: number[] = [];
 
+  // Separate eligible orders from those whose status transition is not allowed
   for (const order of orders) {
     const allowed = ORDER_STATUS_TRANSITIONS[order.status] ?? [];
     if (!allowed.includes(toStatus)) {
       skipped.push(order.id);
-      continue;
+    } else {
+      updated.push(order.id);
     }
+  }
 
+  if (updated.length > 0) {
+    // Single transaction: one updateMany + one createMany — O(1) round trips instead of O(n)
     await prisma.$transaction([
-      prisma.order.update({
-        where: { id: order.id },
+      prisma.order.updateMany({
+        where: { id: { in: updated } },
         data: { status: toStatus },
       }),
-      prisma.orderStatusLog.create({
-        data: {
-          orderId: order.id,
-          fromStatus: order.status,
+      prisma.orderStatusLog.createMany({
+        data: updated.map((orderId) => ({
+          orderId,
+          fromStatus: orders.find((o) => o.id === orderId)!.status,
           toStatus,
           userId: user.id as number,
-        },
+        })),
       }),
     ]);
-
-    updated.push(order.id);
   }
 
   return NextResponse.json({ updated, skipped });

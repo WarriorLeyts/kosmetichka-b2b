@@ -98,6 +98,7 @@ model ProductPrice {
   updatedAt DateTime @updatedAt
 
   @@unique([productGuid, priceType])
+  @@index([priceType]) // speeds up sale-filter and price-sort pre-queries
 }
 
 model Customer {
@@ -175,6 +176,7 @@ model Order {
 
   @@index([customerId])
   @@index([status])
+  @@index([createdAt]) // used in admin order lists and 1C export ordering
 }
 
 model OrderItem {
@@ -244,6 +246,7 @@ model OrderMessage {
   createdAt DateTime @default(now())
 
   @@index([orderId, source])
+  @@index([orderId, createdAt]) // efficient pagination of message history
 }
 
 model OrderStatusLog {
