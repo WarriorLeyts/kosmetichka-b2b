@@ -48,13 +48,33 @@ function getCellValue(
     case "category":
       return product.categoryName || <span className="text-slate-300">—</span>;
     case "price": {
-      // Build price tiers using the same fallback logic as priceFor()
+      const activeValue = priceFor(product, priceType);
+
+      // Wholesale customers see all tiers (they can reach different thresholds
+      // depending on cart total). Everyone else sees only their single price.
+      const isWholesaleCustomer =
+        priceType === "wholesale" || priceType === "big_wholesale";
+
+      if (!isWholesaleCustomer) {
+        // Single price row
+        if (activeValue <= 0)
+          return <span className="text-slate-300">—</span>;
+        const label =
+          priceType === "retail"
+            ? "Розница"
+            : priceType === "discount"
+            ? "Скидка"
+            : "Цена";
+        return (
+          <div className="flex items-center justify-between gap-2 text-sm font-black text-indigo-600">
+            <span>{label}:</span>
+            <span>{activeValue.toLocaleString("ru-RU")} ₽</span>
+          </div>
+        );
+      }
+
+      // Wholesale: show all available tiers
       const tiers = [
-        {
-          label: "Розница",
-          key: "retail" as PriceType,
-          value: Number(product.retailPrice ?? 0),
-        },
         {
           label: "Скидка",
           key: "discount" as PriceType,
@@ -73,9 +93,6 @@ function getCellValue(
           ),
         },
       ].filter((t) => t.value > 0);
-
-      // Active price determined by priceFor() — handles all fallbacks correctly
-      const activeValue = priceFor(product, priceType);
 
       if (tiers.length === 0)
         return <span className="text-slate-300">—</span>;
