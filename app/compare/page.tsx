@@ -8,9 +8,9 @@ import { SafeImage } from "@/components/catalog/SafeImage";
 import { useCartStore } from "@/store/cartStore";
 import { useAuthStore } from "@/store/authStore";
 import {
-  resolveCustomerPriceType,
   effectivePriceType,
   priceFor,
+  type PriceType,
 } from "@/lib/pricing";
 import { getStockLabel } from "@/lib/utils";
 
@@ -40,7 +40,7 @@ const ROWS: { key: RowKey; label: string }[] = [
 function getCellValue(
   key: RowKey,
   product: CompareProduct,
-  priceType: string
+  priceType: PriceType
 ): React.ReactNode {
   switch (key) {
     case "brand":
@@ -48,42 +48,51 @@ function getCellValue(
     case "category":
       return product.categoryName || <span className="text-slate-300">—</span>;
     case "price": {
-      // Show all price tiers if available
-      const prices = [
-        { label: "Розница", value: product.retailPrice },
-        { label: "Скидка", value: product.discountPrice },
-        { label: "Опт", value: product.wholesalePrice },
-        { label: "Кр. опт", value: product.bigWholesalePrice },
-      ].filter((p) => p.value != null && Number(p.value) > 0);
+      // Build price tiers using the same fallback logic as priceFor()
+      const tiers: { label: string; key: PriceType; value: number }[] = [
+        {
+          label: "Розница",
+          key: "retail",
+          value: Number(product.retailPrice ?? 0),
+        },
+        {
+          label: "Скидка",
+          key: "discount",
+          value: Number(product.discountPrice ?? product.retailPrice ?? 0),
+        },
+        {
+          label: "Опт",
+          key: "wholesale",
+          value: Number(product.wholesalePrice ?? 0),
+        },
+        {
+          label: "Кр. опт",
+          key: "big_wholesale",
+          value: Number(
+            product.bigWholesalePrice ?? product.wholesalePrice ?? 0
+          ),
+        },
+      ].filter((t) => t.value > 0);
 
-      // Find the customer's effective price
-      const activePrice =
-        priceType === "retail"
-          ? product.retailPrice
-          : priceType === "discount"
-          ? product.discountPrice
-          : priceType === "wholesale"
-          ? product.wholesalePrice
-          : priceType === "big_wholesale"
-          ? product.bigWholesalePrice
-          : product.retailPrice;
+      // Active price determined by priceFor() — handles all fallbacks correctly
+      const activeValue = priceFor(product, priceType);
 
-      if (prices.length === 0)
+      if (tiers.length === 0)
         return <span className="text-slate-300">—</span>;
 
       return (
         <div className="space-y-1">
-          {prices.map((p) => {
-            const isActive = Number(p.value) === Number(activePrice);
+          {tiers.map((t) => {
+            const isActive = t.value === activeValue && t.key === priceType;
             return (
               <div
-                key={p.label}
+                key={t.key}
                 className={`flex items-center justify-between gap-2 text-sm ${
                   isActive ? "font-black text-indigo-600" : "text-slate-500"
                 }`}
               >
-                <span>{p.label}:</span>
-                <span>{Number(p.value).toLocaleString("ru-RU")} ₽</span>
+                <span>{t.label}:</span>
+                <span>{t.value.toLocaleString("ru-RU")} ₽</span>
               </div>
             );
           })}
@@ -130,12 +139,15 @@ export default function ComparePage() {
   const addToCart = useCartStore((s) => s.addToCart);
   const cartItems = useCartStore((s) => s.cart);
   const customer = useAuthStore((s) => s.customer);
+  const fetchCustomer = useAuthStore((s) => s.fetchCustomer);
 
-  // SSR hydration guard
+  // SSR hydration guard + load customer so price tier is correct
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    fetchCustomer();
+  }, [fetchCustomer]);
 
-  const base = resolveCustomerPriceType(customer);
   const activePriceType = effectivePriceType(cartItems, customer);
 
   if (!mounted) {
