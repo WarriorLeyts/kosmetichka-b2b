@@ -15,8 +15,8 @@ const STATUS_CLASSES: Record<string, string> = {
   cancelled: "bg-red-100 text-red-700",
 };
 
+// V-11: убрали "approved" — перехода pending → approved нет в state machine
 const BULK_STATUS_OPTIONS = [
-  { value: "approved", label: "Подтвердить" },
   { value: "assembly", label: "Передать в сборку" },
   { value: "consultation", label: "Отправить на консультацию" },
   { value: "payment", label: "К оплате" },
@@ -41,6 +41,7 @@ export function AdminOrdersList({ orders }: { orders: OrderRow[] }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkStatus, setBulkStatus] = useState("");
   const [applying, setApplying] = useState(false);
+  const [confirming, setConfirming] = useState(false); // V-8: confirmation state
   const [bulkResult, setBulkResult] = useState<{ updated: number; skipped: number } | null>(null);
 
   const allIds = orders.map((o) => o.id);
@@ -65,6 +66,7 @@ export function AdminOrdersList({ orders }: { orders: OrderRow[] }) {
 
   async function applyBulk() {
     if (selected.size === 0 || !bulkStatus) return;
+    setConfirming(false);
     setApplying(true);
     setBulkResult(null);
 
@@ -89,35 +91,63 @@ export function AdminOrdersList({ orders }: { orders: OrderRow[] }) {
     }
   }
 
+  const bulkLabel = BULK_STATUS_OPTIONS.find((o) => o.value === bulkStatus)?.label ?? "";
+
   return (
     <div>
       {/* Bulk action bar */}
       {selected.size > 0 && (
-        <div className="mb-4 flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
           <span className="text-sm font-bold text-indigo-700">
             Выбрано: {selected.size}
           </span>
-          <select
-            value={bulkStatus}
-            onChange={(e) => setBulkStatus(e.target.value)}
-            className="rounded-lg border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-          >
-            <option value="">— Сменить статус —</option>
-            {BULK_STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+
+          {!confirming ? (
+            <>
+              <select
+                value={bulkStatus}
+                onChange={(e) => { setBulkStatus(e.target.value); }}
+                className="rounded-lg border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              >
+                <option value="">— Сменить статус —</option>
+                {BULK_STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              {/* V-8: show confirmation instead of applying directly */}
+              <button
+                onClick={() => setConfirming(true)}
+                disabled={!bulkStatus || applying}
+                className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50 transition"
+              >
+                {applying ? "Применяем..." : "Применить"}
+              </button>
+            </>
+          ) : (
+            /* Confirmation dialog */
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-slate-800">
+                {selected.size} заказ(ов) → «{bulkLabel}»?
+              </span>
+              <button
+                onClick={applyBulk}
+                className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-bold text-white hover:bg-red-700 transition"
+              >
+                Да, применить
+              </button>
+              <button
+                onClick={() => setConfirming(false)}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 transition"
+              >
+                Отмена
+              </button>
+            </div>
+          )}
+
           <button
-            onClick={applyBulk}
-            disabled={!bulkStatus || applying}
-            className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50 transition"
-          >
-            {applying ? "Применяем..." : "Применить"}
-          </button>
-          <button
-            onClick={() => setSelected(new Set())}
+            onClick={() => { setSelected(new Set()); setConfirming(false); }}
             className="text-sm text-slate-500 hover:text-slate-700 ml-auto"
           >
             Снять выбор

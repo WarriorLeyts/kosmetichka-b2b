@@ -3428,3 +3428,65 @@ align-items: flex-start;
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ── Mobile bottom navigation (V-12) ──────────────────────────────────────── */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 40;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+    height: 60px;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .mobile-bottom-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-decoration: none;
+    border: none;
+    background: none;
+    cursor: pointer;
+    transition: color 0.15s;
+    padding: 0;
+  }
+
+  .mobile-bottom-nav-item.active,
+  .mobile-bottom-nav-item:hover {
+    color: #ec4899;
+  }
+
+  .mobile-bottom-nav-badge {
+    position: absolute;
+    top: -4px; right: -6px;
+    min-width: 16px; height: 16px;
+    padding: 0 3px;
+    border-radius: 8px;
+    background: #ec4899;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 16px;
+    text-align: center;
+  }
+
+  /* Add bottom padding to pages so content isn't hidden behind the nav */
+  .catalog-page,
+  main {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+}

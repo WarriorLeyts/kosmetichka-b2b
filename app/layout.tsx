@@ -6,6 +6,7 @@ import { FavoriteDrawer } from "@/components/catalog/FavoriteDrawer";
 import { CartToast } from "@/components/catalog/CartToast";
 import { OrderNotifications } from "@/components/orders/OrderNotifications";
 import { CompareBar } from "@/components/compare/CompareBar";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 
 export const metadata: Metadata = {
   title: {
@@ -54,6 +55,7 @@ export default function RootLayout({
         <CartToast />
         <OrderNotifications />
         <CompareBar />
+        <MobileBottomNav />
       </body>
     </html>
   );

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { Toaster } from "sonner";
 
 export default async function AdminLayout({
   children,
@@ -19,8 +20,8 @@ export default async function AdminLayout({
   return (
     <div className="min-h-screen bg-gray-100">
       <AdminHeader user={user} />
-
       <main>{children}</main>
+      <Toaster position="top-right" richColors />
     </div>
   );
 }
