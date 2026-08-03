@@ -1,9 +1,10 @@
 "use client";
 
-import { Bell, Heart, ShoppingCart } from "lucide-react";
+import { Bell, Heart, ShoppingCart, GitCompareArrows } from "lucide-react";
 import { useFavoriteStore } from "@/store/favoriteStore";
 import { useAuthStore } from "@/store/authStore";
 import { useWishlistStore } from "@/store/wishlistStore";
+import { useCompareStore } from "@/store/compareStore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SafeImage } from "./SafeImage";
@@ -57,6 +58,12 @@ export function ProductCard({ product, addToCart }: Props) {
   const base = resolveCustomerPriceType(customer);
   const activePriceType = effectivePriceType(cartItems, customer);
   const mainPrice = priceFor(product, activePriceType);
+
+  // Compare store
+  const addToCompare = useCompareStore((s) => s.add);
+  const removeFromCompare = useCompareStore((s) => s.remove);
+  const isInCompare = useCompareStore((s) => s.has(product.id));
+  const canAddToCompare = useCompareStore((s) => s.canAdd());
 
   // Animation states
   const [favAnim, setFavAnim] = useState(false);
@@ -330,6 +337,45 @@ export function ProductCard({ product, addToCart }: Props) {
               className={favAnim ? "fav-pop" : ""}
               onAnimationEnd={() => setFavAnim(false)}
             />
+          </button>
+
+          {/* Compare button */}
+          <button
+            title={
+              isInCompare
+                ? "Убрать из сравнения"
+                : canAddToCompare
+                ? "Добавить в сравнение"
+                : "В сравнении уже 3 товара"
+            }
+            className={`favorite-button ${isInCompare ? "active" : ""}`}
+            style={isInCompare ? { color: "#6366f1", borderColor: "#c7d2fe", background: "#eef2ff" } : {}}
+            disabled={!isInCompare && !canAddToCompare}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isInCompare) {
+                removeFromCompare(product.id);
+              } else if (canAddToCompare) {
+                addToCompare({
+                  id: product.id,
+                  name: product.name,
+                  imagePath: imagePath,
+                  description: product.description ?? null,
+                  brandName: product.brand?.name ?? null,
+                  categoryName: product.category?.name ?? null,
+                  retailPrice: product.retailPrice ?? null,
+                  discountPrice: product.discountPrice ?? null,
+                  wholesalePrice: product.wholesalePrice ?? null,
+                  bigWholesalePrice: product.bigWholesalePrice ?? null,
+                  stock: product.stock ?? null,
+                  article: product.article ?? null,
+                  barcode: product.barcode ?? null,
+                  minOrderQty: product.minOrderQty ?? 1,
+                });
+              }
+            }}
+          >
+            <GitCompareArrows size={15} />
           </button>
         </div>
       </article>

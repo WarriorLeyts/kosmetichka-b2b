@@ -3,16 +3,18 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Heart, ShoppingCart } from "lucide-react";
+import { Bell, Heart, ShoppingCart, GitCompareArrows } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
 import { useFavoriteStore } from "@/store/favoriteStore";
 import { useAuthStore } from "@/store/authStore";
+import { useCompareStore } from "@/store/compareStore";
 import { ProductGallery } from "./ProductGallery";
 import { ProductCard } from "./ProductCard";
 import { TopBar } from "./TopBar";
 import { getStockLabel } from "@/lib/utils";
 import { resolveCustomerPriceType, priceFor, priceTypeLabel } from "@/lib/pricing";
 import { useWishlistStore } from "@/store/wishlistStore";
+import { resolveImageUrl } from "@/lib/image";
 
 type Variant = { id: number; imageUrl: string; name: string };
 
@@ -154,6 +156,11 @@ export function ProductPageClient({
   const customer = useAuthStore((s) => s.customer);
   const isInWishlist = useWishlistStore((s) => s.isInWishlist(product.id));
   const toggleWishlist = useWishlistStore((s) => s.toggle);
+
+  const addToCompare = useCompareStore((s) => s.add);
+  const removeFromCompare = useCompareStore((s) => s.remove);
+  const isInCompare = useCompareStore((s) => s.has(product.id));
+  const canAddToCompare = useCompareStore((s) => s.canAdd());
 
   const stock      = getStockLabel(product.stock);
   const isOutOfStock = (product.stock ?? 0) <= 0;
@@ -382,6 +389,50 @@ export function ProductPageClient({
                       className={favAnim ? "fav-pop" : ""}
                       onAnimationEnd={() => setFavAnim(false)}
                     />
+                  </button>
+
+                  {/* Compare button */}
+                  <button
+                    title={
+                      isInCompare
+                        ? "Убрать из сравнения"
+                        : canAddToCompare
+                        ? "Добавить в сравнение"
+                        : "В сравнении уже 3 товара"
+                    }
+                    disabled={!isInCompare && !canAddToCompare}
+                    onClick={() => {
+                      if (isInCompare) {
+                        removeFromCompare(product.id);
+                      } else if (canAddToCompare) {
+                        const imagePath = product.images?.[0]?.path
+                          ? resolveImageUrl(product.images[0].path)
+                          : null;
+                        addToCompare({
+                          id: product.id,
+                          name: product.name,
+                          imagePath,
+                          description: product.description ?? null,
+                          brandName: product.brand?.name ?? null,
+                          categoryName: product.category?.name ?? null,
+                          retailPrice: product.retailPrice ?? null,
+                          discountPrice: product.discountPrice ?? null,
+                          wholesalePrice: product.wholesalePrice ?? null,
+                          bigWholesalePrice: product.bigWholesalePrice ?? null,
+                          stock: product.stock ?? null,
+                          article: product.article ?? null,
+                          barcode: product.barcode ?? null,
+                          minOrderQty: product.minOrderQty ?? 1,
+                        });
+                      }
+                    }}
+                    className={`flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border transition ${
+                      isInCompare
+                        ? "border-indigo-300 bg-indigo-50 text-indigo-500"
+                        : "border-slate-200 bg-white text-slate-400 hover:bg-indigo-50 hover:text-indigo-500"
+                    } disabled:opacity-40 disabled:cursor-not-allowed`}
+                  >
+                    <GitCompareArrows size={18} />
                   </button>
                 </div>
               </div>
