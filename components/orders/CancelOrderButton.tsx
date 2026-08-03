@@ -49,7 +49,7 @@ export function CancelOrderButton({ orderId }: { orderId: number }) {
       <ConfirmModal
         open={confirmOpen}
         title="Отменить заказ?"
-        message="Заказ будет убран из очереди на подтверждение менеджером. Это действие можно будет повторить и отредактировать позже."
+        message="Заказ будет отменён. Это действие нельзя отменить. Если захотите, вы сможете повторить его через кнопку «Повторить заказ»."
         confirmLabel="Отменить заказ"
         cancelLabel="Не отменять"
         danger

@@ -4,8 +4,16 @@ import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import PasswordInput from "@/components/PasswordInput";
+import { AuthInit } from "@/components/AuthInit";
 
 export const dynamic = "force-dynamic";
+
+async function logout() {
+  "use server";
+  const cookieStore = await cookies();
+  cookieStore.delete("auth_token");
+  redirect("/login");
+}
 
 async function updateProfile(formData: FormData) {
   "use server";
@@ -101,6 +109,7 @@ export default async function ProfilePage({
 
   return (
     <main className="min-h-screen bg-slate-50 p-4 md:p-8">
+      <AuthInit />
       <div className="mx-auto max-w-xl">
 
         {/* Header */}
@@ -119,10 +128,18 @@ export default async function ProfilePage({
               </p>
             )}
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
             <span className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-slate-600">
               {PRICE_LABELS[customer.priceType] ?? customer.priceType}
             </span>
+            <form action={logout}>
+              <button
+                type="submit"
+                className="rounded-full border bg-white px-3 py-1 text-xs font-semibold text-red-500 hover:bg-red-50 hover:border-red-200 transition"
+              >
+                Выйти
+              </button>
+            </form>
           </div>
         </div>
 

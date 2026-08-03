@@ -77,6 +77,18 @@ export function CatalogClient({
   // ── Restore scroll position + loaded products on back-navigation ──────────
   useEffect(() => {
     try {
+      // If the URL has explicit filter params, the user arrived via a direct link —
+      // don't overwrite those filters with a stale sessionStorage snapshot.
+      const urlHasFilters =
+        searchParams.get("categoryId") ||
+        searchParams.get("search") ||
+        searchParams.getAll("brandGuid").length > 0 ||
+        searchParams.get("onlyStock") ||
+        searchParams.get("priceMin") ||
+        searchParams.get("priceMax") ||
+        searchParams.get("sort");
+      if (urlHasFilters) return;
+
       const savedScroll = sessionStorage.getItem("catalog_scroll");
       const savedState = sessionStorage.getItem("catalog_products");
 

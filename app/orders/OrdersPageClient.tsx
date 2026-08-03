@@ -1,9 +1,21 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCartStore } from "@/store/cartStore";
 
 import { ORDER_STATUS_LABELS_CUSTOMER as STATUS_LABELS } from "@/lib/orderStatus";
+
+const ALL_STATUSES = [
+  { value: "", label: "Все статусы" },
+  { value: "pending", label: "Ожидает подтверждения" },
+  { value: "approved", label: "Подтверждён" },
+  { value: "assembly", label: "Сборка" },
+  { value: "consultation", label: "Консультация" },
+  { value: "payment", label: "К оплате" },
+  { value: "exported", label: "Выполнен" },
+  { value: "cancelled", label: "Отменён" },
+];
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-800 border border-amber-200",
@@ -600,15 +612,102 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
                     imagePath: i.imagePath,
                   }))
                 );
-                setTimeout(() => setRepeating(false), 1500);
+                setTimeout(() => setRepeating(false), 3000);
               }}
               disabled={repeating}
               className="flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 transition disabled:opacity-60"
             >
-              {repeating ? "✓ Добавлено!" : "🔁 Повторить заказ"}
+              {repeating ? "✓ Добавлено в корзину" : "🔁 Повторить заказ"}
             </button>
+            {repeating && (
+              <p className="w-full text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-1.5 mt-1">
+                ⚠️ Цены будут пересчитаны по вашему прайсу при оформлении заказа
+              </p>
+            )}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function OrdersFilterBar({
+  currentStatus,
+  currentDateFrom,
+  currentDateTo,
+}: {
+  currentStatus: string;
+  currentDateFrom: string;
+  currentDateTo: string;
+}) {
+  const router = useRouter();
+  const [status, setStatus] = useState(currentStatus);
+  const [dateFrom, setDateFrom] = useState(currentDateFrom);
+  const [dateTo, setDateTo] = useState(currentDateTo);
+
+  function apply() {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo)   params.set("dateTo", dateTo);
+    const qs = params.toString();
+    router.push(qs ? `/orders?${qs}` : "/orders");
+  }
+
+  function reset() {
+    setStatus("");
+    setDateFrom("");
+    setDateTo("");
+    router.push("/orders");
+  }
+
+  const hasFilter = currentStatus || currentDateFrom || currentDateTo;
+
+  return (
+    <div className="mb-4 rounded-2xl bg-white border shadow-sm p-4 flex flex-wrap gap-3 items-end">
+      <div className="flex flex-col gap-1 min-w-[160px]">
+        <label className="text-xs font-semibold text-slate-500">Статус</label>
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className="rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+        >
+          {ALL_STATUSES.map((s) => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </select>
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-slate-500">С даты</label>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className="rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold text-slate-500">По дату</label>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          className="rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+        />
+      </div>
+      <button
+        onClick={apply}
+        className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 transition"
+      >
+        Найти
+      </button>
+      {hasFilter && (
+        <button
+          onClick={reset}
+          className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition"
+        >
+          Сбросить
+        </button>
       )}
     </div>
   );
@@ -617,11 +716,19 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
 export default function OrdersPageClient({
   orders,
   stats,
+  currentStatus = "",
+  currentDateFrom = "",
+  currentDateTo = "",
 }: {
   orders: Order[];
   stats: Stats;
+  currentStatus?: string;
+  currentDateFrom?: string;
+  currentDateTo?: string;
 }) {
-  if (orders.length === 0) {
+  const hasFilter = currentStatus || currentDateFrom || currentDateTo;
+
+  if (orders.length === 0 && !hasFilter) {
     return (
       <div className="rounded-3xl bg-white p-16 text-center shadow-sm border border-white/60">
         <p className="text-5xl mb-4">📦</p>
@@ -636,7 +743,21 @@ export default function OrdersPageClient({
 
   return (
     <div className="flex flex-col gap-4">
-      {stats.totalOrders > 0 && (
+      <OrdersFilterBar
+        currentStatus={currentStatus}
+        currentDateFrom={currentDateFrom}
+        currentDateTo={currentDateTo}
+      />
+
+      {orders.length === 0 && hasFilter && (
+        <div className="rounded-2xl bg-white border p-10 text-center shadow-sm">
+          <p className="text-3xl mb-3">🔍</p>
+          <p className="font-bold text-slate-700">Заказов не найдено</p>
+          <p className="text-sm text-slate-400 mt-1">Попробуйте изменить фильтры</p>
+        </div>
+      )}
+
+      {stats.totalOrders > 0 && orders.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div className="rounded-2xl bg-white px-5 py-4 shadow-sm border border-white/60" style={{ boxShadow: "0 2px 12px rgba(236,72,153,0.08)" }}>
             <p className="text-xs font-semibold text-slate-400 mb-1">🛒 Заказов</p>

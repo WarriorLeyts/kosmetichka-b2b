@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import OrdersPageClient from "./OrdersPageClient";
 import Link from "next/link";
 import PaginationBar from "@/components/PaginationBar";
+import { AuthInit } from "@/components/AuthInit";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ const PAGE_SIZE = 20;
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; status?: string; dateFrom?: string; dateTo?: string }>;
 }) {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
@@ -25,35 +26,48 @@ export default async function OrdersPage({
   const p = await searchParams;
   const page = Math.max(1, parseInt(p.page || "1", 10));
 
+  const statusFilter = p.status || "";
+  const dateFrom = p.dateFrom ? new Date(p.dateFrom + "T00:00:00") : null;
+  const dateTo   = p.dateTo   ? new Date(p.dateTo   + "T23:59:59") : null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = { customerId };
+  if (statusFilter) where.status = statusFilter;
+  if (dateFrom || dateTo) {
+    where.createdAt = {};
+    if (dateFrom) where.createdAt.gte = dateFrom;
+    if (dateTo)   where.createdAt.lte = dateTo;
+  }
+
   const [totalCount, orders] = await Promise.all([
-    prisma.order.count({ where: { customerId } }),
+    prisma.order.count({ where }),
     prisma.order.findMany({
-    where: { customerId },
-    orderBy: { createdAt: "desc" },
-    take: PAGE_SIZE,
-    skip: (page - 1) * PAGE_SIZE,
-    include: {
-      items: {
-        orderBy: { id: "asc" },
-        select: {
-          id: true,
-          productId: true,
-          productName: true,
-          barcode: true,
-          quantity: true,
-          price: true,
-          total: true,
-          variantImageUrl: true,
-          variantName: true,
+      where,
+      orderBy: { createdAt: "desc" },
+      take: PAGE_SIZE,
+      skip: (page - 1) * PAGE_SIZE,
+      include: {
+        items: {
+          orderBy: { id: "asc" },
+          select: {
+            id: true,
+            productId: true,
+            productName: true,
+            barcode: true,
+            quantity: true,
+            price: true,
+            total: true,
+            variantImageUrl: true,
+            variantName: true,
+          },
         },
       },
-    },
-  }),
+    }),
   ]);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  // Stats across ALL orders (light aggregate queries)
+  // Stats across ALL orders (no filter applied — whole-account totals)
   const [sumResult, topItems] = await Promise.all([
     prisma.order.aggregate({
       where: { customerId },
@@ -89,7 +103,6 @@ export default async function OrdersPage({
           orderBy: { id: "asc" },
         })
       : [];
-  // Keep only the first image per product
   const imageByProductId = new Map<number, string>();
   for (const img of productImages) {
     if (!imageByProductId.has(img.productId)) {
@@ -120,6 +133,8 @@ export default async function OrdersPage({
 
   return (
     <main className="min-h-screen" style={{ background: "linear-gradient(135deg, #fdf2f8 0%, #f5f3ff 50%, #eff6ff 100%)" }}>
+      <AuthInit />
+
       {/* Top nav */}
       <nav className="bg-white/80 backdrop-blur border-b border-pink-100 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
         <Link href="/catalog" className="flex items-center gap-2">
@@ -159,11 +174,22 @@ export default async function OrdersPage({
         <OrdersPageClient
           orders={serialized}
           stats={{ totalOrders, totalSum, topProduct, topProductQty }}
+          currentStatus={statusFilter}
+          currentDateFrom={p.dateFrom || ""}
+          currentDateTo={p.dateTo || ""}
         />
         <PaginationBar
           page={page}
           totalPages={totalPages}
-          buildHref={(p) => (p === 1 ? "/orders" : `/orders?page=${p}`)}
+          buildHref={(pg) => {
+            const params = new URLSearchParams();
+            if (pg > 1) params.set("page", String(pg));
+            if (statusFilter) params.set("status", statusFilter);
+            if (p.dateFrom) params.set("dateFrom", p.dateFrom);
+            if (p.dateTo)   params.set("dateTo", p.dateTo);
+            const qs = params.toString();
+            return qs ? `/orders?${qs}` : "/orders";
+          }}
         />
       </div>
     </main>
