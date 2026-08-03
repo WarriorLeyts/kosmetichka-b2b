@@ -56,7 +56,7 @@ export default async function AdminOrderPage({
     prisma.orderMessage.findMany({
       where: { orderId: Number(id), source: "customer" },
       orderBy: { createdAt: "asc" },
-      select: { id: true, text: true, isFromPicker: true, createdAt: true },
+      select: { id: true, text: true, isFromPicker: true, createdAt: true, user: { select: { name: true } } },
     }),
   ]);
 
@@ -139,6 +139,7 @@ export default async function AdminOrderPage({
       id: m.id,
       text: m.text,
       isFromPicker: m.isFromPicker,
+      userName: m.isFromPicker ? (m.user?.name ?? null) : null,
       createdAt: m.createdAt.toISOString(),
     })),
   };

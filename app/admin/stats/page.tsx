@@ -18,7 +18,14 @@ function getStatusColor(status: string) {
   }
 }
 
-export default async function AdminStatsPage() {
+export default async function AdminStatsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const params = await searchParams;
+  const period = params.period || "all"; // "all" | "30d" | "90d" | "365d"
+
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const weekStart = new Date(todayStart);
@@ -90,12 +97,26 @@ export default async function AdminStatsPage() {
     .sort((a, b) => b[1].qty - a[1].qty)
     .slice(0, 10);
 
-  // Top customers (all time, excl. cancelled)
+  // Top customers — optionally filtered by period
+  const periodDays: Record<string, number | null> = {
+    all: null,
+    "30d": 30,
+    "90d": 90,
+    "365d": 365,
+  };
+  const periodDay = periodDays[period] ?? null;
+  const periodStart = periodDay
+    ? new Date(Date.now() - periodDay * 24 * 60 * 60 * 1000)
+    : null;
+
   const topCustomerGroups = await prisma.order.groupBy({
     by: ["customerId"],
     _sum: { total: true },
     _count: { id: true },
-    where: { status: { not: "cancelled" } },
+    where: {
+      status: { not: "cancelled" },
+      ...(periodStart ? { createdAt: { gte: periodStart } } : {}),
+    },
     orderBy: { _sum: { total: "desc" } },
     take: 10,
   });
@@ -234,7 +255,35 @@ export default async function AdminStatsPage() {
 
       {/* Top customers */}
       <div className="mb-6 rounded-2xl border bg-white p-4">
-        <h2 className="mb-4 font-bold text-slate-700">Топ клиентов (все время)</h2>
+        <div className="mb-4 flex items-center justify-between gap-4 flex-wrap">
+          <h2 className="font-bold text-slate-700">
+            Топ клиентов
+            {period === "30d" && " (30 дней)"}
+            {period === "90d" && " (90 дней)"}
+            {period === "365d" && " (год)"}
+            {period === "all" && " (все время)"}
+          </h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            {[
+              { value: "all", label: "Все время" },
+              { value: "365d", label: "Год" },
+              { value: "90d", label: "90 дней" },
+              { value: "30d", label: "30 дней" },
+            ].map((opt) => (
+              <Link
+                key={opt.value}
+                href={`/admin/stats?period=${opt.value}`}
+                className={`rounded-full px-3 py-1 text-xs font-semibold border transition-all ${
+                  period === opt.value
+                    ? "bg-slate-800 text-white border-slate-800"
+                    : "bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {opt.label}
+              </Link>
+            ))}
+          </div>
+        </div>
         {topCustomerGroups.length === 0 ? (
           <div className="text-sm text-slate-400">Нет данных</div>
         ) : (

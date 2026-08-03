@@ -36,9 +36,9 @@ export async function PUT(request: NextRequest, { params }: Props) {
   });
   if (!order) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
-  if (!["consultation", "assembly"].includes(order.status)) {
+  if (!["pending", "consultation", "assembly"].includes(order.status)) {
     return NextResponse.json(
-      { error: "Редактирование доступно только во время консультации или сборки" },
+      { error: "Редактирование доступно только для заказов в ожидании, консультации или сборке" },
       { status: 400 }
     );
   }

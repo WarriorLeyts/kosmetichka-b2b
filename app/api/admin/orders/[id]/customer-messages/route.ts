@@ -15,14 +15,21 @@ export async function GET(
   const msgs = await prisma.orderMessage.findMany({
     where: { orderId: Number(id), source: "customer" },
     orderBy: { createdAt: "asc" },
-    select: { id: true, text: true, userId: true, createdAt: true },
+    select: {
+      id: true,
+      text: true,
+      isFromPicker: true,
+      createdAt: true,
+      user: { select: { name: true } },
+    },
   });
 
   return NextResponse.json({
     messages: msgs.map((m) => ({
       id: m.id,
       text: m.text,
-      isFromManager: m.userId !== null,
+      isFromPicker: m.isFromPicker,
+      userName: m.isFromPicker ? (m.user?.name ?? null) : null,
       createdAt: m.createdAt.toISOString(),
     })),
   });
@@ -46,14 +53,20 @@ export async function POST(
     return NextResponse.json({ error: "Сообщение слишком длинное" }, { status: 400 });
   }
 
-  const msg = await prisma.orderMessage.create({
-    data: {
-      orderId,
-      text: text.trim(),
-      source: "customer",
-      userId: user.id as number,
-    },
-  });
+  const [msg, senderUser] = await Promise.all([
+    prisma.orderMessage.create({
+      data: {
+        orderId,
+        text: text.trim(),
+        source: "customer",
+        userId: user.id as number,
+      },
+    }),
+    prisma.user.findUnique({
+      where: { id: user.id as number },
+      select: { name: true },
+    }),
+  ]);
 
   // UX-2: Email notification to customer when manager replies
   const order = await prisma.order.findUnique({
@@ -111,7 +124,8 @@ export async function POST(
     message: {
       id: msg.id,
       text: msg.text,
-      isFromManager: true,
+      isFromPicker: true,
+      userName: senderUser?.name ?? null,
       createdAt: msg.createdAt.toISOString(),
     },
   });

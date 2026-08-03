@@ -43,6 +43,7 @@ type CustomerMessage = {
   id: number;
   text: string;
   isFromPicker: boolean; // true = admin sent, false = customer sent
+  userName?: string | null;
   createdAt: string;
 };
 
@@ -1334,7 +1335,7 @@ export default function AdminOrderClient({
                         : "bg-slate-100 text-slate-800 rounded-tl-sm"
                     }`}>
                       <div className="font-bold text-xs mb-0.5 opacity-70">
-                        {msg.isFromPicker ? "Менеджер" : "Клиент"}
+                        {msg.isFromPicker ? (msg.userName || "Менеджер") : "Клиент"}
                       </div>
                       <div>{renderMsgContent(msg.text)}</div>
                       <div className="text-xs mt-0.5 opacity-60">{formatDate(msg.createdAt)}</div>

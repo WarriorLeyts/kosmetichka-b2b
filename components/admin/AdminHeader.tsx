@@ -2,13 +2,29 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AdminLogoutButton } from "./AdminLogoutButton";
 import { Menu, X } from "lucide-react";
 
 export function AdminHeader({ user }: { user: any }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [orderBadge, setOrderBadge] = useState(0);
+
+  useEffect(() => {
+    async function fetchCount() {
+      try {
+        const res = await fetch("/api/admin/orders/count");
+        if (res.ok) {
+          const data = await res.json();
+          setOrderBadge((data.pending ?? 0) + (data.consultation ?? 0));
+        }
+      } catch {}
+    }
+    fetchCount();
+    const interval = setInterval(fetchCount, 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   if (pathname === "/admin/login") {
     return null;
@@ -26,7 +42,14 @@ export function AdminHeader({ user }: { user: any }) {
           {isAdminOrManager && (
             <>
               <Link href="/admin/customers">Клиенты</Link>
-              <Link href="/admin/orders">Заказы</Link>
+              <Link href="/admin/orders" className="relative">
+                Заказы
+                {orderBadge > 0 && (
+                  <span className="absolute -right-3 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white">
+                    {orderBadge > 99 ? "99+" : orderBadge}
+                  </span>
+                )}
+              </Link>
               <Link href="/admin/products">Товары</Link>
             </>
           )}
@@ -62,7 +85,14 @@ export function AdminHeader({ user }: { user: any }) {
           {isAdminOrManager && (
             <>
               <Link href="/admin/customers" onClick={() => setMenuOpen(false)} className="py-2 border-b">Клиенты</Link>
-              <Link href="/admin/orders" onClick={() => setMenuOpen(false)} className="py-2 border-b">Заказы</Link>
+              <Link href="/admin/orders" onClick={() => setMenuOpen(false)} className="py-2 border-b flex items-center gap-2">
+                Заказы
+                {orderBadge > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white">
+                    {orderBadge > 99 ? "99+" : orderBadge}
+                  </span>
+                )}
+              </Link>
               <Link href="/admin/products" onClick={() => setMenuOpen(false)} className="py-2 border-b">Товары</Link>
             </>
           )}

@@ -2,13 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import Link from "next/link";
 import PaginationBar from "@/components/PaginationBar";
+import { AdminOrdersList } from "@/components/admin/AdminOrdersList";
+import { parseCheckStatuses } from "@/lib/checkStatus";
+import { ORDER_STATUS_LABELS as STATUS_LABELS } from "@/lib/orderStatus";
 
 const PAGE_SIZE = 50;
 
 export const dynamic = "force-dynamic";
-
-import { ORDER_STATUS_LABELS as STATUS_LABELS } from "@/lib/orderStatus";
-import { parseCheckStatuses } from "@/lib/checkStatus";
 
 const STATUS_CLASSES: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-700",
@@ -56,6 +56,7 @@ export default async function AdminOrdersPage({
             { name: { contains: customerSearch, mode: "insensitive" } },
             { companyName: { contains: customerSearch, mode: "insensitive" } },
             { phone: { contains: customerSearch } },
+            { inn: { contains: customerSearch } },
           ],
         }
       : undefined,
@@ -64,22 +65,22 @@ export default async function AdminOrdersPage({
   const [totalCount, orders] = await Promise.all([
     prisma.order.count({ where }),
     prisma.order.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: PAGE_SIZE,
-    skip: (page - 1) * PAGE_SIZE,
-    select: {
-      id: true,
-      status: true,
-      total: true,
-      createdAt: true,
-      customer: { select: { name: true, companyName: true, phone: true } },
-      _count: { select: { items: true } },
-      items: {
-        select: { check: { select: { status: true } } },
+      where,
+      orderBy: { createdAt: "desc" },
+      take: PAGE_SIZE,
+      skip: (page - 1) * PAGE_SIZE,
+      select: {
+        id: true,
+        status: true,
+        total: true,
+        createdAt: true,
+        customer: { select: { name: true, companyName: true, phone: true } },
+        _count: { select: { items: true } },
+        items: {
+          select: { check: { select: { status: true } } },
+        },
       },
-    },
-  }),
+    }),
   ]);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
@@ -211,71 +212,18 @@ export default async function AdminOrdersPage({
         </div>
       </form>
 
-      {/* Orders list */}
-      <div className="space-y-3">
-        {orders.map((order) => {
-          // BUG-3 fix: parse JSON check statuses correctly
-          const hasIssues = order.items.some((i) => {
+      {/* Orders list with bulk selection */}
+      <AdminOrdersList
+        orders={orders.map((order) => ({
+          ...order,
+          createdAt: order.createdAt.toISOString(),
+          hasIssues: order.items.some((i) => {
             if (!i.check) return false;
             return parseCheckStatuses(i.check.status).some((s) => s !== "ok");
-          });
-          const checkedCount = order.items.filter((i) => i.check).length;
-          const itemCount = order._count.items;
-
-          return (
-            <Link
-              href={`/admin/orders/${order.id}`}
-              key={order.id}
-              className="block rounded-xl border bg-white p-5 shadow-sm hover:bg-slate-50 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-slate-800">Заказ №{order.id}</span>
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${STATUS_CLASSES[order.status] ?? "bg-gray-100 text-gray-600"}`}>
-                      {STATUS_LABELS[order.status] ?? order.status}
-                    </span>
-                    {hasIssues && (
-                      <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-bold text-orange-700">
-                        ⚠ Проблемы
-                      </span>
-                    )}
-                    {order.status === "assembly" && checkedCount > 0 && (
-                      <span className="text-xs text-slate-400">
-                        {checkedCount}/{itemCount} проверено
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-1 text-sm text-slate-500">
-                    {new Date(order.createdAt).toLocaleString("ru-RU", {
-                      day: "2-digit", month: "2-digit", year: "numeric",
-                      hour: "2-digit", minute: "2-digit",
-                    })}
-                  </div>
-                  <div className="mt-1 text-sm">
-                    <span className="font-medium">
-                      {order.customer.companyName || order.customer.name || "—"}
-                    </span>
-                    {order.customer.phone && (
-                      <span className="ml-2 text-slate-400">{order.customer.phone}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-lg font-black">{order.total.toLocaleString("ru-RU")} ₽</div>
-                  <div className="text-xs text-slate-400">{itemCount} позиций</div>
-                </div>
-              </div>
-            </Link>
-          );
-        })}
-
-        {orders.length === 0 && (
-          <div className="rounded-xl border bg-white p-8 text-center text-slate-400">
-            Заказов по выбранным фильтрам нет
-          </div>
-        )}
-      </div>
+          }),
+          checkedCount: order.items.filter((i) => i.check).length,
+        }))}
+      />
 
       <PaginationBar page={page} totalPages={totalPages} buildHref={pageHref} />
     </div>
