@@ -150,16 +150,24 @@ export async function POST() {
   const { xmlFile, orderIds } = await buildXml();
 
   if (orderIds.length > 0) {
+    // Build per-order fromStatus map so the audit log reflects the actual
+    // pre-export status (either "approved" or "payment"), not a hardcoded value.
+    const preExportOrders = await prisma.order.findMany({
+      where: { id: { in: orderIds } },
+      select: { id: true, status: true },
+    });
+    const statusByOrderId = new Map(preExportOrders.map((o) => [o.id, o.status]));
+
     await prisma.$transaction([
       prisma.order.updateMany({
         where: { id: { in: orderIds } },
-        data: { status: "exported" },
+        data: { status: "exported", oneCExportedAt: new Date() },
       }),
       ...orderIds.map((orderId) =>
         prisma.orderStatusLog.create({
           data: {
             orderId,
-            fromStatus: "approved",
+            fromStatus: statusByOrderId.get(orderId) ?? "approved",
             toStatus: "exported",
             userId: user.id as number,
           },

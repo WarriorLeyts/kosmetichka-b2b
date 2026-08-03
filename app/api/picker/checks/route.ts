@@ -101,16 +101,46 @@ export async function POST(request: Request) {
     });
   }
 
+  // ── Partial-check guard ────────────────────────────────────────────────────
+  // Only close the assembly phase when EVERY order item has a check record.
+  // A picker who submits a batch that covers fewer items than the order total
+  // should get a partial-success response without a status transition.
+  const [totalItems, totalChecks] = await Promise.all([
+    prisma.orderItem.count({ where: { orderId } }),
+    prisma.orderItemCheck.count({ where: { orderItem: { orderId } } }),
+  ]);
+
+  if (totalChecks < totalItems) {
+    return NextResponse.json({
+      success: true,
+      partial: true,
+      checked: totalChecks,
+      total: totalItems,
+      message: `Проверено ${totalChecks} из ${totalItems} позиций — сборка продолжается`,
+    });
+  }
+
   // Issues → consultation; all OK → payment
-  // Обрабатываем все три формата: statusData (rich), statuses (array), status (legacy)
-  const hasIssues = items.some((i) => {
-    if (i.statusData !== undefined) {
-      // Rich-формат: [{s:"expired",q:2}, "bad_condition", ...] или ["ok"]
-      return !(i.statusData.length === 1 && i.statusData[0] === "ok");
-    }
-    const statuses = i.statuses ?? (i.status ? [i.status] : ["ok"]);
-    return statuses.some((s) => s !== "ok");
+  // Читаем ВСЕ проверки из БД (а не только поданные в этом запросе)
+  const allChecks = await prisma.orderItemCheck.findMany({
+    where: { orderItem: { orderId } },
+    select: { status: true },
   });
+
+  const hasIssues = allChecks.some((c) => {
+    // status is either "ok", a JSON array, or an issue string
+    if (c.status === "ok") return false;
+    try {
+      const parsed = JSON.parse(c.status);
+      if (Array.isArray(parsed)) {
+        return !(parsed.length === 1 && parsed[0] === "ok");
+      }
+    } catch {
+      // not JSON — treat as issue string
+    }
+    return true;
+  });
+
   const newStatus = hasIssues ? "consultation" : "payment";
 
   await prisma.order.update({
@@ -130,6 +160,9 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     success: true,
+    partial: false,
+    checked: totalChecks,
+    total: totalItems,
     newStatus,
   });
 }

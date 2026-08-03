@@ -105,7 +105,7 @@ model Customer {
 
   name        String?
   companyName String?
-  phone       String?
+  phone       String? @unique
   email       String?
 
   inn     String?
@@ -131,7 +131,7 @@ model Customer {
   updatedAt DateTime @updatedAt
 
   @@index([email])
-  @@index([phone])
+  // @@index([phone]) removed — @unique above already creates the index
 }
 
 model User {

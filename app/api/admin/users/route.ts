@@ -17,6 +17,15 @@ export async function POST(request: Request) {
     );
   }
 
+  const VALID_ROLES = ["manager", "picker", "admin"];
+  const safeRole = VALID_ROLES.includes(role) ? role : "manager";
+  if (role && !VALID_ROLES.includes(role)) {
+    return NextResponse.json(
+      { error: "Недопустимая роль. Разрешено: manager, picker, admin" },
+      { status: 400 }
+    );
+  }
+
   const exists = await prisma.user.findUnique({
     where: { login },
   });
@@ -35,7 +44,7 @@ export async function POST(request: Request) {
       name,
       login,
       password: hashedPassword,
-      role: role || "manager",
+      role: safeRole,
     },
   });
 

@@ -32,6 +32,7 @@ async function updateProfile(formData: FormData) {
   const email = String(formData.get("email") || "");
   const city = String(formData.get("city") || "");
   const address = String(formData.get("address") || "");
+  const currentPassword = String(formData.get("currentPassword") || "");
   const password = String(formData.get("password") || "");
   const passwordConfirm = String(formData.get("passwordConfirm") || "");
 
@@ -48,8 +49,19 @@ async function updateProfile(formData: FormData) {
   const data: any = { name, companyName, phone, email, city, address };
 
   if (password.trim()) {
+    // Require current password before allowing a change
+    if (!currentPassword.trim()) {
+      redirect("/profile?error=current_password_required");
+    }
+    const stored = await prisma.customer.findUnique({
+      where: { id },
+      select: { password: true },
+    });
+    const matches = stored ? await bcrypt.compare(currentPassword, stored.password) : false;
+    if (!matches) {
+      redirect("/profile?error=current_password_wrong");
+    }
     if (password !== passwordConfirm) {
-      // Redirect back with error flag — simple approach for server action
       redirect("/profile?error=password_mismatch");
     }
     if (password.length < 6) {
@@ -66,6 +78,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   password_mismatch: "Пароли не совпадают",
   password_too_short: "Пароль должен быть не короче 6 символов",
   email_taken: "Этот email уже используется другим аккаунтом",
+  current_password_required: "Введите текущий пароль для смены пароля",
+  current_password_wrong: "Текущий пароль введён неверно",
 };
 
 export default async function ProfilePage({
@@ -237,6 +251,16 @@ export default async function ProfilePage({
             Оставьте пустым, чтобы не менять пароль
           </p>
 
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">Текущий пароль</label>
+            <PasswordInput
+              name="currentPassword"
+              autoComplete="current-password"
+              placeholder="Введите текущий пароль"
+              className="w-full rounded-xl border px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            />
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">Новый пароль</label>
@@ -248,7 +272,7 @@ export default async function ProfilePage({
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">Повтор пароля</label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">Повтор нового пароля</label>
               <PasswordInput
                 name="passwordConfirm"
                 autoComplete="new-password"

@@ -196,9 +196,13 @@ export async function GET(request: Request) {
 
   // ── Step 4b: price sort → lightweight in-memory sort, but only on the
   //            already price-filtered candidate set ─────────────────────────
+  // Safety cap: even though we only fetch id+guid, guard against runaway
+  // catalogs (100k+ SKUs) that could consume significant memory.
+  const MAX_SORT_CANDIDATES = 10_000;
   const matched = await prisma.product.findMany({
     where,
     select: { id: true, guid: true },
+    take: MAX_SORT_CANDIDATES,
   });
 
   if (matched.length === 0) {
