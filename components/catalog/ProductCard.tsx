@@ -24,10 +24,10 @@ type Props = {
   product: any;
   addToCart: (product: any) => void;
   /** Called when this card needs the variant picker — parent renders a single shared modal */
-  onOpenPicker: (product: any, variants: Variant[]) => void;
+  onOpenPicker?: (product: any, variants: Variant[]) => void;
 };
 
-export function ProductCard({ product, addToCart, onOpenPicker }: Props) {
+export function ProductCard({ product, addToCart, onOpenPicker = () => {} }: Props) {
   const imagePath = product.images?.[0]?.path
     ? resolveImageUrl(product.images[0].path)
     : null;
