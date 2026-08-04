@@ -1,7 +1,7 @@
 "use client";
 
 import { useCartStore } from "@/store/cartStore";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
 import { RotateCcw, FileText, ArrowLeft } from "lucide-react";
 import { OrderChat } from "@/components/orders/OrderChat";
@@ -49,19 +49,42 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function OrderDetailClient({ order }: { order: Order }) {
   const repeatOrder = useCartStore((s) => s.repeatOrder);
-  const router = useRouter();
+  const [repeating, setRepeating] = useState(false);
 
-  function handleRepeat() {
-    repeatOrder(
-      order.items.map((item) => ({
-        productId: item.productId,
-        productName: item.productName,
-        quantity: item.quantity,
-        price: item.price,
-        variantName: item.variantName,
-      }))
-    );
-    router.push("/catalog");
+  async function handleRepeat() {
+    setRepeating(true);
+    try {
+      // Fetch current prices for each product in parallel
+      const currentData = await Promise.all(
+        order.items.map((item) =>
+          fetch(`/api/products/${item.productId}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null)
+        )
+      );
+
+      repeatOrder(
+        order.items.map((item, idx) => {
+          const cur = currentData[idx];
+          // Use current server price if available; fall back to order price
+          const price = cur
+            ? (cur.wholesalePrice ?? cur.retailPrice ?? item.price)
+            : item.price;
+          return {
+            productId: item.productId,
+            productName: item.productName,
+            quantity: item.quantity,
+            price,
+            barcode: item.barcode,
+            variantName: item.variantName,
+            imagePath: cur?.images?.[0]?.path ?? null,
+          };
+        })
+      );
+      // repeatOrder already sets isCartOpen: true — no router.push needed
+    } finally {
+      setRepeating(false);
+    }
   }
 
   const statusLabel = STATUS_LABELS[order.status] ?? order.status;
@@ -151,10 +174,11 @@ export default function OrderDetailClient({ order }: { order: Order }) {
         <div className="flex flex-wrap gap-3">
           <button
             onClick={handleRepeat}
-            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 py-3 font-bold text-white"
+            disabled={repeating}
+            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 py-3 font-bold text-white disabled:opacity-70"
           >
-            <RotateCcw size={16} />
-            Повторить заказ
+            <RotateCcw size={16} className={repeating ? "animate-spin" : ""} />
+            {repeating ? "Загрузка…" : "Повторить заказ"}
           </button>
           <Link
             href={`/orders/${order.id}/invoice`}

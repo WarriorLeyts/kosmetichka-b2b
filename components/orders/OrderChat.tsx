@@ -1,91 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Send, MessageSquare, ChevronDown, ChevronUp, X } from "lucide-react";
-
-const IMAGES_BASE = process.env.NEXT_PUBLIC_IMAGES_BASE_URL ?? "https://kosmetichka-opt.ru";
-
-function getProductImageUrl(imagePath: string | null): string | null {
-  if (!imagePath) return null;
-  if (imagePath.startsWith("http")) return imagePath;
-  return `${IMAGES_BASE}/api/1c/${imagePath}`;
-}
-
-/** Рендерит текст сообщения: обычный текст или структурированные JSON-карточки от менеджера */
-function renderMsgContent(text: string) {
-  try {
-    const obj = JSON.parse(text);
-    // Фото из чата
-    if (obj?._t === "img" && obj.url) {
-      return (
-        <a href={obj.url} target="_blank" rel="noreferrer">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={obj.url}
-            alt="фото"
-            className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer hover:opacity-90"
-          />
-        </a>
-      );
-    }
-    // Карточка товара (менеджер добавил из каталога)
-    if (obj?._t === "product") {
-      const imgUrl = getProductImageUrl(obj.imagePath ?? null);
-      return (
-        <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-52 shadow-sm">
-          {imgUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={imgUrl}
-              alt={obj.name}
-              className="w-full h-24 object-contain bg-slate-50 p-1"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
-          )}
-          <div className="p-2">
-            <p className="font-semibold text-sm leading-snug">{obj.name}</p>
-            {obj.price > 0 && (
-              <p className="text-xs text-slate-500 mt-0.5">
-                {Number(obj.price).toLocaleString("ru-RU")} ₽
-              </p>
-            )}
-          </div>
-        </div>
-      );
-    }
-    // Карточка проблемного товара (от сборщика)
-    if (obj?._t === "product-problem") {
-      const imgUrl = getProductImageUrl(obj.imagePath ?? null);
-      return (
-        <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-56 shadow-sm">
-          {imgUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={imgUrl}
-              alt={obj.name}
-              className="w-full h-28 object-contain bg-slate-50 p-1"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
-          )}
-          <div className="p-2">
-            <p className="font-semibold text-sm leading-snug mb-1">{obj.name}</p>
-            {obj.price > 0 && (
-              <p className="text-xs text-slate-500 mb-2">
-                {Number(obj.price).toLocaleString("ru-RU")} ₽
-              </p>
-            )}
-            <div className="rounded-lg bg-orange-50 border border-orange-200 px-2 py-1.5">
-              <p className="text-xs font-semibold text-orange-700">⚠️ {obj.problem}</p>
-            </div>
-          </div>
-        </div>
-      );
-    }
-  } catch {
-    // Не JSON — рендерим как обычный текст
-  }
-  return <span style={{ whiteSpace: "pre-wrap" }}>{text}</span>;
-}
+import { Send, MessageSquare, ChevronDown, ChevronUp, X, ImagePlus } from "lucide-react";
+import { renderMsgContent } from "@/lib/renderMsgContent";
 
 type Message = {
   id: number;
@@ -104,11 +21,13 @@ export function OrderChat({ orderId, onOpenChange }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploadingImg, setUploadingImg] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unread, setUnread] = useState(0);
 
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const prevCountRef = useRef(0);
   const openRef = useRef(open);
   openRef.current = open;
@@ -204,6 +123,43 @@ export function OrderChat({ orderId, onOpenChange }: Props) {
     }
   }
 
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    setUploadingImg(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/uploads/chat", { method: "POST", body: formData });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error || "Ошибка загрузки фото");
+        return;
+      }
+      const data = await res.json();
+      const msgJson = JSON.stringify({ _t: "img", url: data.url });
+
+      const res2 = await fetch(`/api/orders/${orderId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: msgJson }),
+      });
+      if (!res2.ok) {
+        setError("Ошибка отправки фото");
+        return;
+      }
+      await fetchMessages();
+      setTimeout(scrollToBottom, 50);
+    } catch {
+      setError("Нет соединения");
+    } finally {
+      setUploadingImg(false);
+    }
+  }
+
   return (
     <div className="order-chat">
       <button
@@ -264,6 +220,26 @@ export function OrderChat({ orderId, onOpenChange }: Props) {
 
           {/* Input */}
           <div className="order-chat-input-wrap">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageUpload}
+            />
+            <button
+              type="button"
+              className="order-chat-send"
+              style={{ color: uploadingImg ? "#a78bfa" : "#94a3b8" }}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingImg || sending}
+              title="Прикрепить фото"
+            >
+              {uploadingImg
+                ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-violet-500" />
+                : <ImagePlus size={15} />
+              }
+            </button>
             <textarea
               ref={inputRef}
               className="order-chat-input"

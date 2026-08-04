@@ -14,21 +14,27 @@ export async function GET() {
     const payload = await verifyToken(token);
     if (!payload?.id) return NextResponse.json({ pending: 0, statuses: [], managerMessages: [] });
 
-    const orders = await prisma.order.findMany({
-      where: { customerId: Number(payload.id) },
-      select: {
-        id: true,
-        status: true,
-        messages: {
-          where: { isFromPicker: true, source: "customer" },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { createdAt: true, text: true },
+    const [orders, customerRow] = await Promise.all([
+      prisma.order.findMany({
+        where: { customerId: Number(payload.id) },
+        select: {
+          id: true,
+          status: true,
+          messages: {
+            where: { isFromPicker: true, source: "customer" },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { createdAt: true, text: true },
+          },
         },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    });
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+      prisma.customer.findUnique({
+        where: { id: Number(payload.id) },
+        select: { isApproved: true },
+      }),
+    ]);
 
     const pending = orders.filter((o) => o.status === "pending").length;
 
@@ -43,7 +49,12 @@ export async function GET() {
         preview: o.messages[0].text.slice(0, 60),
       }));
 
-    return NextResponse.json({ pending, statuses, managerMessages });
+    return NextResponse.json({
+      pending,
+      statuses,
+      managerMessages,
+      isApproved: customerRow?.isApproved ?? false,
+    });
   } catch {
     return NextResponse.json({ pending: 0, statuses: [], managerMessages: [] });
   }

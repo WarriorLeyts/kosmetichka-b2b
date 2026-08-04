@@ -70,13 +70,11 @@ export default async function CustomerInvoicePage({
         {/* Header */}
         <div className="mb-8 flex items-start justify-between border-b pb-6">
           <div>
-            <h1 className="text-3xl font-black text-slate-900">СЧЁТ</h1>
-            <p className="mt-1 text-lg font-semibold text-slate-500">№{order.id}</p>
+            <h1 className="text-3xl font-black text-slate-900">СЧЁТ НА ОПЛАТУ</h1>
+            <p className="mt-1 text-lg font-semibold text-slate-500">№{order.id} от {issueDate}</p>
           </div>
           <div className="text-right text-sm text-slate-500">
-            <p className="font-semibold text-slate-700">Дата выставления</p>
-            <p>{issueDate}</p>
-            <p className="mt-2 font-semibold text-slate-700">Статус заказа</p>
+            <p className="font-semibold text-slate-700">Статус заказа</p>
             <p>{STATUS_LABELS[order.status] ?? order.status}</p>
           </div>
         </div>
@@ -85,8 +83,31 @@ export default async function CustomerInvoicePage({
         <div className="mb-8 grid grid-cols-2 gap-8">
           <div>
             <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">Поставщик</p>
-            <p className="font-bold text-slate-800">ООО «Косметичка»</p>
-            <p className="text-sm text-slate-500">kosmetichka-opt.ru</p>
+            <p className="font-bold text-slate-800">{process.env.SHOP_NAME || "ООО «Косметичка»"}</p>
+            {process.env.SHOP_INN && (
+              <p className="text-sm text-slate-500">ИНН: {process.env.SHOP_INN}</p>
+            )}
+            {process.env.SHOP_KPP && (
+              <p className="text-sm text-slate-500">КПП: {process.env.SHOP_KPP}</p>
+            )}
+            {process.env.SHOP_ADDRESS && (
+              <p className="text-sm text-slate-500">{process.env.SHOP_ADDRESS}</p>
+            )}
+            {process.env.SHOP_BANK && (
+              <p className="mt-2 text-sm text-slate-500">{process.env.SHOP_BANK}</p>
+            )}
+            {process.env.SHOP_BIK && (
+              <p className="text-sm text-slate-500">БИК: {process.env.SHOP_BIK}</p>
+            )}
+            {process.env.SHOP_ACCOUNT && (
+              <p className="text-sm text-slate-500">р/с: {process.env.SHOP_ACCOUNT}</p>
+            )}
+            {process.env.SHOP_CORR_ACCOUNT && (
+              <p className="text-sm text-slate-500">к/с: {process.env.SHOP_CORR_ACCOUNT}</p>
+            )}
+            {!process.env.SHOP_INN && (
+              <p className="text-sm text-slate-500">kosmetichka-opt.ru</p>
+            )}
           </div>
           <div>
             <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">Покупатель</p>
@@ -147,15 +168,42 @@ export default async function CustomerInvoicePage({
           </tbody>
         </table>
 
-        {/* Total */}
+        {/* Total + VAT */}
         <div className="flex justify-end">
-          <div className="w-64">
-            <div className="flex justify-between border-t-2 border-slate-800 pt-3">
-              <span className="text-lg font-black text-slate-800">ИТОГО:</span>
-              <span className="text-lg font-black text-slate-800">
-                {order.total.toLocaleString("ru-RU")} ₽
-              </span>
-            </div>
+          <div className="w-72">
+            {(() => {
+              const vatRate = Number(process.env.SHOP_VAT_RATE ?? 20);
+              const hasVat = vatRate > 0;
+              const vatAmount = hasVat
+                ? Math.round((order.total * vatRate) / (100 + vatRate))
+                : 0;
+              const subtotal = order.total - vatAmount;
+              return (
+                <>
+                  {hasVat && (
+                    <>
+                      <div className="flex justify-between py-1.5 text-sm text-slate-500">
+                        <span>Итого без НДС:</span>
+                        <span>{subtotal.toLocaleString("ru-RU")} ₽</span>
+                      </div>
+                      <div className="flex justify-between py-1.5 text-sm text-slate-500">
+                        <span>НДС {vatRate}%:</span>
+                        <span>{vatAmount.toLocaleString("ru-RU")} ₽</span>
+                      </div>
+                    </>
+                  )}
+                  {!hasVat && (
+                    <div className="py-1.5 text-sm text-slate-400">Без НДС</div>
+                  )}
+                  <div className="flex justify-between border-t-2 border-slate-800 pt-3">
+                    <span className="text-lg font-black text-slate-800">ИТОГО:</span>
+                    <span className="text-lg font-black text-slate-800">
+                      {order.total.toLocaleString("ru-RU")} ₽
+                    </span>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
 

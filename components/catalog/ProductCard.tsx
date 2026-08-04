@@ -17,6 +17,7 @@ import {
 import { resolveImageUrl } from "@/lib/image";
 import { useCartStore } from "@/store/cartStore";
 import { useState } from "react";
+import { toast } from "sonner";
 
 type Variant = { id: number; imageUrl: string; name: string };
 
@@ -311,16 +312,9 @@ export function ProductCard({ product, addToCart, onOpenPicker = () => {} }: Pro
 
         {/* Compare button */}
         <button
-          title={
-            isInCompare
-              ? "Убрать из сравнения"
-              : canAddToCompare
-              ? "Добавить в сравнение"
-              : "В сравнении уже 3 товара"
-          }
+          title={isInCompare ? "Убрать из сравнения" : "Добавить в сравнение"}
           className={`favorite-button ${isInCompare ? "active" : ""}`}
           style={isInCompare ? { color: "#6366f1", borderColor: "#c7d2fe", background: "#eef2ff" } : {}}
-          disabled={!isInCompare && !canAddToCompare}
           onClick={(e) => {
             e.stopPropagation();
             if (isInCompare) {
@@ -342,6 +336,8 @@ export function ProductCard({ product, addToCart, onOpenPicker = () => {} }: Pro
                 barcode: product.barcode ?? null,
                 minOrderQty: product.minOrderQty ?? 1,
               });
+            } else {
+              toast.error("В сравнении уже 3 товара", { duration: 3000 });
             }
           }}
         >

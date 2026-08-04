@@ -15,8 +15,11 @@ export function OrderNotifications() {
   const approvedIds = useOrdersNotifStore((state) => state.approvedIds);
   const pendingCount = useOrdersNotifStore((state) => state.pendingCount);
   const newMessageOrderIds = useOrdersNotifStore((state) => state.newMessageOrderIds);
+  const accountJustApproved = useOrdersNotifStore((state) => state.accountJustApproved);
+  const setAccountApproval = useOrdersNotifStore((state) => state.setAccountApproval);
   const dismissApproved = useOrdersNotifStore((state) => state.dismissApproved);
   const dismissMessage = useOrdersNotifStore((state) => state.dismissMessage);
+  const dismissAccountApproved = useOrdersNotifStore((state) => state.dismissAccountApproved);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function poll() {
@@ -26,6 +29,9 @@ export function OrderNotifications() {
       const data = await res.json();
       setStatuses(data.statuses ?? []);
       setManagerMessages(data.managerMessages ?? []);
+      if (typeof data.isApproved === "boolean") {
+        setAccountApproval(data.isApproved);
+      }
     } catch {
       // ignore
     }
@@ -49,6 +55,35 @@ export function OrderNotifications() {
     }, 8000);
     return () => clearTimeout(timer);
   }, [approvedIds, dismissApproved]);
+
+  // Browser Notification + toast when account just got approved
+  useEffect(() => {
+    if (!accountJustApproved) return;
+
+    // Try to show a browser Notification (permission may already be granted)
+    const showBrowserNotif = () => {
+      try {
+        new Notification("Аккаунт одобрен! 🎉", {
+          body: "Теперь вам доступны оптовые цены и оформление заказов.",
+          icon: "/favicon.svg",
+        });
+      } catch {}
+    };
+
+    if (typeof Notification !== "undefined") {
+      if (Notification.permission === "granted") {
+        showBrowserNotif();
+      } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then((perm) => {
+          if (perm === "granted") showBrowserNotif();
+        });
+      }
+    }
+
+    // Auto-dismiss after 12s
+    const timer = setTimeout(() => dismissAccountApproved(), 12000);
+    return () => clearTimeout(timer);
+  }, [accountJustApproved, dismissAccountApproved]);
 
   // Auto-dismiss message toasts after 10s
   useEffect(() => {
@@ -77,7 +112,21 @@ export function OrderNotifications() {
 
       {/* Toast stack */}
       <div className="orders-toast-stack">
-        {/* Approval toasts */}
+        {/* Account approved toast */}
+        {accountJustApproved && (
+          <div className="orders-toast orders-toast--approved">
+            <CheckCircle size={18} className="orders-toast-icon orders-toast-icon--green" />
+            <div className="orders-toast-body">
+              <div className="orders-toast-title">Аккаунт одобрен! 🎉</div>
+              <div className="orders-toast-sub">Вам доступны оптовые цены и оформление заказов</div>
+            </div>
+            <button className="orders-toast-close" onClick={dismissAccountApproved}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* Order approval toasts */}
         {approvedIds.map((id) => (
           <div key={`approved-${id}`} className="orders-toast orders-toast--approved">
             <CheckCircle size={18} className="orders-toast-icon orders-toast-icon--green" />

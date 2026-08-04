@@ -3490,3 +3490,61 @@ align-items: flex-start;
     padding-bottom: calc(60px + env(safe-area-inset-bottom));
   }
 }
+
+/* ── Guest CTA banner (C-10) ───────────────────────────────────────────────── */
+.guest-cta-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: linear-gradient(90deg, #f0f4ff 0%, #fdf2ff 100%);
+  border-bottom: 1px solid #e2e8f0;
+  padding: 10px 20px;
+  position: sticky;
+  top: 56px; /* below TopBar */
+  z-index: 30;
+}
+
+.guest-cta-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.guest-cta-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.guest-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.guest-cta-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+.guest-cta-btn:active { transform: scale(0.97); }
+
+.guest-cta-btn--primary {
+  background: linear-gradient(135deg, #ec4899, #a855f7);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(168,85,247,0.3);
+}
+
+.guest-cta-btn--secondary {
+  background: #fff;
+  color: #6366f1;
+  border: 1.5px solid #c7d2fe;
+}
+
+@media (max-width: 480px) {
+  .guest-cta-banner { gap: 8px; padding: 8px 14px; top: 52px; }
+  .guest-cta-text { font-size: 12px; }
+}

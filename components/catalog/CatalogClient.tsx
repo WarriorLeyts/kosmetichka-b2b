@@ -8,6 +8,8 @@ import { CatalogSidebar } from "./CatalogSidebar";
 import { CatalogHeader } from "./CatalogHeader";
 import { ProductGrid } from "./ProductGrid";
 import { useCartStore } from "@/store/cartStore";
+import { useAuthStore } from "@/store/authStore";
+import Link from "next/link";
 
 type Variant = { id: number; imageUrl: string; name: string };
 
@@ -92,6 +94,8 @@ export function CatalogClient({
 
   const addToCart = useCartStore((state) => state.addToCart);
   const addToCartWithVariant = useCartStore((s) => s.addToCartWithVariant);
+  const customer = useAuthStore((state) => state.customer);
+  const isGuest = customer === null;
 
   const abortRef = useRef<AbortController | null>(null);
   // When true — skip the first filter-change effect (state was restored from sessionStorage)
@@ -330,6 +334,23 @@ export function CatalogClient({
         categoryId={categoryId}
         onCategorySelect={(id) => { setCategoryId(id); }}
       />
+
+      {/* C-10: Guest CTA banner */}
+      {isGuest && (
+        <div className="guest-cta-banner">
+          <span className="guest-cta-text">
+            🔒 Войдите или зарегистрируйтесь, чтобы увидеть оптовые цены
+          </span>
+          <div className="guest-cta-actions">
+            <Link href="/login" className="guest-cta-btn guest-cta-btn--primary">
+              Войти
+            </Link>
+            <Link href="/register" className="guest-cta-btn guest-cta-btn--secondary">
+              Регистрация
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div
         className={`catalog-layout ${

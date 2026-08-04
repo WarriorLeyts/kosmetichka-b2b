@@ -17,11 +17,16 @@ type OrdersNotifState = {
   approvedIds: number[];           // orders just transitioned pending→approved
   newMessageOrderIds: number[];    // orders with new unread manager messages
   knownMessageTimestamps: Record<number, string>; // orderId → last seen latestAt
+  // Account approval tracking
+  seenApprovalStatus: boolean | null; // null = not yet polled
+  accountJustApproved: boolean;
   setPendingCount: (count: number) => void;
   setStatuses: (statuses: OrderStatus[]) => void;
   setManagerMessages: (msgs: ManagerMessageInfo[]) => void;
+  setAccountApproval: (isApproved: boolean) => void;
   dismissApproved: (id: number) => void;
   dismissMessage: (orderId: number) => void;
+  dismissAccountApproved: () => void;
   markMessageRead: (orderId: number) => void; // called when user opens chat
 };
 
@@ -31,6 +36,8 @@ export const useOrdersNotifStore = create<OrdersNotifState>((set) => ({
   approvedIds: [],
   newMessageOrderIds: [],
   knownMessageTimestamps: {},
+  seenApprovalStatus: null,
+  accountJustApproved: false,
 
   setPendingCount: (count) => set({ pendingCount: count }),
 
@@ -85,6 +92,19 @@ export const useOrdersNotifStore = create<OrdersNotifState>((set) => ({
       };
     }),
 
+  setAccountApproval: (isApproved) =>
+    set((state) => {
+      // First poll — just record, don't notify
+      if (state.seenApprovalStatus === null) {
+        return { seenApprovalStatus: isApproved };
+      }
+      // Transition false → true: account just got approved
+      if (state.seenApprovalStatus === false && isApproved === true) {
+        return { seenApprovalStatus: true, accountJustApproved: true };
+      }
+      return { seenApprovalStatus: isApproved };
+    }),
+
   dismissApproved: (id) =>
     set((state) => ({ approvedIds: state.approvedIds.filter((i) => i !== id) })),
 
@@ -92,6 +112,8 @@ export const useOrdersNotifStore = create<OrdersNotifState>((set) => ({
     set((state) => ({
       newMessageOrderIds: state.newMessageOrderIds.filter((i) => i !== orderId),
     })),
+
+  dismissAccountApproved: () => set({ accountJustApproved: false }),
 
   markMessageRead: (orderId) =>
     set((state) => ({

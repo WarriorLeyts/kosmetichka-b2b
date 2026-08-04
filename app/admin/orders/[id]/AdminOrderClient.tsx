@@ -238,6 +238,7 @@ export default function AdminOrderClient({
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const paginationRef = useRef({ offset: 0, hasMore: false, loading: false });
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Image upload ──
   const [uploadingImg, setUploadingImg] = useState<"picker" | "customer" | null>(null);
@@ -457,7 +458,10 @@ export default function AdminOrderClient({
 
   function handleCatalogSearch(q: string) {
     setSearchQuery(q);
-    fetchProducts(q, selectedCatGuid);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      fetchProducts(q, selectedCatGuid);
+    }, 300);
   }
 
   function addProductToEdit(p: CatalogProduct, variant?: CatalogProductVariant) {

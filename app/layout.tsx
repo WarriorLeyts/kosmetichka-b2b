@@ -7,6 +7,7 @@ import { CartToast } from "@/components/catalog/CartToast";
 import { OrderNotifications } from "@/components/orders/OrderNotifications";
 import { CompareBar } from "@/components/compare/CompareBar";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: {
@@ -56,6 +57,7 @@ export default function RootLayout({
         <OrderNotifications />
         <CompareBar />
         <MobileBottomNav />
+        <Toaster position="top-center" richColors />
       </body>
     </html>
   );
