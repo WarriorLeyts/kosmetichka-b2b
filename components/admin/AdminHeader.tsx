@@ -51,9 +51,6 @@ export function AdminHeader({ user }: { user: any }) {
                 )}
               </Link>
               <Link href="/admin/products">Товары</Link>
-              <Link href="/admin/orders/export" className="text-indigo-600 hover:text-indigo-800">
-                Выгрузка 1С
-              </Link>
             </>
           )}
           {isAdmin && (
@@ -97,7 +94,6 @@ export function AdminHeader({ user }: { user: any }) {
                 )}
               </Link>
               <Link href="/admin/products" onClick={() => setMenuOpen(false)} className="py-2 border-b">Товары</Link>
-              <Link href="/admin/orders/export" onClick={() => setMenuOpen(false)} className="py-2 border-b font-semibold text-indigo-600">Выгрузка 1С</Link>
             </>
           )}
           {isAdmin && (
