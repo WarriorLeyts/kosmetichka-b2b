@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Heart, ShoppingCart, GitCompareArrows } from "lucide-react";
+import { Bell, Heart, ShoppingCart, GitCompareArrows, Share2 } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
 import { useFavoriteStore } from "@/store/favoriteStore";
 import { useAuthStore } from "@/store/authStore";
@@ -15,6 +15,7 @@ import { getStockLabel } from "@/lib/utils";
 import { resolveCustomerPriceType, priceFor, priceTypeLabel } from "@/lib/pricing";
 import { useWishlistStore } from "@/store/wishlistStore";
 import { resolveImageUrl } from "@/lib/image";
+import { toast } from "sonner";
 
 type Variant = { id: number; imageUrl: string; name: string };
 
@@ -433,6 +434,22 @@ export function ProductPageClient({
                     } disabled:opacity-40 disabled:cursor-not-allowed`}
                   >
                     <GitCompareArrows size={18} />
+                  </button>
+
+                  {/* Share button */}
+                  <button
+                    title="Скопировать ссылку на товар"
+                    onClick={() => {
+                      const url = `${window.location.origin}/product/${product.id}`;
+                      navigator.clipboard.writeText(url).then(() => {
+                        toast.success("Ссылка скопирована!", { duration: 2000 });
+                      }).catch(() => {
+                        toast.error("Не удалось скопировать", { duration: 2000 });
+                      });
+                    }}
+                    className="flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition hover:bg-emerald-50 hover:text-emerald-500 hover:border-emerald-200"
+                  >
+                    <Share2 size={18} />
                   </button>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Heart, ShoppingCart, GitCompareArrows } from "lucide-react";
+import { Bell, Heart, ShoppingCart, GitCompareArrows, Share2 } from "lucide-react";
 import { useFavoriteStore } from "@/store/favoriteStore";
 import { useAuthStore } from "@/store/authStore";
 import { useWishlistStore } from "@/store/wishlistStore";
@@ -342,6 +342,23 @@ export function ProductCard({ product, addToCart, onOpenPicker = () => {} }: Pro
           }}
         >
           <GitCompareArrows size={15} />
+        </button>
+
+        {/* Share button */}
+        <button
+          title="Скопировать ссылку"
+          className="favorite-button"
+          onClick={(e) => {
+            e.stopPropagation();
+            const url = `${window.location.origin}/product/${product.id}`;
+            navigator.clipboard.writeText(url).then(() => {
+              toast.success("Ссылка скопирована!", { duration: 2000 });
+            }).catch(() => {
+              toast.error("Не удалось скопировать", { duration: 2000 });
+            });
+          }}
+        >
+          <Share2 size={15} />
         </button>
       </div>
     </article>
