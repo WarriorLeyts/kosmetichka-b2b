@@ -1,13 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-
-type CartItem = any & {
-  quantity: number;
-  cartKey: string;
-  variantId?: number;
-  variantName?: string | null;
-  variantImageUrl?: string | null;
-};
+import { priceFor, type PriceType } from "@/lib/pricing";
+import type { CartItem, FlatProduct, RepeatOrderItem } from "@/lib/types";
 
 type CartNotification = {
   id: number;
@@ -16,18 +10,6 @@ type CartNotification = {
 };
 
 type VariantEntry = { id: number; name: string; imageUrl: string };
-
-type RepeatOrderItem = {
-  productId: number;
-  productName: string;
-  quantity: number;
-  price: number;
-  barcode?: string | null;
-  variantId?: number | null;
-  variantName?: string | null;
-  variantImageUrl?: string | null;
-  imagePath?: string | null;
-};
 
 type CartStore = {
   cart: CartItem[];
@@ -39,10 +21,10 @@ type CartStore = {
   toggleCart: () => void;
   clearNotification: () => void;
 
-  addToCart: (product: any) => void;
-  addToCartWithVariant: (product: any, variant: VariantEntry) => void;
+  addToCart: (product: FlatProduct) => void;
+  addToCartWithVariant: (product: FlatProduct, variant: VariantEntry) => void;
   /** Adds multiple variant quantities in a single Zustand set() — no re-render per item */
-  addVariantsBatch: (product: any, entries: Array<{ variant: VariantEntry; quantity: number }>) => void;
+  addVariantsBatch: (product: FlatProduct, entries: Array<{ variant: VariantEntry; quantity: number }>) => void;
   /** Repeats a previous order — merges all items into current cart in one set() */
   repeatOrder: (items: RepeatOrderItem[]) => void;
   increaseQuantity: (cartKey: string) => void;
@@ -52,7 +34,10 @@ type CartStore = {
   setCart: (items: CartItem[]) => void;
 
   cartCount: () => number;
+  /** Approximate total using wholesale price (for display; for exact total use rawCartTotal from lib/pricing). */
   cartTotal: () => number;
+  /** Exact total for a specific price tier — use with effectivePriceType() for accuracy. */
+  cartTotalFor: (priceType: PriceType) => number;
 };
 
 export const useCartStore = create<CartStore>()(
@@ -244,19 +229,28 @@ export const useCartStore = create<CartStore>()(
         return get().cart.reduce((sum, item) => sum + item.quantity, 0);
       },
 
-      // Приблизительная сумма по розничной цене (для точного расчёта используйте
-      // rawCartTotal(cart, priceType) из lib/pricing.ts с учётом типа клиента)
+      // Приблизительная сумма по оптовой цене. Для точного расчёта используйте
+      // rawCartTotal(cart, effectivePriceType(cart, customer)) из lib/pricing.ts.
       cartTotal: () => {
         return get().cart.reduce((sum, item) => {
+          // Priority: wholesale → discount → retail → big_wholesale → 0
+          // Wholesale is the default tier for this B2B store (fixes T-22)
           const price = Number(
-            item.retailPrice ||
-            item.discountPrice ||
-            item.wholesalePrice ||
-            item.bigWholesalePrice ||
+            item.wholesalePrice ??
+            item.discountPrice ??
+            item.retailPrice ??
+            item.bigWholesalePrice ??
             0
           );
           return sum + price * item.quantity;
         }, 0);
+      },
+
+      cartTotalFor: (priceType) => {
+        return get().cart.reduce(
+          (sum, item) => sum + priceFor(item, priceType) * item.quantity,
+          0
+        );
       },
     }),
     {

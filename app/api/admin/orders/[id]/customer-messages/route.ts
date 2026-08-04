@@ -59,6 +59,7 @@ export async function POST(
         orderId,
         text: text.trim(),
         source: "customer",
+        isFromPicker: true,
         userId: user.id as number,
       },
     }),

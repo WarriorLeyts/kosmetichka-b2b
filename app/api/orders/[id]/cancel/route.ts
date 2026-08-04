@@ -69,9 +69,15 @@ export async function POST(request: Request, { params }: Props) {
 
   const { id } = await params;
 
-  const order = await prisma.order.findUnique({
-    where: { id: Number(id) },
-  });
+  let order;
+  try {
+    order = await prisma.order.findUnique({
+      where: { id: Number(id) },
+    });
+  } catch (err) {
+    console.error("[cancel] findUnique error:", err);
+    return NextResponse.json({ error: "Ошибка при поиске заказа" }, { status: 500 });
+  }
 
   if (!order || order.customerId !== Number(payload.id)) {
     return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
@@ -87,10 +93,15 @@ export async function POST(request: Request, { params }: Props) {
     );
   }
 
-  await prisma.order.update({
-    where: { id: order.id },
-    data: { status: "cancelled" },
-  });
+  try {
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: "cancelled" },
+    });
+  } catch (err) {
+    console.error("[cancel] update error:", err);
+    return NextResponse.json({ error: "Не удалось отменить заказ" }, { status: 500 });
+  }
 
   // Перенести сделку в Битрикс в стадию "Отменен"
   cancelDealInBitrix(order.id).catch((err) =>

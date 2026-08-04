@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Send, MessageSquare, ChevronDown, ChevronUp, X, ImagePlus } from "lucide-react";
+import { Send, MessageSquare, ChevronDown, ChevronUp, X } from "lucide-react";
 import { renderMsgContent } from "@/lib/renderMsgContent";
 
 type Message = {
@@ -21,13 +21,11 @@ export function OrderChat({ orderId, onOpenChange }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [uploadingImg, setUploadingImg] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unread, setUnread] = useState(0);
 
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const prevCountRef = useRef(0);
   const openRef = useRef(open);
   openRef.current = open;
@@ -38,9 +36,19 @@ export function OrderChat({ orderId, onOpenChange }: Props) {
     }
   };
 
+  const abortRef = useRef<AbortController | null>(null);
+
   const fetchMessages = useCallback(async () => {
+    // Skip polling when tab is hidden — resume when visible again
+    if (document.visibilityState === "hidden") return;
+
+    // Abort any in-flight request before starting a new one
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
-      const res = await fetch(`/api/orders/${orderId}/messages`);
+      const res = await fetch(`/api/orders/${orderId}/messages`, { signal: controller.signal });
       if (!res.ok) return;
       const data = await res.json();
       const msgs: Message[] = data.messages || [];
@@ -57,15 +65,25 @@ export function OrderChat({ orderId, onOpenChange }: Props) {
       } else {
         prevCountRef.current = msgs.filter((m) => m.isFromManager).length;
       }
-    } catch {
-      // silently skip
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") return; // expected — not an error
+      // silently skip other errors
     }
   }, [orderId]);
 
   useEffect(() => {
     fetchMessages();
     const interval = setInterval(fetchMessages, 15_000);
-    return () => clearInterval(interval);
+
+    // Resume polling when the user switches back to this tab
+    const onVisible = () => { if (document.visibilityState === "visible") fetchMessages(); };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      abortRef.current?.abort();
+    };
   }, [fetchMessages]);
 
   useEffect(() => {
@@ -120,43 +138,6 @@ export function OrderChat({ orderId, onOpenChange }: Props) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       send();
-    }
-  }
-
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-
-    setUploadingImg(true);
-    setError(null);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/uploads/chat", { method: "POST", body: formData });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError(d.error || "Ошибка загрузки фото");
-        return;
-      }
-      const data = await res.json();
-      const msgJson = JSON.stringify({ _t: "img", url: data.url });
-
-      const res2 = await fetch(`/api/orders/${orderId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: msgJson }),
-      });
-      if (!res2.ok) {
-        setError("Ошибка отправки фото");
-        return;
-      }
-      await fetchMessages();
-      setTimeout(scrollToBottom, 50);
-    } catch {
-      setError("Нет соединения");
-    } finally {
-      setUploadingImg(false);
     }
   }
 
@@ -220,26 +201,6 @@ export function OrderChat({ orderId, onOpenChange }: Props) {
 
           {/* Input */}
           <div className="order-chat-input-wrap">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageUpload}
-            />
-            <button
-              type="button"
-              className="order-chat-send"
-              style={{ color: uploadingImg ? "#a78bfa" : "#94a3b8" }}
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingImg || sending}
-              title="Прикрепить фото"
-            >
-              {uploadingImg
-                ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-violet-500" />
-                : <ImagePlus size={15} />
-              }
-            </button>
             <textarea
               ref={inputRef}
               className="order-chat-input"
