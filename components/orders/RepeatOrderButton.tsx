@@ -24,6 +24,7 @@ export function RepeatOrderButton({ items }: { items: OrderItem[] }) {
     setCart(
       items.map((item) => ({
         id: item.productId,
+        cartKey: String(item.productId),
         name: item.productName,
         barcode: item.barcode,
         // Заполняем все варианты цены чтобы корзина показывала правильно
