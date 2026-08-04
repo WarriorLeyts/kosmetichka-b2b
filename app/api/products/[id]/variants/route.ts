@@ -19,12 +19,21 @@ export async function GET(
     orderBy: { sortOrder: "asc" },
   });
 
-  return NextResponse.json({
-    variants: variants.map((v) => ({
-      id: v.id,
-      imageId: v.imageId,
-      imageUrl: resolveImageUrl(v.image.path),
-      name: v.name,
-    })),
-  });
+  return NextResponse.json(
+    {
+      variants: variants.map((v) => ({
+        id: v.id,
+        imageId: v.imageId,
+        imageUrl: resolveImageUrl(v.image.path),
+        name: v.name,
+      })),
+    },
+    {
+      headers: {
+        // Браузер кэширует ответ на 60 секунд, CDN/прокси — на 5 минут.
+        // Варианты меняются редко (только при синхронизации с 1С).
+        "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
+      },
+    }
+  );
 }
