@@ -26,7 +26,7 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // --- Admin API routes: require admin or manager role, return JSON 401 ---
-  if (pathname.startsWith("/api/admin/")) {
+  if (pathname.startsWith("/api/admin/") && pathname !== "/api/admin/login") {
     const token = request.cookies.get("admin_token")?.value;
 
     if (!token) {
