@@ -27,8 +27,11 @@ export default async function OrdersPage({
   const page = Math.max(1, parseInt(p.page || "1", 10));
 
   const statusFilter = p.status || "";
-  const dateFrom = p.dateFrom ? new Date(p.dateFrom + "T00:00:00") : null;
-  const dateTo   = p.dateTo   ? new Date(p.dateTo   + "T23:59:59") : null;
+  // Append Moscow timezone offset so "Jan 15" means Jan 15 00:00–23:59 MSK,
+  // not UTC (which would miss the first 3 h and last 3 h of the Moscow day).
+  const MSK = "+03:00";
+  const dateFrom = p.dateFrom ? new Date(p.dateFrom + "T00:00:00" + MSK) : null;
+  const dateTo   = p.dateTo   ? new Date(p.dateTo   + "T23:59:59" + MSK) : null;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = { customerId };
@@ -46,7 +49,14 @@ export default async function OrdersPage({
       orderBy: { createdAt: "desc" },
       take: PAGE_SIZE,
       skip: (page - 1) * PAGE_SIZE,
-      include: {
+      select: {
+        id: true,
+        status: true,
+        total: true,
+        comment: true,
+        createdAt: true,
+        customerConfirmed: true,
+        changesSnapshot: true,
         items: {
           orderBy: { id: "asc" },
           select: {
@@ -117,6 +127,7 @@ export default async function OrdersPage({
     comment: o.comment,
     createdAt: o.createdAt.toISOString(),
     customerConfirmed: o.customerConfirmed,
+    changesSnapshot: (o.changesSnapshot as any) ?? null,
     items: o.items.map((item) => ({
       id: item.id,
       productId: item.productId,
