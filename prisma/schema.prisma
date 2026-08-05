@@ -164,6 +164,7 @@ model Order {
   oneCExportedAt    DateTime?
   bitrixDealId      Int?
   customerConfirmed Boolean  @default(false)
+  changesSnapshot   Json?
 
   pickerId Int?
   picker   User? @relation("OrderPicker", fields: [pickerId], references: [id])
