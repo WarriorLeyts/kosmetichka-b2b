@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useCartStore } from "@/store/cartStore";
-
+import { OrderChat } from "@/components/orders/OrderChat";
+import { getProductImageUrl } from "@/lib/renderMsgContent";
 import { ORDER_STATUS_LABELS_CUSTOMER as STATUS_LABELS } from "@/lib/orderStatus";
 
 const ALL_STATUSES = [
@@ -50,6 +51,14 @@ type OrderItem = {
   variantName?: string | null;
 };
 
+type ChangeItem = { productName: string; quantity?: number; price: number; variantName?: string | null };
+type ChangedItem = { productName: string; oldQty: number; newQty: number; price: number; variantName?: string | null };
+type ChangesSnapshot = {
+  added: ChangeItem[];
+  removed: ChangeItem[];
+  changed: ChangedItem[];
+} | null;
+
 type Order = {
   id: number;
   status: string;
@@ -57,6 +66,7 @@ type Order = {
   comment?: string | null;
   createdAt: string;
   customerConfirmed: boolean;
+  changesSnapshot: ChangesSnapshot;
   items: OrderItem[];
 };
 
@@ -87,189 +97,6 @@ function formatMoney(amount: number) {
 }
 
 const IMAGES_BASE = process.env.NEXT_PUBLIC_IMAGES_BASE_URL ?? "https://kosmetichka-opt.ru";
-
-function getProductImageUrl(imagePath: string | null): string | null {
-  if (!imagePath) return null;
-  if (imagePath.startsWith("http")) return imagePath;
-  return `${IMAGES_BASE}/api/1c/${imagePath}`;
-}
-
-function renderMsgContent(text: string) {
-  try {
-    const obj = JSON.parse(text);
-    if (obj?._t === "img" && obj.url) {
-      return (
-        <a href={obj.url} target="_blank" rel="noreferrer">
-          <img src={obj.url} alt="фото" className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer hover:opacity-90" />
-        </a>
-      );
-    }
-    if (obj?._t === "product") {
-      const imgUrl = getProductImageUrl(obj.imagePath ?? null);
-      return (
-        <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-52 shadow-sm">
-          {imgUrl && <img src={imgUrl} alt={obj.name} className="w-full h-24 object-contain bg-slate-50 p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />}
-          <div className="p-2">
-            <p className="font-semibold text-sm leading-snug">{obj.name}</p>
-            {obj.price > 0 && <p className="text-xs text-slate-500 mt-0.5">{Number(obj.price).toLocaleString("ru-RU")} ₽</p>}
-          </div>
-        </div>
-      );
-    }
-    if (obj?._t === "product-problem") {
-      const imgUrl = getProductImageUrl(obj.imagePath ?? null);
-      return (
-        <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-56 shadow-sm">
-          {imgUrl && <img src={imgUrl} alt={obj.name} className="w-full h-28 object-contain bg-slate-50 p-1" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />}
-          <div className="p-2">
-            <p className="font-semibold text-sm leading-snug mb-1">{obj.name}</p>
-            {obj.price > 0 && <p className="text-xs text-slate-500 mb-2">{Number(obj.price).toLocaleString("ru-RU")} ₽</p>}
-            <div className="rounded-lg bg-orange-50 border border-orange-200 px-2 py-1.5">
-              <p className="text-xs font-semibold text-orange-700">⚠️ {obj.problem}</p>
-            </div>
-          </div>
-        </div>
-      );
-    }
-  } catch {}
-  return <span style={{ whiteSpace: "pre-wrap" }}>{text}</span>;
-}
-
-function OrderChat({ orderId }: { orderId: number }) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
-  const endRef = useRef<HTMLDivElement>(null);
-  const chatBoxRef = useRef<HTMLDivElement>(null);
-  const lastCountRef = useRef(0);
-
-  async function fetchMessages() {
-    try {
-      const res = await fetch(`/api/orders/${orderId}/messages`);
-      if (!res.ok) return;
-      const data = await res.json();
-      const msgs: Message[] = data.messages || [];
-      if (!open) {
-        const newManagerMsgs = msgs.filter((m) => m.isFromManager).length;
-        if (newManagerMsgs > lastCountRef.current) {
-          setUnread(newManagerMsgs - lastCountRef.current);
-        }
-      }
-      setMessages(msgs);
-    } catch {}
-  }
-
-  useEffect(() => {
-    // Only fetch and poll when chat is open — avoids redundant HTTP on mount
-    if (!open) return;
-    fetchMessages();
-    const timer = setInterval(fetchMessages, 8000);
-    return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, open]);
-
-  useEffect(() => {
-    if (open) {
-      lastCountRef.current = messages.filter((m) => m.isFromManager).length;
-      setUnread(0);
-    }
-  }, [open, messages]);
-
-  useEffect(() => {
-    if (open && chatBoxRef.current) {
-      chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
-    }
-  }, [messages, open]);
-
-  async function send() {
-    if (!text.trim() || sending) return;
-    setSending(true);
-    try {
-      const res = await fetch(`/api/orders/${orderId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text.trim() }),
-      });
-      if (res.ok) {
-        setText("");
-        await fetchMessages();
-      }
-    } finally {
-      setSending(false);
-    }
-  }
-
-  return (
-    <div className="mt-3 border-t pt-3">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800"
-      >
-        {"\u{1F4AC}"} {"Чат с менеджером"}
-        {unread > 0 && (
-          <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-xs text-white">
-            {unread}
-          </span>
-        )}
-        <span className="text-xs text-slate-400">{open ? "▲" : "▼"}</span>
-      </button>
-
-      {open && (
-        <div className="mt-3 flex flex-col gap-2">
-          <div ref={chatBoxRef} className="max-h-60 overflow-y-auto rounded-xl border bg-slate-50 p-3 flex flex-col gap-2">
-            {messages.length === 0 ? (
-              <p className="text-center text-sm text-slate-400">
-                {"Нет сообщений. Задайте вопрос менеджеру."}
-              </p>
-            ) : (
-              messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm ${
-                    m.isFromManager
-                      ? "self-start bg-white border text-slate-800"
-                      : "self-end bg-indigo-600 text-white"
-                  }`}
-                >
-                  {m.isFromManager && (
-                    <p className="text-xs font-semibold text-slate-500 mb-0.5">
-                      {"Менеджер"}
-                    </p>
-                  )}
-                  {renderMsgContent(m.text)}
-                  <p className={`text-xs mt-1 ${m.isFromManager ? "text-slate-400" : "text-indigo-200"}`}>
-                    {new Date(m.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-              ))
-            )}
-            <div ref={endRef} />
-          </div>
-
-          <div className="flex gap-2">
-            <input
-              className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300"
-              placeholder={"Написать менеджеру…"}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
-              disabled={sending}
-            />
-            <button
-              onClick={send}
-              disabled={sending || !text.trim()}
-              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 hover:bg-indigo-700"
-            >
-              {sending ? "…" : "Отправить"}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 type EditableItem = {
   id: number;
@@ -406,9 +233,55 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
 
       {needsConfirm && (
         <div className="mx-5 mb-3 rounded-xl bg-orange-50 border border-orange-200 px-4 py-3">
-          <p className="text-sm font-medium text-orange-800 mb-2">
+          <p className="text-sm font-medium text-orange-800 mb-3">
             {"\u{1F4CB} Менеджер изменил состав заказа. Пожалуйста, подтвердите изменения."}
           </p>
+
+          {/* ── Changes diff ── */}
+          {order.changesSnapshot && (
+            <div className="mb-3 flex flex-col gap-2 text-xs">
+              {order.changesSnapshot.added.length > 0 && (
+                <div className="rounded-lg bg-green-50 border border-green-200 px-3 py-2">
+                  <p className="font-bold text-green-700 mb-1">✅ Добавлено</p>
+                  <div className="flex flex-col gap-0.5">
+                    {order.changesSnapshot.added.map((item, i) => (
+                      <div key={i} className="flex items-baseline gap-1 text-green-800">
+                        <span className="font-medium truncate flex-1">{item.productName}{item.variantName ? ` (${item.variantName})` : ""}</span>
+                        <span className="shrink-0 text-green-600">× {item.quantity ?? 1} шт. · {formatMoney((item.quantity ?? 1) * item.price)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {order.changesSnapshot.removed.length > 0 && (
+                <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2">
+                  <p className="font-bold text-red-700 mb-1">🗑 Удалено</p>
+                  <div className="flex flex-col gap-0.5">
+                    {order.changesSnapshot.removed.map((item, i) => (
+                      <div key={i} className="flex items-baseline gap-1 text-red-800">
+                        <span className="font-medium truncate flex-1 line-through">{item.productName}{item.variantName ? ` (${item.variantName})` : ""}</span>
+                        <span className="shrink-0 text-red-500">× {item.quantity ?? 1} шт.</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {order.changesSnapshot.changed.length > 0 && (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+                  <p className="font-bold text-amber-700 mb-1">✏️ Изменено количество</p>
+                  <div className="flex flex-col gap-0.5">
+                    {order.changesSnapshot.changed.map((item, i) => (
+                      <div key={i} className="flex items-baseline gap-1 text-amber-800">
+                        <span className="font-medium truncate flex-1">{item.productName}{item.variantName ? ` (${item.variantName})` : ""}</span>
+                        <span className="shrink-0 text-amber-600">{item.oldQty} → {item.newQty} шт.</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {confirmError && <p className="text-xs text-red-600 mb-2">{confirmError}</p>}
           <button
             onClick={confirmOrder}
