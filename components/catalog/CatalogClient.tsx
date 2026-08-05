@@ -8,10 +8,6 @@ import { CatalogSidebar } from "./CatalogSidebar";
 import { CatalogHeader } from "./CatalogHeader";
 import { ProductGrid } from "./ProductGrid";
 import { useCartStore } from "@/store/cartStore";
-import { useAuthStore } from "@/store/authStore";
-import Link from "next/link";
-
-type Variant = { id: number; imageUrl: string; name: string };
 
 function getDescendantGuids(categories: any[], parentGuid: string): string[] {
   const result = [parentGuid];
@@ -20,20 +16,6 @@ function getDescendantGuids(categories: any[], parentGuid: string): string[] {
     result.push(...getDescendantGuids(categories, child.guid));
   }
   return result;
-}
-
-/** Skeleton card — matches the rough dimensions of ProductCard */
-function SkeletonCard() {
-  return (
-    <div className="product-card" style={{ pointerEvents: "none" }}>
-      <div className="product-image-box" style={{ background: "#f1f5f9", borderRadius: 12 }} />
-      <div style={{ height: 14, width: "75%", background: "#e2e8f0", borderRadius: 6, margin: "10px 0 6px" }} />
-      <div style={{ height: 12, width: "50%", background: "#e2e8f0", borderRadius: 6, marginBottom: 8 }} />
-      <div style={{ height: 13, width: "60%", background: "#e2e8f0", borderRadius: 6, marginBottom: 4 }} />
-      <div style={{ height: 13, width: "40%", background: "#e2e8f0", borderRadius: 6, marginBottom: 12 }} />
-      <div style={{ height: 36, background: "#e2e8f0", borderRadius: 12 }} />
-    </div>
-  );
 }
 
 export function CatalogClient({
@@ -86,50 +68,11 @@ export function CatalogClient({
 
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
-  // ── Shared variant picker state (V-1: single modal for all cards) ──────────
-  const [pickerProduct, setPickerProduct] = useState<any | null>(null);
-  const [pickerVariants, setPickerVariants] = useState<Variant[]>([]);
-  const [pickerQtys, setPickerQtys] = useState<Record<number, number>>({});
-  const [zoomedImg, setZoomedImg] = useState<string | null>(null);
-
   const addToCart = useCartStore((state) => state.addToCart);
-  const addToCartWithVariant = useCartStore((s) => s.addToCartWithVariant);
-  const customer = useAuthStore((state) => state.customer);
-  const isGuest = customer === null;
 
   const abortRef = useRef<AbortController | null>(null);
   // When true — skip the first filter-change effect (state was restored from sessionStorage)
   const isRestored = useRef(false);
-
-  function handleOpenPicker(product: any, variants: Variant[]) {
-    setPickerProduct(product);
-    setPickerVariants(variants);
-    setPickerQtys({});
-  }
-
-  function changePickerQty(variantId: number, delta: number) {
-    setPickerQtys((prev) => {
-      const cur = prev[variantId] ?? 0;
-      const next = Math.max(0, cur + delta);
-      return { ...prev, [variantId]: next };
-    });
-  }
-
-  function submitPicker() {
-    pickerVariants.forEach((v) => {
-      const qty = pickerQtys[v.id] ?? 0;
-      if (qty > 0) {
-        for (let i = 0; i < qty; i++) {
-          addToCartWithVariant(pickerProduct, v);
-        }
-      }
-    });
-    setPickerProduct(null);
-    setPickerVariants([]);
-    setPickerQtys({});
-  }
-
-  const pickerTotal = Object.values(pickerQtys).reduce((s, n) => s + n, 0);
 
   // ── Restore scroll position + loaded products on back-navigation ──────────
   useEffect(() => {
@@ -153,6 +96,8 @@ export function CatalogClient({
         const state = JSON.parse(savedState);
 
         // Only skip re-fetch if the cached state looks consistent
+        // (products present AND total > 0). If total=0 with products it means
+        // the cache was saved during a broken state — do a fresh load instead.
         if ((state.products?.length ?? 0) > 0 && (state.total ?? 0) > 0) {
           isRestored.current = true;
         }
@@ -335,23 +280,6 @@ export function CatalogClient({
         onCategorySelect={(id) => { setCategoryId(id); }}
       />
 
-      {/* C-10: Guest CTA banner */}
-      {isGuest && (
-        <div className="guest-cta-banner">
-          <span className="guest-cta-text">
-            🔒 Войдите или зарегистрируйтесь, чтобы увидеть оптовые цены
-          </span>
-          <div className="guest-cta-actions">
-            <Link href="/login" className="guest-cta-btn guest-cta-btn--primary">
-              Войти
-            </Link>
-            <Link href="/register" className="guest-cta-btn guest-cta-btn--secondary">
-              Регистрация
-            </Link>
-          </div>
-        </div>
-      )}
-
       <div
         className={`catalog-layout ${
           mobileFiltersOpen ? "mobile-filters-open" : ""
@@ -386,23 +314,15 @@ export function CatalogClient({
           <CatalogHeader total={total} sort={sort} setSort={setSort} />
 
           <div className="relative">
-            <ProductGrid
-              products={products}
-              addToCart={addToCart}
-              onOpenPicker={handleOpenPicker}
-            />
+            <ProductGrid products={products} addToCart={addToCart} />
           </div>
 
-          {/* V-5: Skeleton grid while first page loads */}
           {loadingProducts && products.length === 0 && (
-            <div className="product-grid">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <SkeletonCard key={i} />
-              ))}
+            <div className="flex items-center justify-center py-24">
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-pink-500" />
             </div>
           )}
 
-          {/* Spinner while loading more pages */}
           {loadingProducts && products.length > 0 && (
             <div className="flex items-center justify-center py-8">
               <div className="h-7 w-7 animate-spin rounded-full border-4 border-slate-200 border-t-pink-500" />
@@ -416,103 +336,6 @@ export function CatalogClient({
           )}
         </section>
       </div>
-
-      {/* V-1: Single shared image zoom lightbox */}
-      {zoomedImg && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setZoomedImg(null)}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={zoomedImg}
-            alt=""
-            className="max-h-[90vh] max-w-[90vw] rounded-2xl object-contain shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <button
-            onClick={() => setZoomedImg(null)}
-            className="absolute top-4 right-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 text-xl font-bold"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      {/* V-1: Single shared variant picker modal */}
-      {pickerProduct && pickerVariants.length > 0 && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4"
-          onClick={() => setPickerProduct(null)}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="mb-1 text-base font-bold text-slate-800 line-clamp-2">
-              {pickerProduct.name}
-            </h3>
-            <p className="mb-4 text-sm text-slate-500">Выберите варианты и количество</p>
-
-            <div className="flex flex-col gap-3 max-h-72 overflow-y-auto">
-              {pickerVariants.map((v) => {
-                const qty = pickerQtys[v.id] ?? 0;
-                return (
-                  <div key={v.id} className="flex items-center gap-3">
-                    <div
-                      className="h-14 w-14 rounded-xl border bg-slate-100 flex-shrink-0 overflow-hidden cursor-zoom-in"
-                      onClick={(e) => { if (v.imageUrl) { e.stopPropagation(); setZoomedImg(v.imageUrl); } }}
-                    >
-                      {v.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={v.imageUrl}
-                          alt={v.name}
-                          loading="lazy"
-                          decoding="async"
-                          className="h-full w-full object-cover hover:opacity-80 transition-opacity"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                        />
-                      ) : (
-                        <span className="flex h-full w-full items-center justify-center text-xl">🧴</span>
-                      )}
-                    </div>
-                    <span className="flex-1 text-sm font-medium text-slate-800">{v.name}</span>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => changePickerQty(v.id, -1)}
-                        disabled={qty === 0}
-                        className="h-8 w-8 rounded-lg border flex items-center justify-center text-slate-600 disabled:opacity-30 hover:bg-slate-50"
-                      >−</button>
-                      <span className="w-6 text-center text-sm font-bold">{qty}</span>
-                      <button
-                        onClick={() => changePickerQty(v.id, 1)}
-                        className="h-8 w-8 rounded-lg border flex items-center justify-center text-slate-600 hover:bg-slate-50"
-                      >+</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => setPickerProduct(null)}
-                className="flex-1 rounded-xl border py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={submitPicker}
-                disabled={pickerTotal === 0}
-                className="flex-1 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 py-2.5 text-sm font-bold text-white disabled:opacity-40"
-              >
-                В корзину {pickerTotal > 0 ? `(${pickerTotal})` : ""}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
