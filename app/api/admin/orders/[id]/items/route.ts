@@ -69,6 +69,40 @@ export async function PUT(request: NextRequest, { params }: Props) {
     }
   }
 
+  // ── Compute diff snapshot BEFORE applying changes ─────────────────────────
+  const snapshot = {
+    added: newItems.map((ni) => ({
+      productName: ni.productName,
+      quantity: ni.quantity,
+      price: ni.price,
+      variantName: ni.variantName ?? null,
+    })),
+    removed: order.items
+      .filter((i) => removeIds.includes(i.id))
+      .map((i) => ({
+        productName: i.productName,
+        quantity: i.quantity,
+        price: i.price,
+        variantName: (i as any).variantName ?? null,
+      })),
+    changed: updates
+      .filter((u) => {
+        const orig = order.items.find((i) => i.id === u.id);
+        return orig && orig.quantity !== u.quantity;
+      })
+      .map((u) => {
+        const orig = order.items.find((i) => i.id === u.id)!;
+        return {
+          productName: orig.productName,
+          oldQty: orig.quantity,
+          newQty: u.quantity,
+          price: u.price,
+          variantName: (orig as any).variantName ?? null,
+        };
+      }),
+  };
+  // ──────────────────────────────────────────────────────────────────────────
+
   if (removeIds.length > 0) {
     const validRemoveIds = removeIds.filter((rid) => orderItemIds.has(rid));
     await prisma.orderItemCheck.deleteMany({ where: { orderItemId: { in: validRemoveIds } } });
@@ -120,7 +154,11 @@ export async function PUT(request: NextRequest, { params }: Props) {
   const newTotal = remaining.reduce((s, i) => s + i.total, 0);
   await prisma.order.update({
     where: { id: orderId },
-    data: { total: newTotal, customerConfirmed: false },
+    data: {
+      total: newTotal,
+      customerConfirmed: false,
+      changesSnapshot: snapshot,
+    },
   });
 
   const updated = await prisma.order.findUnique({
