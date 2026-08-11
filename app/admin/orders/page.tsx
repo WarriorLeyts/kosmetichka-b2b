@@ -1,0 +1,231 @@
+import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+import Link from "next/link";
+import PaginationBar from "@/components/PaginationBar";
+import { AdminOrdersList } from "@/components/admin/AdminOrdersList";
+import { parseCheckStatuses } from "@/lib/checkStatus";
+import { ORDER_STATUS_LABELS as STATUS_LABELS } from "@/lib/orderStatus";
+
+const PAGE_SIZE = 50;
+
+export const dynamic = "force-dynamic";
+
+const STATUS_CLASSES: Record<string, string> = {
+  pending: "bg-yellow-100 text-yellow-700",
+  approved: "bg-green-100 text-green-700",
+  assembly: "bg-blue-100 text-blue-700",
+  consultation: "bg-orange-100 text-orange-700",
+  payment: "bg-emerald-100 text-emerald-700",
+  exported: "bg-slate-100 text-slate-500",
+  cancelled: "bg-red-100 text-red-700",
+};
+
+
+export default async function AdminOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    date?: string;
+    customer?: string;
+    status?: string;
+    page?: string;
+  }>;
+}) {
+  const params = await searchParams;
+
+  // date=undefined → today (default); date="" → all; date="YYYY-MM-DD" → that day
+  const today = new Date().toISOString().slice(0, 10);
+  const selectedDate = params.date !== undefined ? params.date : today;
+  const customerSearch = params.customer || "";
+  const selectedStatus = params.status || "";
+  const page = Math.max(1, parseInt(params.page || "1", 10));
+
+  let dateFilter = {};
+  if (selectedDate) {
+    const startDate = new Date(`${selectedDate}T00:00:00`);
+    const endDate = new Date(`${selectedDate}T23:59:59.999`);
+    dateFilter = { createdAt: { gte: startDate, lte: endDate } };
+  }
+
+  const where: Prisma.OrderWhereInput = {
+    ...dateFilter,
+    status: selectedStatus || undefined,
+    customer: customerSearch
+      ? {
+          OR: [
+            { name: { contains: customerSearch, mode: "insensitive" } },
+            { companyName: { contains: customerSearch, mode: "insensitive" } },
+            { phone: { contains: customerSearch } },
+            { inn: { contains: customerSearch } },
+          ],
+        }
+      : undefined,
+  };
+
+  const [totalCount, orders] = await Promise.all([
+    prisma.order.count({ where }),
+    prisma.order.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: PAGE_SIZE,
+      skip: (page - 1) * PAGE_SIZE,
+      select: {
+        id: true,
+        status: true,
+        total: true,
+        createdAt: true,
+        customer: { select: { name: true, companyName: true, phone: true } },
+        _count: { select: { items: true } },
+        items: {
+          select: { check: { select: { status: true } } },
+        },
+      },
+    }),
+  ]);
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  // Build href preserving all current filters + changing page
+  function pageHref(p: number) {
+    const sp = new URLSearchParams();
+    if (selectedDate !== today) sp.set("date", selectedDate);
+    else if (params.date !== undefined) sp.set("date", selectedDate);
+    if (customerSearch) sp.set("customer", customerSearch);
+    if (selectedStatus) sp.set("status", selectedStatus);
+    if (p > 1) sp.set("page", String(p));
+    const qs = sp.toString();
+    return `/admin/orders${qs ? `?${qs}` : ""}`;
+  }
+
+  // Count by status (always for today)
+  const todayStart = new Date(`${today}T00:00:00`);
+  const todayEnd = new Date(`${today}T23:59:59.999`);
+  const todayCounts = await prisma.order.groupBy({
+    by: ["status"],
+    where: { createdAt: { gte: todayStart, lte: todayEnd } },
+    _count: { id: true },
+  });
+  const countMap: Record<string, number> = {};
+  for (const c of todayCounts) countMap[c.status] = c._count.id;
+
+  const PIPELINE_STATUSES = ["pending", "approved", "assembly", "consultation", "payment", "exported", "cancelled"];
+
+  return (
+    <div className="p-4 md:p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Заказы</h1>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-400">
+            {totalCount} {totalCount === 1 ? "заказ" : totalCount < 5 ? "заказа" : "заказов"}
+          </span>
+          <Link href="/admin/stats" className="rounded-xl border px-4 py-2 text-sm hover:bg-slate-50">
+            📊 Статистика
+          </Link>
+        </div>
+      </div>
+
+      {/* Status chips (today counts) — preserve current date param */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Link
+          href={selectedDate ? `/admin/orders?date=${selectedDate}&status=` : `/admin/orders?status=`}
+          className={`rounded-full px-3 py-1 text-sm font-medium border transition-all ${
+            !selectedStatus ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 hover:bg-slate-50"
+          }`}
+        >
+          Все {Object.values(countMap).reduce((a, b) => a + b, 0) > 0
+            ? `(${Object.values(countMap).reduce((a, b) => a + b, 0)})`
+            : ""}
+        </Link>
+        {PIPELINE_STATUSES.map((s) => {
+          const count = countMap[s] ?? 0;
+          if (count === 0 && !["pending", "approved", "assembly", "consultation", "payment"].includes(s)) return null;
+          const chipHref = selectedDate
+            ? `/admin/orders?date=${selectedDate}&status=${s}`
+            : `/admin/orders?status=${s}`;
+          return (
+            <Link
+              key={s}
+              href={chipHref}
+              className={`rounded-full px-3 py-1 text-sm font-medium border transition-all ${
+                selectedStatus === s
+                  ? "bg-slate-800 text-white border-slate-800"
+                  : `${STATUS_CLASSES[s]} hover:opacity-80`
+              }`}
+            >
+              {STATUS_LABELS[s]}{count > 0 ? ` (${count})` : ""}
+              {s === "consultation" && count > 0 ? " ⚠️" : ""}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Filters */}
+      <form className="mb-6 grid gap-3 rounded-xl border bg-white p-4 md:grid-cols-4">
+        <div>
+          <label className="mb-1 block text-sm font-semibold">Дата</label>
+          <input
+            type="date"
+            name="date"
+            defaultValue={selectedDate || today}
+            className="w-full rounded-lg border px-3 py-2"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-semibold">Клиент / телефон</label>
+          <input
+            name="customer"
+            defaultValue={customerSearch}
+            placeholder="Поиск по клиенту"
+            className="w-full rounded-lg border px-3 py-2"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-semibold">Статус</label>
+          <select
+            name="status"
+            defaultValue={selectedStatus}
+            className="w-full rounded-lg border px-3 py-2"
+          >
+            <option value="">Все статусы</option>
+            <option value="pending">Ожидание</option>
+            <option value="approved">Подтверждён</option>
+            <option value="assembly">Сборка</option>
+            <option value="consultation">Консультация</option>
+            <option value="payment">К оплате</option>
+            <option value="exported">Выгружен в 1С</option>
+            <option value="cancelled">Отменён</option>
+          </select>
+        </div>
+
+        <div className="flex items-end gap-2">
+          <button type="submit" className="rounded-lg bg-black px-5 py-2 text-white">
+            Найти
+          </button>
+          <Link href="/admin/orders" className="rounded-lg border px-5 py-2">
+            Сегодня
+          </Link>
+          <Link href={`/admin/orders?date=`} className="rounded-lg border px-5 py-2">
+            Все
+          </Link>
+        </div>
+      </form>
+
+      {/* Orders list with bulk selection */}
+      <AdminOrdersList
+        orders={orders.map((order) => ({
+          ...order,
+          createdAt: order.createdAt.toISOString(),
+          hasIssues: order.items.some((i) => {
+            if (!i.check) return false;
+            return parseCheckStatuses(i.check.status).some((s) => s !== "ok");
+          }),
+          checkedCount: order.items.filter((i) => i.check).length,
+        }))}
+      />
+
+      <PaginationBar page={page} totalPages={totalPages} buildHref={pageHref} />
+    </div>
+  );
+}

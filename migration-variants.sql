@@ -1,0 +1,5 @@
+﻿ALTER TABLE "OrderItem" ADD COLUMN IF NOT EXISTS "variantName" TEXT;
+ALTER TABLE "OrderItem" ADD COLUMN IF NOT EXISTS "variantImageUrl" TEXT;
+CREATE TABLE IF NOT EXISTS "ProductVariant" ("id" SERIAL NOT NULL, "productId" INTEGER NOT NULL, "imageId" INTEGER NOT NULL, "name" TEXT NOT NULL, "sortOrder" INTEGER NOT NULL DEFAULT 0, CONSTRAINT "ProductVariant_pkey" PRIMARY KEY ("id"));
+ALTER TABLE "ProductVariant" ADD CONSTRAINT "ProductVariant_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "ProductVariant" ADD CONSTRAINT "ProductVariant_imageId_fkey" FOREIGN KEY ("imageId") REFERENCES "ProductImage"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -1,0 +1,229 @@
+"use client";
+
+import { useEffect, useRef, useState, useCallback } from "react";
+import { Send, MessageSquare, ChevronDown, ChevronUp, X } from "lucide-react";
+import { renderMsgContent } from "@/lib/renderMsgContent";
+
+type Message = {
+  id: number;
+  text: string;
+  isFromManager: boolean;
+  createdAt: string;
+};
+
+type Props = {
+  orderId: number;
+  onOpenChange?: (open: boolean) => void;
+};
+
+export function OrderChat({ orderId, onOpenChange }: Props) {
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [unread, setUnread] = useState(0);
+
+  const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const prevCountRef = useRef(0);
+  const openRef = useRef(open);
+  openRef.current = open;
+
+  const scrollToBottom = () => {
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
+  };
+
+  const abortRef = useRef<AbortController | null>(null);
+
+  const fetchMessages = useCallback(async () => {
+    // Skip polling when tab is hidden — resume when visible again
+    if (document.visibilityState === "hidden") return;
+
+    // Abort any in-flight request before starting a new one
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await fetch(`/api/orders/${orderId}/messages`, { signal: controller.signal });
+      if (!res.ok) return;
+      const data = await res.json();
+      const msgs: Message[] = data.messages || [];
+
+      setMessages(msgs);
+
+      if (!openRef.current) {
+        const newManager = msgs.filter((m) => m.isFromManager).length;
+        const prevManager = prevCountRef.current;
+        if (newManager > prevManager) {
+          setUnread((u) => u + (newManager - prevManager));
+        }
+        prevCountRef.current = newManager;
+      } else {
+        prevCountRef.current = msgs.filter((m) => m.isFromManager).length;
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") return; // expected — not an error
+      // silently skip other errors
+    }
+  }, [orderId]);
+
+  useEffect(() => {
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 15_000);
+
+    // Resume polling when the user switches back to this tab
+    const onVisible = () => { if (document.visibilityState === "visible") fetchMessages(); };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      abortRef.current?.abort();
+    };
+  }, [fetchMessages]);
+
+  useEffect(() => {
+    if (open) scrollToBottom();
+  }, [messages, open]);
+
+  function handleOpen() {
+    setOpen(true);
+    setUnread(0);
+    prevCountRef.current = messages.filter((m) => m.isFromManager).length;
+    onOpenChange?.(true);
+    setTimeout(() => {
+      scrollToBottom();
+      inputRef.current?.focus();
+    }, 50);
+  }
+
+  function handleClose() {
+    setOpen(false);
+    onOpenChange?.(false);
+  }
+
+  async function send() {
+    const trimmed = text.trim();
+    if (!trimmed || sending) return;
+
+    setSending(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/orders/${orderId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: trimmed }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Ошибка отправки");
+        return;
+      }
+      setText("");
+      await fetchMessages();
+      setTimeout(scrollToBottom, 50);
+    } catch {
+      setError("Нет соединения");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  }
+
+  return (
+    <div className="order-chat">
+      <button
+        type="button"
+        className={`order-chat-toggle${open ? " order-chat-toggle--active" : ""}`}
+        onClick={open ? handleClose : handleOpen}
+      >
+        <MessageSquare size={15} />
+        {"Чат с менеджером"}
+        {unread > 0 && <span className="order-chat-badge">{unread}</span>}
+        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </button>
+
+      {open && (
+        <div className="order-chat-panel">
+          {/* Header */}
+          <div className="order-chat-header">
+            <div className="order-chat-header-avatar">М</div>
+            <div>
+              <div className="order-chat-header-name">{"Менеджер"}</div>
+              <div className="order-chat-header-status">{"Отвечаем в рабочее время"}</div>
+            </div>
+            <button className="order-chat-close" onClick={handleClose} type="button">
+              <X size={15} />
+            </button>
+          </div>
+
+          {/* Messages */}
+          <div className="order-chat-messages" ref={listRef}>
+            {messages.length === 0 && (
+              <div className="order-chat-empty">
+                <MessageSquare size={30} strokeWidth={1.5} />
+                <p>{"Напишите нам — ответим как можно скорее"}</p>
+              </div>
+            )}
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`order-chat-msg ${msg.isFromManager ? "order-chat-msg--manager" : "order-chat-msg--customer"}`}
+              >
+                {msg.isFromManager && (
+                  <div className="order-chat-msg-avatar">{"М"}</div>
+                )}
+                <div className="order-chat-msg-body">
+                  <div className="order-chat-bubble">{renderMsgContent(msg.text)}</div>
+                  <div className="order-chat-time">
+                    {new Date(msg.createdAt).toLocaleString("ru-RU", {
+                      day: "numeric",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Input */}
+          <div className="order-chat-input-wrap">
+            <textarea
+              ref={inputRef}
+              className="order-chat-input"
+              placeholder={"Написать сообщение..."}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={handleKey}
+              rows={1}
+              maxLength={2000}
+            />
+            <button
+              type="button"
+              className="order-chat-send"
+              onClick={send}
+              disabled={!text.trim() || sending}
+            >
+              <Send size={15} />
+            </button>
+          </div>
+          {error && <div className="order-chat-error">{error}</div>}
+          <div className="order-chat-hint">{"Enter — отправить · Shift+Enter — новая строка"}</div>
+        </div>
+      )}
+    </div>
+  );
+}
