@@ -32,8 +32,8 @@ export function MobileBottomNav() {
         onClick={openCart}
         aria-label="Корзина"
       >
-        <span className="relative inline-flex">
-          <ShoppingBag size={22} />
+        <span className="relative inline-flex items-center justify-center">
+          <ShoppingBag size={24} />
           {cartCount > 0 && (
             <span className="mobile-bottom-nav-badge">{cartCount > 99 ? "99+" : cartCount}</span>
           )}
@@ -45,7 +45,7 @@ export function MobileBottomNav() {
         const active = pathname === href || pathname.startsWith(href + "/");
         return (
           <Link key={href} href={href} className={`mobile-bottom-nav-item${active ? " active" : ""}`}>
-            <Icon size={22} />
+            <Icon size={24} />
             <span>{label}</span>
           </Link>
         );

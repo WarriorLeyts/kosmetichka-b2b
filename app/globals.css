@@ -3429,7 +3429,7 @@ align-items: flex-start;
   to { transform: rotate(360deg); }
 }
 
-/* ── Mobile bottom navigation (V-12) ──────────────────────────────────────── */
+/* ── Mobile bottom navigation (WhatsApp style) ────────────────────────────── */
 .mobile-bottom-nav {
   display: none;
 }
@@ -3438,13 +3438,16 @@ align-items: flex-start;
   .mobile-bottom-nav {
     display: flex;
     position: fixed;
-    bottom: 0; left: 0; right: 0;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    left: 12px;
+    right: 12px;
     z-index: 40;
     background: #fff;
-    border-top: 1px solid #e2e8f0;
-    box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
-    height: 60px;
-    padding-bottom: env(safe-area-inset-bottom);
+    border-radius: 22px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.13), 0 1.5px 6px rgba(0,0,0,0.07);
+    height: 66px;
+    padding: 0 6px;
+    align-items: center;
   }
 
   .mobile-bottom-nav-item {
@@ -3461,18 +3464,26 @@ align-items: flex-start;
     border: none;
     background: none;
     cursor: pointer;
-    transition: color 0.15s;
-    padding: 0;
+    transition: color 0.15s, background 0.15s;
+    padding: 8px 4px;
+    border-radius: 14px;
+    position: relative;
   }
 
-  .mobile-bottom-nav-item.active,
-  .mobile-bottom-nav-item:hover {
-    color: #ec4899;
+  .mobile-bottom-nav-item.active {
+    color: #7c3aed;
+    background: #f3f0ff;
+  }
+
+  .mobile-bottom-nav-item:hover:not(.active) {
+    color: #7c3aed;
+    background: #f8f7ff;
   }
 
   .mobile-bottom-nav-badge {
     position: absolute;
-    top: -4px; right: -6px;
+    top: 4px;
+    right: calc(50% - 20px);
     min-width: 16px; height: 16px;
     padding: 0 3px;
     border-radius: 8px;
@@ -3487,7 +3498,7 @@ align-items: flex-start;
   /* Add bottom padding to pages so content isn't hidden behind the nav */
   .catalog-page,
   main {
-    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+    padding-bottom: calc(92px + env(safe-area-inset-bottom));
   }
 }
 
