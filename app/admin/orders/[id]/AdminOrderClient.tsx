@@ -900,7 +900,7 @@ export default function AdminOrderClient({
               {order.customer.phone && (
                 <span className="flex items-center gap-1">
                   <a
-                    href={`https://wa.me/${order.customer.phone.replace(/\D/g, "")}`}
+                    href={`https://wa.me/${(() => { const d = order.customer.phone.replace(/\D/g, ""); return d.startsWith("8") && d.length === 11 ? "7" + d.slice(1) : d; })()}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-medium text-blue-600 hover:underline"
@@ -908,7 +908,7 @@ export default function AdminOrderClient({
                     {order.customer.phone}
                   </a>
                   <a
-                    href={`https://wa.me/${order.customer.phone.replace(/\D/g, "")}`}
+                    href={`https://wa.me/${(() => { const d = order.customer.phone.replace(/\D/g, ""); return d.startsWith("8") && d.length === 11 ? "7" + d.slice(1) : d; })()}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-green-600 hover:opacity-75"
