@@ -34,17 +34,34 @@ export default async function AdminOrdersPage({
   const params = await searchParams;
 
   // date=undefined → today (default); date="" → all; date="YYYY-MM-DD" → that day
-  const today = new Date().toISOString().slice(0, 10);
-  const selectedDate = params.date !== undefined ? params.date : today;
+  // Business day cutoff: 19:00 — orders after 19:00 belong to the NEXT business day.
+  const now = new Date();
+  const calendarToday = now.toISOString().slice(0, 10);
+  // If it's already past 18:30, "today" in business terms is tomorrow's date
+  const isPastCutoff = now.getHours() > 18 || (now.getHours() === 18 && now.getMinutes() >= 30);
+  const businessToday = isPastCutoff
+    ? new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    : calendarToday;
+
+  const selectedDate = params.date !== undefined ? params.date : businessToday;
   const customerSearch = params.customer || "";
   const selectedStatus = params.status || "";
   const page = Math.max(1, parseInt(params.page || "1", 10));
 
+  // Helper: get business-day date range for a given business date
+  function businessDayRange(dateStr: string) {
+    const d = new Date(`${dateStr}T00:00:00`);
+    d.setDate(d.getDate() - 1);
+    const prevDayStr = d.toISOString().slice(0, 10);
+    return {
+      gte: new Date(`${prevDayStr}T19:00:00`),
+      lte: new Date(`${dateStr}T18:59:59.999`),
+    };
+  }
+
   let dateFilter = {};
   if (selectedDate) {
-    const startDate = new Date(`${selectedDate}T00:00:00`);
-    const endDate = new Date(`${selectedDate}T23:59:59.999`);
-    dateFilter = { createdAt: { gte: startDate, lte: endDate } };
+    dateFilter = { createdAt: businessDayRange(selectedDate) };
   }
 
   const where: Prisma.OrderWhereInput = {
@@ -88,7 +105,7 @@ export default async function AdminOrdersPage({
   // Build href preserving all current filters + changing page
   function pageHref(p: number) {
     const sp = new URLSearchParams();
-    if (selectedDate !== today) sp.set("date", selectedDate);
+    if (selectedDate !== businessToday) sp.set("date", selectedDate);
     else if (params.date !== undefined) sp.set("date", selectedDate);
     if (customerSearch) sp.set("customer", customerSearch);
     if (selectedStatus) sp.set("status", selectedStatus);
@@ -97,12 +114,11 @@ export default async function AdminOrdersPage({
     return `/admin/orders${qs ? `?${qs}` : ""}`;
   }
 
-  // Count by status (always for today)
-  const todayStart = new Date(`${today}T00:00:00`);
-  const todayEnd = new Date(`${today}T23:59:59.999`);
+  // Count by status — always for current business day
+  const todayRange = businessDayRange(businessToday);
   const todayCounts = await prisma.order.groupBy({
     by: ["status"],
-    where: { createdAt: { gte: todayStart, lte: todayEnd } },
+    where: { createdAt: todayRange },
     _count: { id: true },
   });
   const countMap: Record<string, number> = {};
@@ -166,7 +182,7 @@ export default async function AdminOrdersPage({
           <input
             type="date"
             name="date"
-            defaultValue={selectedDate || today}
+            defaultValue={selectedDate || businessToday}
             className="w-full rounded-lg border px-3 py-2"
           />
         </div>
