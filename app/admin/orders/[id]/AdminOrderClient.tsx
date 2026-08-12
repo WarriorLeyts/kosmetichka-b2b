@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { renderMsgContent, getProductImageUrl } from "@/lib/renderMsgContent";
+import type { IScannerControls } from "@zxing/browser";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -251,7 +252,7 @@ export default function AdminOrderClient({
   const [showScanner, setShowScanner] = useState(false);
   const [scanError, setScanError] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
-  const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scanControlsRef = useRef<IScannerControls | null>(null);
 
   // ── Mobile catalog navigation ──
   const [mobileCatParent, setMobileCatParent] = useState("");
@@ -472,10 +473,9 @@ export default function AdminOrderClient({
   }
 
   function stopScanner() {
-    if (scanTimerRef.current) { clearInterval(scanTimerRef.current); scanTimerRef.current = null; }
-    if (videoRef.current?.srcObject) {
-      (videoRef.current.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
-      videoRef.current.srcObject = null;
+    if (scanControlsRef.current) {
+      scanControlsRef.current.stop();
+      scanControlsRef.current = null;
     }
     setShowScanner(false);
     setScanError("");
@@ -483,35 +483,28 @@ export default function AdminOrderClient({
 
   async function startScanner() {
     setScanError("");
-    // @ts-ignore
-    if (typeof BarcodeDetector === "undefined") {
-      setScanError("Сканер не поддерживается браузером. Используйте Chrome на Android или Safari 17+.");
-      return;
-    }
+    setShowScanner(true);
+    await new Promise((r) => setTimeout(r, 100));
+    if (!videoRef.current) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      setShowScanner(true);
-      // Wait for video element to mount
-      await new Promise((r) => setTimeout(r, 100));
-      if (!videoRef.current) return;
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
-      // @ts-ignore
-      const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "code_128", "code_39", "qr_code"] });
-      scanTimerRef.current = setInterval(async () => {
-        if (!videoRef.current) return;
-        try {
-          const results = await detector.detect(videoRef.current);
-          if (results.length > 0) {
-            const barcode = results[0].rawValue;
+      const { BrowserMultiFormatReader } = await import("@zxing/browser");
+      const codeReader = new BrowserMultiFormatReader();
+      const controls = await codeReader.decodeFromConstraints(
+        { video: { facingMode: "environment" } },
+        videoRef.current,
+        (result) => {
+          if (result) {
+            const barcode = result.getText();
             stopScanner();
             setSearchQuery(barcode);
             fetchProducts(barcode, selectedCatGuid);
           }
-        } catch {}
-      }, 250);
+        }
+      );
+      scanControlsRef.current = controls;
     } catch {
       setScanError("Нет доступа к камере.");
+      setShowScanner(false);
     }
   }
 
