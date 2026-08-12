@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { renderMsgContent, getProductImageUrl } from "@/lib/renderMsgContent";
+import type { IScannerControls } from "@zxing/browser";
 
 type CheckStatus =
   | "ok"
@@ -15,6 +17,7 @@ type ItemState = {
   statuses: CheckStatus[];
   statusQtys: Partial<Record<string, string>>; // qty per non-OK status
   availableQty: string;
+  factQty: string; // фактическое количество, введённое сборщиком
   note: string;
   photos: string[];
   uploading: boolean;
@@ -150,12 +153,13 @@ function getInitialState(item: OrderItem): ItemState {
       statuses: parseStatuses(item.check.status),
       statusQtys: parseStatusQtys(item.check.status),
       availableQty: item.check.availableQty?.toString() || "",
+      factQty: item.check.availableQty?.toString() || "",
       note: item.check.note || "",
       photos: item.photos.map((p) => p.url),
       uploading: false,
     };
   }
-  return { statuses: [], statusQtys: {}, availableQty: "", note: "", photos: [], uploading: false };
+  return { statuses: [], statusQtys: {}, availableQty: "", factQty: "", note: "", photos: [], uploading: false };
 }
 
 function playBeep(type: "ok" | "issue") {
@@ -240,52 +244,6 @@ function formatDate(str: string) {
   });
 }
 
-const IMAGES_BASE = process.env.NEXT_PUBLIC_IMAGES_BASE_URL ?? "https://kosmetichka-opt.ru";
-
-function getProductImageUrl(imagePath: string | null): string | null {
-  if (!imagePath) return null;
-  if (imagePath.startsWith("http")) return imagePath;
-  return `${IMAGES_BASE}/api/1c/${imagePath}`;
-}
-
-function renderMsgContent(text: string) {
-  try {
-    const obj = JSON.parse(text);
-    if (obj?._t === "img" && obj.url) {
-      return (
-        <a href={obj.url} target="_blank" rel="noreferrer">
-          <img
-            src={obj.url}
-            alt="фото"
-            className="max-w-[180px] max-h-[180px] rounded-xl object-cover cursor-pointer hover:opacity-90"
-          />
-        </a>
-      );
-    }
-    if (obj?._t === "product") {
-      const imgUrl = getProductImageUrl(obj.imagePath ?? null);
-      return (
-        <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-48">
-          {imgUrl && (
-            <img
-              src={imgUrl}
-              alt={obj.name}
-              className="w-full h-20 object-contain bg-slate-50 p-1"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
-          )}
-          <div className="p-2">
-            <p className="font-semibold text-xs leading-snug">{obj.name}</p>
-            {obj.price > 0 && (
-              <p className="text-xs text-slate-500 mt-0.5">{Number(obj.price).toLocaleString("ru-RU")} ₽</p>
-            )}
-          </div>
-        </div>
-      );
-    }
-  } catch {}
-  return <span>{text}</span>;
-}
 
 export default function PickerOrderClient({
   order,
@@ -309,6 +267,12 @@ export default function PickerOrderClient({
   const [highlightedItem, setHighlightedItem] = useState<number | null>(null);
   const barcodeRef = useRef<HTMLInputElement>(null);
   const itemRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  // Barcode scanner
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanError, setScanError] = useState("");
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const scanControlsRef = useRef<IScannerControls | null>(null);
 
   // Chat
   const [messages, setMessages] = useState<Message[]>([]);
@@ -381,6 +345,60 @@ export default function PickerOrderClient({
 
   function handleBarcodeKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") handleBarcodeSearch(barcodeInput);
+  }
+
+  // ── Scanner ──
+  function stopScanner() {
+    if (scanControlsRef.current) { scanControlsRef.current.stop(); scanControlsRef.current = null; }
+    setShowScanner(false);
+    setScanError("");
+  }
+
+  async function startScanner() {
+    setScanError("");
+    setShowScanner(true);
+    await new Promise((r) => setTimeout(r, 100));
+    if (!videoRef.current) return;
+    try {
+      const { BrowserMultiFormatReader } = await import("@zxing/browser");
+      const codeReader = new BrowserMultiFormatReader();
+      const controls = await codeReader.decodeFromConstraints(
+        { video: { facingMode: "environment" } },
+        videoRef.current,
+        (result) => {
+          if (result) {
+            const barcode = result.getText();
+            stopScanner();
+            setBarcodeInput(barcode);
+            handleBarcodeSearch(barcode);
+          }
+        }
+      );
+      scanControlsRef.current = controls;
+    } catch {
+      setScanError("Нет доступа к камере.");
+      setShowScanner(false);
+    }
+  }
+
+  // ── План/Факт ──
+  function setFactQty(itemId: number, value: string, planQty: number) {
+    const fact = parseInt(value, 10);
+    setItems((prev) => {
+      const updated = { ...prev[itemId], factQty: value };
+      if (value === "" ) return { ...prev, [itemId]: updated };
+      if (isNaN(fact)) return { ...prev, [itemId]: updated };
+      if (fact >= planQty) {
+        // Факт >= план → ОК
+        return { ...prev, [itemId]: { ...updated, statuses: ["ok"], statusQtys: {}, availableQty: "" } };
+      } else if (fact === 0) {
+        // Факт = 0 → Нет в наличии
+        return { ...prev, [itemId]: { ...updated, statuses: ["out_of_stock"], statusQtys: {}, availableQty: "" } };
+      } else {
+        // 0 < факт < план → Мало
+        return { ...prev, [itemId]: { ...updated, statuses: ["insufficient_qty"], statusQtys: {}, availableQty: String(fact) } };
+      }
+    });
   }
 
   function setItemStatus(itemId: number, status: CheckStatus) {
@@ -718,7 +736,29 @@ export default function PickerOrderClient({
         {barcodeInput && (
           <button onClick={() => { setBarcodeInput(""); setHighlightedItem(null); }} className="rounded-xl border px-3 py-2 text-slate-500 hover:bg-slate-100">✕</button>
         )}
+        <button
+          onClick={startScanner}
+          className="flex h-11 w-11 items-center justify-center rounded-xl border-2 border-slate-200 text-xl hover:bg-slate-50"
+          title="Сканировать штрихкод"
+        >📷</button>
       </div>
+
+      {/* Scanner error */}
+      {scanError && <div className="mb-3 rounded-xl bg-red-50 px-4 py-2 text-sm text-red-600">{scanError}</div>}
+
+      {/* Scanner overlay */}
+      {showScanner && (
+        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/90">
+          <div className="relative w-full max-w-sm mx-4">
+            <video ref={videoRef} className="w-full rounded-2xl" playsInline muted />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-56 h-32 border-2 border-white/80 rounded-xl" style={{ boxShadow: "0 0 0 9999px rgba(0,0,0,0.5)" }} />
+            </div>
+            <p className="mt-4 text-center text-white text-sm">Наведите камеру на штрихкод</p>
+          </div>
+          <button onClick={stopScanner} className="mt-6 rounded-xl bg-white px-6 py-3 text-sm font-bold text-slate-800">Отмена</button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="mb-4 flex gap-1 rounded-xl bg-slate-100 p-1">
@@ -765,10 +805,34 @@ export default function PickerOrderClient({
                         </div>
                       )}
                     </div>
-                    <div className="mt-3 flex items-end justify-between">
-                      <div>
-                        <div className="text-3xl font-black">{item.quantity}</div>
-                        <div className="text-xs text-slate-400">шт.</div>
+                    <div className="mt-3 flex items-end justify-between gap-3">
+                      {/* План / Факт */}
+                      <div className="flex items-end gap-3">
+                        <div className="text-center">
+                          <div className="text-3xl font-black text-slate-700">{item.quantity}</div>
+                          <div className="text-xs text-slate-400 font-semibold">ПЛАН</div>
+                        </div>
+                        <div className="text-slate-300 text-2xl font-light mb-1">→</div>
+                        <div className="text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            max={item.quantity + 99}
+                            value={state.factQty}
+                            onChange={(e) => setFactQty(item.id, e.target.value, item.quantity)}
+                            placeholder="?"
+                            className={`w-16 rounded-xl border-2 px-1 py-0.5 text-center text-2xl font-black focus:outline-none focus:ring-2 transition-colors ${
+                              state.factQty === ""
+                                ? "border-slate-300 focus:ring-slate-400 text-slate-400"
+                                : parseInt(state.factQty) >= item.quantity
+                                ? "border-green-400 focus:ring-green-400 text-green-700 bg-green-50"
+                                : parseInt(state.factQty) === 0
+                                ? "border-red-400 focus:ring-red-400 text-red-700 bg-red-50"
+                                : "border-orange-400 focus:ring-orange-400 text-orange-700 bg-orange-50"
+                            }`}
+                          />
+                          <div className="text-xs text-slate-400 font-semibold">ФАКТ</div>
+                        </div>
                       </div>
                       <div className="text-right">
                         <div className="text-lg font-bold">{item.price} ₽</div>
