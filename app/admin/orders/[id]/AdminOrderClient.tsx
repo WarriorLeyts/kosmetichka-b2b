@@ -907,7 +907,9 @@ export default function AdminOrderClient({
               {order.customer.phone && (
                 <span className="flex items-center gap-1">
                   <a
-                    href={`tel:${order.customer.phone}`}
+                    href={`https://wa.me/${order.customer.phone.replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="font-medium text-blue-600 hover:underline"
                   >
                     {order.customer.phone}
