@@ -200,7 +200,7 @@ export default async function AdminOrdersPage({
         </div>
 
         <div className="flex items-end gap-2">
-          <button type="submit" className="rounded-lg bg-black px-5 py-2 text-white">
+          <button type="submit" className="rounded-lg bg-black px-5 py-2 font-semibold" style={{color: '#fff'}}>
             Найти
           </button>
           <Link href="/admin/orders" className="rounded-lg border px-5 py-2">

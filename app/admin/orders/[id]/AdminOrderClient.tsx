@@ -198,6 +198,9 @@ export default function AdminOrderClient({
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
 
+  // Sync local state when server re-renders (after router.refresh())
+  useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
+
   // ── Image lightbox ──
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
@@ -237,8 +240,21 @@ export default function AdminOrderClient({
   const [searchResults, setSearchResults] = useState<CatalogProduct[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingSearch, setLoadingSearch] = useState(false);
+  const [hideOutOfStock, setHideOutOfStock] = useState(false);
+  const [sortOrder, setSortOrder] = useState<"default" | "price_asc" | "price_desc">("default");
   const paginationRef = useRef({ offset: 0, hasMore: false, loading: false });
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchAbortRef = useRef<AbortController | null>(null);
+
+  // ── Barcode scanner ──
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanError, setScanError] = useState("");
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Mobile catalog navigation ──
+  const [mobileCatParent, setMobileCatParent] = useState("");
 
   // ── Image upload ──
   const [uploadingImg, setUploadingImg] = useState<"picker" | "customer" | null>(null);
@@ -389,17 +405,28 @@ export default function AdminOrderClient({
   }
 
   async function fetchProducts(q: string, catGuid: string) {
+    // Cancel any in-flight request
+    if (fetchAbortRef.current) fetchAbortRef.current.abort();
+    const controller = new AbortController();
+    fetchAbortRef.current = controller;
+
     paginationRef.current = { offset: 0, hasMore: false, loading: false };
-    setSearchResults([]);
     setHasMore(false);
-    const res = await fetch(buildSearchUrl(q, catGuid, 0));
-    if (res.ok) {
-      const data = await res.json();
-      const products = data.products ?? [];
-      const more = data.hasMore ?? false;
-      setSearchResults(products);
-      paginationRef.current = { offset: products.length, hasMore: more, loading: false };
-      setHasMore(more);
+    setLoadingSearch(true);
+    try {
+      const res = await fetch(buildSearchUrl(q, catGuid, 0), { signal: controller.signal });
+      if (res.ok) {
+        const data = await res.json();
+        const products = data.products ?? [];
+        const more = data.hasMore ?? false;
+        setSearchResults(products);
+        paginationRef.current = { offset: products.length, hasMore: more, loading: false };
+        setHasMore(more);
+      }
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === "AbortError") return; // cancelled — ignore
+    } finally {
+      setLoadingSearch(false);
     }
   }
 
@@ -429,6 +456,9 @@ export default function AdminOrderClient({
     setCatalogMode(mode);
     setSearchQuery("");
     setSelectedCatGuid("");
+    setMobileCatParent("");
+    setHideOutOfStock(false);
+    setSortOrder("default");
     setShowCatalog(true);
     fetch("/api/admin/categories")
       .then((r) => r.json())
@@ -439,6 +469,50 @@ export default function AdminOrderClient({
         setExpandedCats(new Set(topGuids));
       });
     fetchProducts("", "");
+  }
+
+  function stopScanner() {
+    if (scanTimerRef.current) { clearInterval(scanTimerRef.current); scanTimerRef.current = null; }
+    if (videoRef.current?.srcObject) {
+      (videoRef.current.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+      videoRef.current.srcObject = null;
+    }
+    setShowScanner(false);
+    setScanError("");
+  }
+
+  async function startScanner() {
+    setScanError("");
+    // @ts-ignore
+    if (typeof BarcodeDetector === "undefined") {
+      setScanError("Сканер не поддерживается браузером. Используйте Chrome на Android или Safari 17+.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      setShowScanner(true);
+      // Wait for video element to mount
+      await new Promise((r) => setTimeout(r, 100));
+      if (!videoRef.current) return;
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+      // @ts-ignore
+      const detector = new BarcodeDetector({ formats: ["ean_13", "ean_8", "code_128", "code_39", "qr_code"] });
+      scanTimerRef.current = setInterval(async () => {
+        if (!videoRef.current) return;
+        try {
+          const results = await detector.detect(videoRef.current);
+          if (results.length > 0) {
+            const barcode = results[0].rawValue;
+            stopScanner();
+            setSearchQuery(barcode);
+            fetchProducts(barcode, selectedCatGuid);
+          }
+        } catch {}
+      }, 250);
+    } catch {
+      setScanError("Нет доступа к камере.");
+    }
   }
 
   function toggleCat(guid: string) {
@@ -461,7 +535,7 @@ export default function AdminOrderClient({
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => {
       fetchProducts(q, selectedCatGuid);
-    }, 300);
+    }, 500);
   }
 
   function addProductToEdit(p: CatalogProduct, variant?: CatalogProductVariant) {
@@ -828,7 +902,30 @@ export default function AdminOrderClient({
             </span>
           </div>
           <div className="mt-2 ml-12 text-sm text-slate-500">
-            <div>{order.customer.companyName || order.customer.name} · {order.customer.phone}</div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span>{order.customer.companyName || order.customer.name}</span>
+              {order.customer.phone && (
+                <span className="flex items-center gap-1">
+                  <a
+                    href={`tel:${order.customer.phone}`}
+                    className="font-medium text-blue-600 hover:underline"
+                  >
+                    {order.customer.phone}
+                  </a>
+                  <a
+                    href={`https://wa.me/${order.customer.phone.replace(/\D/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-green-600 hover:opacity-75"
+                    title="WhatsApp"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                      <path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.37 5.07L2 22l5.07-1.35A9.93 9.93 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm5.07 13.93c-.22.62-1.3 1.2-1.78 1.27-.48.07-1.07.1-1.72-.11-.4-.12-.91-.28-1.57-.55-2.76-1.19-4.56-3.97-4.7-4.15-.14-.18-1.11-1.48-1.11-2.82 0-1.34.7-2 .95-2.27.25-.27.54-.34.72-.34l.52.01c.17 0 .39-.06.61.47.22.53.76 1.85.83 1.98.07.13.11.29.02.46-.09.17-.14.28-.27.43-.13.15-.28.33-.4.45-.13.12-.27.25-.12.5.15.25.68 1.12 1.46 1.82.99.88 1.83 1.15 2.08 1.28.25.13.4.11.54-.07.15-.18.62-.72.79-.97.17-.25.34-.21.57-.13.23.08 1.46.69 1.71.81.25.12.42.19.49.29.06.1.06.58-.16 1.2z"/>
+                    </svg>
+                  </a>
+                </span>
+              )}
+            </div>
             {order.customer.city && <div>{order.customer.city}</div>}
             {order.customer.manager && (
               <div className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-indigo-600">
@@ -875,25 +972,32 @@ export default function AdminOrderClient({
       {order.status !== "cancelled" && (
         <div className="no-print mb-6 overflow-x-auto">
           <div className="flex min-w-max items-center gap-0">
-            {PIPELINE.map((s, i) => (
-              <div key={s} className="flex items-center">
-                <div className={`flex flex-col items-center px-3 py-2 rounded-xl transition-all ${
-                  i < pipelineIndex
-                    ? "text-green-600"
-                    : i === pipelineIndex
-                    ? "bg-blue-50 text-blue-700 font-bold"
-                    : "text-slate-300"
-                }`}>
-                  <div className={`h-3 w-3 rounded-full mb-1 ${
-                    i < pipelineIndex ? "bg-green-500" : i === pipelineIndex ? "bg-blue-500" : "bg-slate-200"
-                  }`} />
-                  <span className="text-xs whitespace-nowrap">{STATUS_LABELS[s]}</span>
+            {PIPELINE.map((s, i) => {
+              const SHORT: Record<string, string> = {
+                pending: "Ожид.", approved: "Подтв.", assembly: "Сборка",
+                consultation: "Консульт.", payment: "Оплата", exported: "Выгружен",
+              };
+              return (
+                <div key={s} className="flex items-center">
+                  <div className={`flex flex-col items-center px-2 py-2 rounded-xl transition-all ${
+                    i < pipelineIndex
+                      ? "text-green-600"
+                      : i === pipelineIndex
+                      ? "bg-blue-50 text-blue-700 font-bold"
+                      : "text-slate-300"
+                  }`}>
+                    <div className={`h-3 w-3 rounded-full mb-1 ${
+                      i < pipelineIndex ? "bg-green-500" : i === pipelineIndex ? "bg-blue-500" : "bg-slate-200"
+                    }`} />
+                    <span className="hidden sm:block text-xs whitespace-nowrap">{STATUS_LABELS[s]}</span>
+                    <span className="sm:hidden text-[10px] whitespace-nowrap">{SHORT[s] ?? STATUS_LABELS[s]}</span>
+                  </div>
+                  {i < PIPELINE.length - 1 && (
+                    <div className={`h-0.5 w-4 sm:w-8 ${i < pipelineIndex ? "bg-green-300" : "bg-slate-200"}`} />
+                  )}
                 </div>
-                {i < PIPELINE.length - 1 && (
-                  <div className={`h-0.5 w-8 ${i < pipelineIndex ? "bg-green-300" : "bg-slate-200"}`} />
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -931,7 +1035,12 @@ export default function AdminOrderClient({
           {transitions.map((t) => (
             <button
               key={t.to}
-              onClick={() => changeStatus(t.to)}
+              onClick={() => {
+                if (t.to === "cancelled") {
+                  if (!confirm("Отменить заказ? Это действие необратимо.")) return;
+                }
+                changeStatus(t.to);
+              }}
               disabled={changingStatus}
               className={`rounded-xl px-5 py-2.5 text-sm font-bold transition-all disabled:opacity-50 ${t.style}`}
             >
@@ -947,7 +1056,7 @@ export default function AdminOrderClient({
               {changingStatus ? "..." : "📦 Собрать самому"}
             </button>
           )}
-          {canRevert && prevStatus && (
+          {canRevert && prevStatus && !transitions.some((t) => t.to === prevStatus) && (
             <button
               onClick={() => changeStatus(prevStatus)}
               disabled={changingStatus}
@@ -1004,9 +1113,9 @@ export default function AdminOrderClient({
             </div>
           ) : (
             <div className="no-print mb-4 rounded-xl border bg-amber-50 p-4">
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex flex-wrap items-center gap-2 justify-between">
                 <span className="font-bold text-amber-800">Режим редактирования</span>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={cancelEdit}
                     className="rounded-xl border px-4 py-2 text-sm hover:bg-amber-100"
@@ -1068,43 +1177,49 @@ export default function AdminOrderClient({
                     );
                   }
                   return (
-                    <div key={idx} className="flex items-center gap-2 rounded-xl border bg-white p-2">
-                      <span className="flex-1 text-sm font-medium">{item.productName}</span>
-                      {item.isNew && <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Новый</span>}
-                      {item.variantName && (
-                        <span className="text-xs text-blue-600 font-semibold bg-blue-50 rounded-full px-2 py-0.5 shrink-0">
-                          🎨 {item.variantName}
-                        </span>
-                      )}
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={(e) => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, quantity: Math.max(1, Number(e.target.value)) } : i))}
-                        className="w-16 rounded-lg border px-2 py-1 text-center text-sm"
-                      />
-                      <span className="text-xs text-slate-400">шт.</span>
-                      <input
-                        type="number"
-                        min="0"
-                        value={item.price}
-                        onChange={(e) => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, price: Math.max(0, Number(e.target.value)) } : i))}
-                        className="w-24 rounded-lg border px-2 py-1 text-center text-sm"
-                      />
-                      <span className="text-xs text-slate-400">₽</span>
-                      <button
-                        onClick={() => openVariantPickerForItem(idx)}
-                        className="rounded-lg border px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 shrink-0"
-                        title="Сменить вариант"
-                      >
-                        🎨
-                      </button>
-                      <button
-                        onClick={() => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, removed: true } : i))}
-                        className="rounded-lg border px-2 py-1 text-xs text-red-500 hover:bg-red-50"
-                      >
-                        ✕
-                      </button>
+                    <div key={idx} className="flex flex-col gap-1.5 rounded-xl border bg-white p-2">
+                      {/* Row 1: name + badges + remove */}
+                      <div className="flex items-start gap-2">
+                        <span className="flex-1 text-sm font-medium leading-snug">{item.productName}</span>
+                        {item.isNew && <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Новый</span>}
+                        <button
+                          onClick={() => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, removed: true } : i))}
+                          className="shrink-0 rounded-lg border px-2 py-1 text-xs text-red-500 hover:bg-red-50"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      {/* Row 2: variant badge + qty + price + variant picker */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {item.variantName && (
+                          <span className="text-xs text-blue-600 font-semibold bg-blue-50 rounded-full px-2 py-0.5">
+                            🎨 {item.variantName}
+                          </span>
+                        )}
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, quantity: Math.max(1, Number(e.target.value)) } : i))}
+                          className="w-14 rounded-lg border px-2 py-1 text-center text-sm"
+                        />
+                        <span className="text-xs text-slate-400">шт.</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={item.price}
+                          onChange={(e) => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, price: Math.max(0, Number(e.target.value)) } : i))}
+                          className="w-20 rounded-lg border px-2 py-1 text-center text-sm"
+                        />
+                        <span className="text-xs text-slate-400">₽</span>
+                        <button
+                          onClick={() => openVariantPickerForItem(idx)}
+                          className="rounded-lg border px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 shrink-0"
+                          title="Сменить вариант"
+                        >
+                          🎨
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -1112,9 +1227,70 @@ export default function AdminOrderClient({
             </div>
           )}
 
-          {/* Items list */}
-          <div className="overflow-hidden rounded-2xl border">
-            <table className="w-full text-sm">
+          {/* Items list — mobile cards */}
+          <div className="sm:hidden space-y-2">
+            {order.items.map((item) => {
+              const rawImgPath = item.variantImageUrl ?? productImages[item.productId] ?? null;
+              const imgUrl = rawImgPath
+                ? (rawImgPath.startsWith("http") ? rawImgPath : getProductImageUrl(rawImgPath))
+                : null;
+              return (
+                <div key={item.id} className="rounded-xl border bg-white p-3">
+                  <div className="flex gap-2">
+                    {imgUrl ? (
+                      <button type="button" onClick={() => setLightboxUrl(imgUrl)}
+                        className="shrink-0 h-12 w-12 rounded-lg border bg-slate-50 overflow-hidden cursor-zoom-in">
+                        <img src={imgUrl} alt={item.productName} className="h-full w-full object-contain p-1"
+                          onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = "none"; }} />
+                      </button>
+                    ) : (
+                      <div className="shrink-0 h-12 w-12 rounded-lg border bg-slate-100 flex items-center justify-center text-xl text-slate-300">📦</div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium leading-snug">{item.productName}</div>
+                      {item.variantName && <div className="text-xs text-blue-600 mt-0.5">🎨 {item.variantName}</div>}
+                      {item.barcode && <div className="text-xs text-slate-400 font-mono mt-0.5">{item.barcode}</div>}
+                      {item.photos.length > 0 && (
+                        <div className="mt-1 flex gap-1">
+                          {item.photos.map((ph) => (
+                            <button key={ph.id} type="button" onClick={() => setLightboxUrl(ph.url)}>
+                              <img src={ph.url} alt="" className="h-8 w-8 rounded object-cover border cursor-zoom-in" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {item.check?.note && <div className="text-xs text-slate-500 italic mt-0.5">{item.check.note}</div>}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-sm text-slate-500">{item.quantity} шт. × {item.price.toLocaleString("ru-RU")} ₽</span>
+                    <span className="text-sm font-bold">{item.total.toLocaleString("ru-RU")} ₽</span>
+                  </div>
+                  {item.check && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {parseCheckEntries(item.check.status).map((entry) => (
+                        <span key={entry.status} className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${CHECK_LABELS[entry.status]?.color || "bg-slate-100"}`}>
+                          {CHECK_LABELS[entry.status]?.label || entry.status}
+                          {entry.qty != null && entry.status !== "ok" && <span className="ml-1 opacity-80">({entry.qty} шт.)</span>}
+                        </span>
+                      ))}
+                      {item.check.availableQty !== null && (
+                        <span className="text-xs text-slate-400">есть {item.check.availableQty} шт.</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <div className="rounded-xl border bg-slate-50 p-3 flex justify-between items-center">
+              <span className="text-sm font-semibold text-slate-600">Итого:</span>
+              <span className="text-lg font-black">{order.total.toLocaleString("ru-RU")} ₽</span>
+            </div>
+          </div>
+
+          {/* Items list — desktop table */}
+          <div className="hidden sm:block overflow-x-auto rounded-2xl border">
+            <table className="w-full min-w-[600px] text-sm">
               <thead className="bg-slate-50">
                 <tr>
                   <th className="p-3 text-left font-semibold text-slate-600">Товар</th>
@@ -1134,7 +1310,6 @@ export default function AdminOrderClient({
                   <tr key={item.id} className="border-t hover:bg-slate-50">
                     <td className="p-3">
                       <div className="flex items-start gap-3">
-                        {/* Product image thumbnail */}
                         {imgUrl ? (
                           <button
                             type="button"
@@ -1514,7 +1689,7 @@ export default function AdminOrderClient({
             {/* Modal header */}
             <div className="flex items-center gap-3 border-b px-4 py-3">
               <button
-                onClick={() => setShowCatalog(false)}
+                onClick={() => { stopScanner(); setShowCatalog(false); }}
                 className="flex h-8 w-8 items-center justify-center rounded-xl border hover:bg-slate-100"
               >
                 ✕
@@ -1527,21 +1702,130 @@ export default function AdminOrderClient({
             </div>
 
             {/* Search bar */}
-            <div className="border-b px-4 py-3">
+            <div className="border-b px-4 py-3 flex gap-2 items-center">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => handleCatalogSearch(e.target.value)}
                 placeholder="Поиск по названию или штрихкоду..."
-                className="w-full rounded-xl border px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="flex-1 rounded-xl border px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                 autoFocus
               />
+              <button
+                onClick={startScanner}
+                className="shrink-0 flex h-9 w-9 items-center justify-center rounded-xl border bg-slate-50 hover:bg-slate-100 text-lg"
+                title="Сканировать штрихкод"
+              >
+                📷
+              </button>
+            </div>
+            {scanError && (
+              <div className="border-b px-4 py-2 bg-red-50 text-xs text-red-600">{scanError}</div>
+            )}
+
+            {/* Barcode scanner overlay */}
+            {showScanner && (
+              <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/90 no-print">
+                <div className="relative w-full max-w-sm mx-4">
+                  <video
+                    ref={videoRef}
+                    className="w-full rounded-2xl"
+                    playsInline
+                    muted
+                  />
+                  {/* Scan frame overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-56 h-32 border-2 border-white/80 rounded-xl" style={{
+                      boxShadow: "0 0 0 9999px rgba(0,0,0,0.5)"
+                    }} />
+                  </div>
+                  <p className="mt-4 text-center text-white text-sm">Наведите камеру на штрихкод</p>
+                </div>
+                <button
+                  onClick={stopScanner}
+                  className="mt-6 rounded-xl bg-white px-6 py-3 text-sm font-bold text-slate-800 hover:bg-slate-100"
+                >
+                  Отмена
+                </button>
+              </div>
+            )}
+
+            {/* Mobile: category chips — two-level */}
+            <div className="sm:hidden border-b bg-slate-50 shrink-0">
+              {/* Level 1: top-level categories */}
+              <div className="overflow-x-auto px-3 py-2 flex gap-2">
+                <button
+                  onClick={() => { setMobileCatParent(""); selectCat(""); }}
+                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold border ${
+                    !selectedCatGuid && !mobileCatParent ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200"
+                  }`}
+                >
+                  Все
+                </button>
+                {categories.filter((c) => !c.parentGuid).map((cat) => {
+                  const hasChildren = categories.some((c) => c.parentGuid === cat.guid);
+                  const isActive = mobileCatParent === cat.guid || (!mobileCatParent && selectedCatGuid === cat.guid);
+                  return (
+                    <button
+                      key={cat.guid}
+                      onClick={() => {
+                        if (hasChildren) {
+                          setMobileCatParent(cat.guid);
+                          // Don't filter yet — wait for subcategory selection
+                        } else {
+                          setMobileCatParent("");
+                          selectCat(cat.guid);
+                        }
+                      }}
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold border ${
+                        isActive ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200"
+                      }`}
+                    >
+                      {cat.name}{hasChildren ? " ▸" : ""}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Level 2: subcategories of selected parent */}
+              {mobileCatParent && (
+                <div className="overflow-x-auto px-3 pb-2 flex gap-2">
+                  <button
+                    onClick={() => {
+                      setMobileCatParent("");
+                      selectCat("");
+                    }}
+                    className="shrink-0 rounded-full px-3 py-1 text-xs font-semibold border bg-slate-200 text-slate-700 border-slate-300"
+                  >
+                    ← Назад
+                  </button>
+                  <button
+                    onClick={() => selectCat(mobileCatParent)}
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold border ${
+                      selectedCatGuid === mobileCatParent ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200"
+                    }`}
+                  >
+                    Все
+                  </button>
+                  {categories.filter((c) => c.parentGuid === mobileCatParent).map((sub) => (
+                    <button
+                      key={sub.guid}
+                      onClick={() => selectCat(sub.guid)}
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold border ${
+                        selectedCatGuid === sub.guid ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200"
+                      }`}
+                    >
+                      {sub.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Body: categories + products */}
             <div className="flex flex-1 overflow-hidden">
-              {/* Categories sidebar */}
-              <div className="w-56 flex-shrink-0 overflow-y-auto border-r bg-slate-50 p-3">
+              {/* Categories sidebar — desktop only */}
+              <div className="hidden sm:flex w-56 flex-shrink-0 flex-col overflow-y-auto border-r bg-slate-50 p-3">
                 <button
                   onClick={() => selectCat("")}
                   className={`mb-2 w-full rounded-lg px-2 py-1.5 text-left text-sm font-semibold ${
@@ -1555,7 +1839,7 @@ export default function AdminOrderClient({
 
               {/* Products grid */}
               <div
-                className="flex-1 overflow-y-auto p-4"
+                className="flex-1 overflow-y-auto flex flex-col"
                 onScroll={(e) => {
                   const el = e.currentTarget;
                   if (el.scrollTop + el.clientHeight >= el.scrollHeight - 300) {
@@ -1563,11 +1847,51 @@ export default function AdminOrderClient({
                   }
                 }}
               >
-                {searchResults.length === 0 && !loadingMore && (
+                {/* Filter toolbar */}
+                <div className="flex items-center gap-2 flex-wrap border-b bg-white px-3 py-2 shrink-0">
+                  <button
+                    onClick={() => setHideOutOfStock((v) => !v)}
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold border transition-all ${
+                      hideOutOfStock ? "bg-green-600 text-white border-green-600" : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                    }`}
+                  >
+                    {hideOutOfStock ? "✓ В наличии" : "В наличии"}
+                  </button>
+                  <select
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value as "default" | "price_asc" | "price_desc")}
+                    className="rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-600 focus:outline-none"
+                  >
+                    <option value="default">По умолчанию</option>
+                    <option value="price_asc">Цена ↑</option>
+                    <option value="price_desc">Цена ↓</option>
+                  </select>
+                  {!loadingSearch && (
+                    <span className="ml-auto text-xs text-slate-400">
+                      {(() => {
+                        const filtered = searchResults.filter(p => hideOutOfStock ? (p.stock ?? 0) > 0 : true);
+                        return filtered.length > 0 ? `${filtered.length}${hasMore ? "+" : ""} товаров` : "";
+                      })()}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-3">
+                {loadingSearch && (
+                  <div className="text-center text-slate-400 py-12 text-sm">Поиск...</div>
+                )}
+                {!loadingSearch && searchResults.filter(p => hideOutOfStock ? (p.stock ?? 0) > 0 : true).length === 0 && !loadingMore && (
                   <div className="text-center text-slate-400 py-12">Ничего не найдено</div>
                 )}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                  {searchResults.map((p) => {
+                <div className={`grid grid-cols-3 gap-1.5 sm:grid-cols-3 md:grid-cols-4 ${loadingSearch ? "opacity-30 pointer-events-none" : ""}`}>
+                  {[...searchResults]
+                    .filter(p => hideOutOfStock ? (p.stock ?? 0) > 0 : true)
+                    .sort((a, b) => {
+                      if (sortOrder === "price_asc") return a.price - b.price;
+                      if (sortOrder === "price_desc") return b.price - a.price;
+                      return 0;
+                    })
+                    .map((p) => {
                     const editItem = editItems.find((i) => i.productId === p.id);
                     const isAdded = editItem && !editItem.removed;
                     const imgUrl = getProductImageUrl(p.imagePath);
@@ -1575,47 +1899,47 @@ export default function AdminOrderClient({
                       <button
                         key={p.id}
                         onClick={() => handleProductSelect(p)}
-                        className={`group relative flex flex-col rounded-2xl border-2 overflow-hidden text-left transition-all hover:shadow-md ${
+                        className={`group relative flex flex-col rounded-xl border-2 overflow-hidden text-left transition-all hover:shadow-md ${
                           isAdded && catalogMode === "order"
                             ? "border-blue-500 bg-blue-50"
                             : "border-slate-200 bg-white hover:border-blue-300"
                         }`}
                       >
                         {/* Image */}
-                        <div className="relative aspect-square bg-slate-100 w-full">
+                        <div className="relative h-24 bg-slate-100 w-full shrink-0">
                           {imgUrl ? (
                             <img
                               src={imgUrl}
                               alt={p.name}
-                              className="h-full w-full object-contain p-2"
+                              className="h-full w-full object-contain p-1"
                               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                             />
                           ) : (
-                            <div className="flex h-full items-center justify-center text-3xl">🧴</div>
+                            <div className="flex h-full items-center justify-center text-2xl">🧴</div>
                           )}
                           {isAdded && catalogMode === "order" && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-blue-600/80 text-white font-bold text-sm">
-                              ✓ Добавлен
+                            <div className="absolute inset-0 flex items-center justify-center bg-blue-600/80 text-white font-bold text-xs">
+                              ✓
                             </div>
                           )}
                           {catalogMode !== "order" && (
-                            <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-blue-600/80 text-white font-bold text-xs px-2 text-center">
-                              Отправить карточку
+                            <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-blue-600/80 text-white font-bold text-xs px-1 text-center">
+                              →
                             </div>
                           )}
                         </div>
                         {/* Info */}
-                        <div className="p-2 flex-1">
-                          <p className="text-xs font-semibold leading-snug line-clamp-2">{p.name}</p>
+                        <div className="p-1 flex-1">
+                          <p className="text-[10px] font-semibold leading-snug line-clamp-2">{p.name}</p>
                           {p.hasVariants && (
-                            <p className="text-xs text-blue-600 mt-0.5 font-semibold">🎨 Есть варианты</p>
+                            <p className="text-[10px] text-blue-600 font-semibold">🎨</p>
                           )}
                           {p.stock !== null && (
-                            <p className={`text-xs mt-0.5 ${p.stock > 0 ? "text-green-600" : "text-red-500"}`}>
-                              {p.stock > 0 ? `${p.stock} шт.` : "Нет в наличии"}
+                            <p className={`text-[10px] ${p.stock > 0 ? "text-green-600" : "text-red-500"}`}>
+                              {p.stock > 0 ? `${p.stock} шт.` : "Нет"}
                             </p>
                           )}
-                          <p className="text-sm font-bold mt-1">{p.price.toLocaleString("ru-RU")} ₽</p>
+                          <p className="text-[11px] font-bold">{p.price.toLocaleString("ru-RU")} ₽</p>
                         </div>
                       </button>
                     );
@@ -1627,6 +1951,7 @@ export default function AdminOrderClient({
                 {hasMore && !loadingMore && (
                   <div className="py-4 text-center text-xs text-slate-400">Прокрутите вниз для загрузки</div>
                 )}
+                </div>
               </div>
             </div>
           </div>
