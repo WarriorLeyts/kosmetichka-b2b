@@ -271,7 +271,7 @@ export function TopBar({
           <button className="top-action-button" onClick={openFavorite}>
             <div className="relative">
               <Heart size={18} />
-              {favoriteCount > 0 && (
+              {mounted && favoriteCount > 0 && (
                 <span className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-pink-500 text-[10px] font-black text-white">
                   {favoriteCount > 99 ? "99+" : favoriteCount}
                 </span>
