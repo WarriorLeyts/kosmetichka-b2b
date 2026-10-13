@@ -122,7 +122,7 @@ export async function POST(request: Request) {
       data: { phone: smsPhone, code, expiresAt },
     });
 
-    const text = `Ваш код подтверждения: ${code}. Действителен 10 минут.`;
+    const text = `${code} — ваш код подтверждения в КОСМЕТИЧКА`;
     const sent = await sendSmsAero(smsPhone, text);
 
     if (!sent) {
