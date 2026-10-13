@@ -26,7 +26,7 @@ export const useFavoriteStore = create<FavoriteStore>()(
       openFavorite: () => set({ isFavoriteOpen: true }),
       closeFavorite: () => set({ isFavoriteOpen: false }),
 
-      toggleFavorite: (product) => {
+      toggleFavorite: (product: any) => {
         const favorites = get().favorites;
         const exists = favorites.find((item) => item.id === product.id);
         set({
@@ -57,6 +57,7 @@ export const useFavoriteStore = create<FavoriteStore>()(
     }),
     {
       name: "kosmetichka-favorites",
+      partialize: (state) => ({ favorites: state.favorites }),
     }
   )
 );

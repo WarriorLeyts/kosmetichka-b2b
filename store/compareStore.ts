@@ -51,6 +51,6 @@ export const useCompareStore = create<CompareStore>()(
 
       canAdd: () => get().items.length < MAX_COMPARE,
     }),
-    { name: "kosmetichka-compare" }
+    { name: "kosmetichka-compare", partialize: (state) => ({ items: state.items }) }
   )
 );

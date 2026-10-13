@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ShoppingBag, Grid2x2, ClipboardList, User, Heart } from "lucide-react";
@@ -12,20 +13,22 @@ const NAV_ITEMS = [
   { href: "/profile", label: "Профиль", Icon: User },
 ];
 
-/** Скрыта на административных и пикер-маршрутах */
 const HIDDEN_PREFIXES = ["/admin", "/picker", "/login", "/register", "/forgot-password", "/reset-password"];
 
 export function MobileBottomNav() {
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
-  const cartCount = useCartStore((s) => s.cart.reduce((sum, i) => sum + i.quantity, 0));
+  const rawCartCount = useCartStore((s) => s.cart.reduce((sum, i) => sum + i.quantity, 0));
   const openCart = useCartStore((s) => s.openCart);
 
-  // Hide on admin/picker/auth pages
+  useEffect(() => { setMounted(true); }, []);
+
   if (HIDDEN_PREFIXES.some((p) => pathname.startsWith(p))) return null;
+
+  const cartCount = mounted ? rawCartCount : 0;
 
   return (
     <nav className="mobile-bottom-nav">
-      {/* Cart button */}
       <button
         type="button"
         className="mobile-bottom-nav-item"
