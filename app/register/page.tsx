@@ -71,6 +71,7 @@ export default function RegisterPage() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaHint, setCaptchaHint] = useState(false);
   const widgetIdRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -80,7 +81,10 @@ export default function RegisterPage() {
 
     widgetIdRef.current = window.smartCaptcha.render(containerRef.current, {
       sitekey: SMARTCAPTCHA_CLIENT_KEY,
-      callback: (token: string) => setCaptchaToken(token),
+      callback: (token: string) => {
+        setCaptchaToken(token);
+        setCaptchaHint(false);
+      },
       "expired-callback": () => setCaptchaToken(null),
       "error-callback": () => setCaptchaToken(null),
     });
@@ -116,7 +120,8 @@ export default function RegisterPage() {
     }
 
     if (!captchaToken) {
-      setError("Пожалуйста, пройдите проверку капчи");
+      setCaptchaHint(true);
+      containerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
@@ -258,9 +263,12 @@ export default function RegisterPage() {
               />
               <button
                 type="button"
-                disabled={smsLoading || smsCooldown > 0 || !captchaToken}
+                disabled={smsLoading || smsCooldown > 0}
                 onClick={handleSendSms}
-                className="flex h-12 shrink-0 cursor-pointer items-center gap-1.5 rounded-2xl bg-slate-100 px-4 text-sm font-bold text-slate-600 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                title={!captchaToken ? "Сначала отметьте «Я не робот» ниже" : undefined}
+                className={`flex h-12 shrink-0 cursor-pointer items-center gap-1.5 rounded-2xl bg-slate-100 px-4 text-sm font-bold text-slate-600 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  !captchaToken ? "opacity-50" : ""
+                }`}
               >
                 {smsLoading ? (
                   <RefreshCw size={15} className="animate-spin" />
@@ -274,6 +282,12 @@ export default function RegisterPage() {
                   : "Код SMS"}
               </button>
             </div>
+
+            {captchaHint && !captchaToken && (
+              <p className="rounded-2xl bg-amber-50 px-4 py-2 text-xs font-bold text-amber-700">
+                Чтобы получить код, сначала отметьте «Я не робот» ниже
+              </p>
+            )}
 
             {/* ─── Поле для ввода SMS-кода ───────────────────────── */}
             {smsSent && (
@@ -361,7 +375,15 @@ export default function RegisterPage() {
             </div>
 
             {/* ─── Yandex SmartCaptcha ──────────────────────────── */}
-            <div ref={containerRef} />
+            <div
+              className={
+                captchaHint && !captchaToken
+                  ? "rounded-2xl ring-2 ring-amber-400 ring-offset-4 transition-shadow"
+                  : "transition-shadow"
+              }
+            >
+              <div ref={containerRef} />
+            </div>
 
             {/* ─── Согласие с политикой и соглашением ──────────── */}
             <label className="flex items-start gap-3 cursor-pointer group">
