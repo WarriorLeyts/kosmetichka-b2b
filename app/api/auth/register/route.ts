@@ -16,11 +16,13 @@ async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
     const url = new URL("https://smartcaptcha.yandexcloud.net/validate");
     url.searchParams.set("secret", serverKey);
     url.searchParams.set("token", token);
-    url.searchParams.set("ip", ip);
 
     const res = await fetch(url.toString(), { method: "GET" });
     const data = await res.json();
 
+    if (data.status !== "ok") {
+      console.error("SmartCaptcha отклонила токен:", JSON.stringify(data), "ip:", ip);
+    }
     return data.status === "ok";
   } catch (err) {
     console.error("Ошибка проверки SmartCaptcha:", err);
