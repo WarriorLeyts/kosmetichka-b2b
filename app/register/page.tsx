@@ -6,8 +6,7 @@ import { useState, useRef, useCallback } from "react";
 import { Heart, Send, MessageSquare, RefreshCw, Eye, EyeOff } from "lucide-react";
 
 const SMARTCAPTCHA_CLIENT_KEY =
-  process.env.NEXT_PUBLIC_SMARTCAPTCHA_CLIENT_KEY ||
-  "ysc1_AIlB5l676p4E3nWbyFmxE0sUSMjxgl6yNGfzUlVff6f9a1e5";
+  process.env.NEXT_PUBLIC_SMARTCAPTCHA_CLIENT_KEY ?? "";
 
 declare global {
   interface Window {
