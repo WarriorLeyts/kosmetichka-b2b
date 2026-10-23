@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { exec } from "child_process";
+import { runSync } from "@/lib/syncRunner";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -69,17 +69,6 @@ function checkAuth(request: NextRequest): boolean {
   return false;
 }
 
-function runSync(): Promise<void> {
-  return new Promise((resolve) => {
-    const scriptPath = path.join(process.cwd(), "scripts", "sync-all.js");
-    exec(`node ${scriptPath}`, { cwd: process.cwd() }, (err, stdout, stderr) => {
-      if (err) console.error("[exchange] sync error:", err.message, stderr);
-      else console.log("[exchange] sync done:", stdout);
-      resolve();
-    });
-  });
-}
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type") ?? "";
@@ -125,7 +114,7 @@ export async function GET(request: NextRequest) {
     );
     if (isMainXml) {
       // Run in background, return success immediately
-      runSync().catch(console.error);
+      runSync("exchange");
     }
     return txt("success");
   }

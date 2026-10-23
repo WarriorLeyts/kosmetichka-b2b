@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { exec } from "child_process";
-import path from "path";
+import { runSync } from "@/lib/syncRunner";
 
 function checkApiKey(request: NextRequest) {
   const key = request.headers.get("x-1c-key");
@@ -12,17 +11,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const scriptPath = path.join(process.cwd(), "scripts", "sync-all.js");
-
   // Run in background — don't wait
-  exec(`node ${scriptPath}`, { cwd: process.cwd() }, (err, stdout, stderr) => {
-    if (err) {
-      console.error("[1C sync] error:", err.message);
-      console.error(stderr);
-    } else {
-      console.log("[1C sync] done:", stdout);
-    }
-  });
+  runSync("1C sync");
 
   return NextResponse.json({ ok: true, message: "Sync started" });
 }

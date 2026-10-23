@@ -6,7 +6,9 @@ import { fileURLToPath } from "url";
 import sharp from "sharp";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, "..");
+// data/1c is resolved from cwd, like in the other import-*.js scripts
+// (in production the 1C files live in .next/standalone/data/1c).
+const ROOT = process.cwd();
 const prisma = new PrismaClient();
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
