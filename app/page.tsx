@@ -2,6 +2,10 @@
 import { prisma } from "@/lib/prisma";
 import { HomeClient } from "@/components/home/HomeClient";
 
+// Счётчики товаров/брендов/категорий меняются после обмена с 1С —
+// без этого страница пререндерится один раз при сборке и не обновляется.
+export const revalidate = 300;
+
 export default async function Home() {
   const [totalProducts, totalBrands, totalCategories] = await Promise.all([
     prisma.product.count(),

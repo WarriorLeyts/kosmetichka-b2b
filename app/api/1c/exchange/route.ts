@@ -113,6 +113,14 @@ export async function GET(request: NextRequest) {
       (f) => filename === f || filename.endsWith(f)
     );
     if (isMainXml) {
+      // Если файл в этом сеансе не дошёл (например, nginx отклонил его по размеру),
+      // не импортируем старый файл, а сообщаем 1С об ошибке.
+      const filePath = path.join(DATA_DIR, path.basename(filename));
+      const fresh = fs.existsSync(filePath) && Date.now() - fs.statSync(filePath).mtimeMs < 2 * 60 * 60 * 1000;
+      if (!fresh) {
+        console.error(`[exchange] import requested for ${filename}, but the file was not received`);
+        return txt(`failure\nФайл ${filename} не получен сервером (проверьте размер файла и лимиты)`);
+      }
       // Run in background, return success immediately
       runSync("exchange");
     }
