@@ -737,3 +737,7 @@ body:has(.cart-drawer--open) .orders-pending-fab,body:has(.cart-drawer--open) .c
 .app-account__btn{position:relative}.app-account__btn .app-badge{position:absolute;top:-4px;right:-4px}
 /* круглая кнопка «Каталог» на телефоне: иконка по центру, размер как у соседних */
 @media (max-width:900px){.app-header .app-catalog-btn{justify-content:center!important;gap:0!important}}@media (max-width:380px){.app-header .app-catalog-btn{width:38px!important;height:38px!important}}
+.app-hijab-icon { color: var(--brand-violet); flex-shrink: 0; }
+html[data-theme="dark"] .app-hijab-icon { color: #C9A5FF; }
+.app-inline-icon { display: inline-block; vertical-align: -3px; margin-right: 4px; }
+.app-inline-icon.app-hijab-icon{width:18px;height:18px;vertical-align:-4px}

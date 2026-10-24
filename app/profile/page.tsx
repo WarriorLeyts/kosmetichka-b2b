@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import PasswordInput from "@/components/PasswordInput";
 import { AuthInit } from "@/components/AuthInit";
 import { AppBar } from "@/components/app/AppBar";
+import { HijabIcon } from "@/components/app/HijabIcon";
 
 export const dynamic = "force-dynamic";
 
@@ -140,7 +141,7 @@ export default async function ProfilePage({
             <h1 className="text-2xl font-black text-slate-900">Мой профиль</h1>
             {customer.manager && (
               <p className="text-sm text-indigo-600 font-semibold">
-                👤 Менеджер: {customer.manager}
+                <HijabIcon size={16} className="app-inline-icon" /> Менеджер: {customer.manager}
               </p>
             )}
           </div>
