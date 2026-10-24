@@ -21,7 +21,7 @@
   --label: #1f2937;
   --label-2: #374151;
   --label-3: #4b5563;
-  --secondary: #6b7280;
+  --secondary: #636b78;
   --faint: #9ca3af;
   --sep: #ece8f3;
   --soft: #f6f4fa;
@@ -750,3 +750,10 @@ html[data-theme="dark"] .app-hijab-icon { color: #C9A5FF; }
 .stock-high { color: #13702b !important; }
 .stock-low { color: #9a4d00 !important; }
 .stock-out { color: #b3211a !important; }
+
+/* контраст текста в светлой теме (WCAG AA ≥ 4.5:1): Tailwind slate-400 и pink-500 слишком светлые для мелкого текста */
+html:not([data-theme="dark"]) .text-slate-400, html:not([data-theme="dark"]) .text-gray-400 { color: #64748b !important; }
+html:not([data-theme="dark"]) .text-pink-500 { color: #c81e64 !important; }
+html:not([data-theme="dark"]) .bg-pink-500 { background-color: #c81e64 !important; }
+html:not([data-theme="dark"]) .hover\:bg-pink-600:hover { background-color: #ad1856 !important; }
+html:not([data-theme="dark"]) .border-pink-500 { border-color: #c81e64 !important; }

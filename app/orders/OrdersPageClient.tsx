@@ -333,7 +333,7 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
                   const imgSrc = item.variantImageUrl
                     ? (item.variantImageUrl.startsWith("http") ? item.variantImageUrl : `${IMAGES_BASE}${item.variantImageUrl}`)
                     : item.imagePath
-                    ? getProductImageUrl(item.imagePath)
+                    ? getProductImageUrl(item.imagePath, 160)
                     : null;
                   if (item.removed) {
                     return (
@@ -410,7 +410,7 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
                         ? item.variantImageUrl
                         : `${IMAGES_BASE}${item.variantImageUrl}`)
                     : item.imagePath
-                    ? getProductImageUrl(item.imagePath)
+                    ? getProductImageUrl(item.imagePath, 160)
                     : null;
                   return (
                     <div key={item.id} className="flex items-center gap-3">

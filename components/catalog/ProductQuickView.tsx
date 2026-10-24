@@ -67,7 +67,7 @@ export function ProductQuickView({ product, onClose }: Props) {
   const activePriceType = effectivePriceType(cart, customer);
   const price = priceFor(p, activePriceType);
   const imagePath = p.images?.[0]?.path
-    ? resolveImageUrl(p.images[0].path)
+    ? resolveImageUrl(p.images[0].path, 800)
     : null;
 
   function handleClose() {

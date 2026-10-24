@@ -159,7 +159,7 @@ export function CartDrawer() {
                     const imagePath = item.variantImageUrl
                       ? item.variantImageUrl
                       : item.images?.[0]?.path
-                      ? resolveImageUrl(item.images[0].path)
+                      ? resolveImageUrl(item.images[0].path, 160)
                       : null;
 
                     const price = priceFor(item, activePriceType);

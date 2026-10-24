@@ -22,7 +22,7 @@ export function ProductGallery({ images, productName }: Props) {
 
   const safeImages = images || [];
   const activeImage = safeImages[activeIndex];
-  const imageSrc = activeImage?.path ? resolveImageUrl(activeImage.path) : null;
+  const imageSrc = activeImage?.path ? resolveImageUrl(activeImage.path, 1200) : null;
 
   function scrollThumbs(dir: "up" | "down") {
     if (!thumbsRef.current) return;
@@ -50,7 +50,7 @@ export function ProductGallery({ images, productName }: Props) {
               style={{ maxHeight: "430px" }}
             >
               {safeImages.map((image, index) => {
-                const src = resolveImageUrl(image.path) ?? "";
+                const src = resolveImageUrl(image.path, 160) ?? "";
                 const isActive = index === activeIndex;
                 return (
                   <button

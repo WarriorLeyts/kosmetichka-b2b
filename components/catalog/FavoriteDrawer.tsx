@@ -46,7 +46,7 @@ export function FavoriteDrawer() {
           <div className="cart-list">
             {favorites.map((item) => {
               const imagePath = item.images?.[0]?.path
-                ? resolveImageUrl(item.images[0].path)
+                ? resolveImageUrl(item.images[0].path, 160)
                 : null;
 
               return (

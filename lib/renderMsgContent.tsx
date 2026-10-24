@@ -7,10 +7,10 @@
 
 const IMAGES_BASE = process.env.NEXT_PUBLIC_IMAGES_BASE_URL ?? "https://kosmetichka-opt.ru";
 
-export function getProductImageUrl(imagePath: string | null): string | null {
+export function getProductImageUrl(imagePath: string | null, width?: number): string | null {
   if (!imagePath) return null;
   if (imagePath.startsWith("http")) return imagePath;
-  return `${IMAGES_BASE}/api/1c/${imagePath}`;
+  return `${IMAGES_BASE}/api/1c/${imagePath}${width ? `?w=${width}` : ""}`;
 }
 
 /** Рендерит текст сообщения: обычный текст или структурированные JSON-карточки */
@@ -34,7 +34,7 @@ export function renderMsgContent(text: string): React.ReactNode {
 
     // Product card (manager added from catalog)
     if (obj._t === "product" && typeof obj.name === "string") {
-      const imgUrl = getProductImageUrl((obj.imagePath as string | null) ?? null);
+      const imgUrl = getProductImageUrl((obj.imagePath as string | null) ?? null, 160);
       const price = typeof obj.price === "number" ? obj.price : 0;
       return (
         <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-52 shadow-sm">
@@ -63,7 +63,7 @@ export function renderMsgContent(text: string): React.ReactNode {
 
     // Problem product card (from picker)
     if (obj._t === "product-problem" && typeof obj.name === "string") {
-      const imgUrl = getProductImageUrl((obj.imagePath as string | null) ?? null);
+      const imgUrl = getProductImageUrl((obj.imagePath as string | null) ?? null, 160);
       const price = typeof obj.price === "number" ? obj.price : 0;
       return (
         <div className="rounded-xl border bg-white text-slate-800 overflow-hidden w-56 shadow-sm">

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import fs from "fs";
 import path from "path";
+import { pickWidth, thumbResponse } from "@/lib/thumb";
 
 function mimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -39,6 +40,13 @@ export async function GET(
   if (!stat.isFile()) {
     return new Response("File not found", { status: 404 });
   }
+
+// ?w=320 — уменьшенная копия (WebP) для карточек, корзины и т.п.
+const thumbWidth = pickWidth(request.nextUrl.searchParams.get("w"));
+if (thumbWidth) {
+  const thumb = await thumbResponse(baseDir, resolvedPath, thumbWidth);
+  if (thumb) return thumb;
+}
 
   // Return 304 if the client already has a fresh copy
   const lastModified = stat.mtime.toUTCString();

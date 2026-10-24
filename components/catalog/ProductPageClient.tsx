@@ -27,12 +27,12 @@ function renderDescription(text: string) {
   parts.forEach((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       nodes.push(
-        <h4
+        <h3
           key={`h${i}`}
           className="mt-5 first:mt-0 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-sm font-black text-transparent md:text-base"
         >
           {part.slice(2, -2)}
-        </h4>
+        </h3>
       );
     } else {
       const trimmed = part.trim();
@@ -409,7 +409,7 @@ export function ProductPageClient({
                         removeFromCompare(product.id);
                       } else if (canAddToCompare) {
                         const imagePath = product.images?.[0]?.path
-                          ? resolveImageUrl(product.images[0].path)
+                          ? resolveImageUrl(product.images[0].path, 160)
                           : null;
                         addToCompare({
                           id: product.id,

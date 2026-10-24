@@ -26,7 +26,7 @@ type WishlistItem = {
 function resolveImageUrl(p: string) {
   if (!p) return "";
   if (p.startsWith("http")) return p;
-  return "/1c/" + p;
+  return "/1c/" + p + "?w=320";
 }
 
 function getPrice(prices: { priceType: string; price: number }[], type = "wholesale") {

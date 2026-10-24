@@ -28,7 +28,7 @@ type Props = {
 
 export function ProductCard({ product, addToCart }: Props) {
   const imagePath = product.images?.[0]?.path
-    ? resolveImageUrl(product.images[0].path)
+    ? resolveImageUrl(product.images[0].path, 480)
     : null;
 
   const toggleFavorite = useFavoriteStore((state) => state.toggleFavorite);
