@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // data/ (файлы обмена с 1С) живёт вне сборки: /root/kosmetichka-data, в сборку подключается ссылкой
+  // (см. deploy.sh). Без этого Next копировал бы в .next/standalone старую локальную папку data/1c.
+  outputFileTracingExcludes: { "*": ["./data/**"] },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: process.env.IMAGES_HOSTNAME ?? "" },
