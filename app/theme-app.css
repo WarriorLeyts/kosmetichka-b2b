@@ -735,3 +735,5 @@ html:not([data-area="staff"]) main button.bg-indigo-600 { background: var(--grad
 /* пока открыта корзина или категории — плавающие плашки не перекрывают кнопки */
 body:has(.cart-drawer--open) .orders-pending-fab,body:has(.cart-drawer--open) .cart-toast,body:has(.app-cat-drawer.open) .orders-pending-fab{display:none!important}
 .app-account__btn{position:relative}.app-account__btn .app-badge{position:absolute;top:-4px;right:-4px}
+/* круглая кнопка «Каталог» на телефоне: иконка по центру, размер как у соседних */
+@media (max-width:900px){.app-header .app-catalog-btn{justify-content:center!important;gap:0!important}}@media (max-width:380px){.app-header .app-catalog-btn{width:38px!important;height:38px!important}}
