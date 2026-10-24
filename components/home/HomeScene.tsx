@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { preload } from "react-dom";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -20,18 +21,18 @@ const CLIP = 1335;
 
 type Box = { src: string; x: number; y: number; w: number; h: number };
 const BOX: Record<"flat" | "open" | "front" | "closed", Box> = {
-  flat: { src: "/app/home2/box-flat.png", x: 0, y: 1056, w: 853, h: 306 },
-  open: { src: "/app/home2/box-open.png", x: 0, y: 845, w: 853, h: 541 },
-  front: { src: "/app/home2/box-open-front.png", x: 0, y: 845, w: 853, h: 541 },
-  closed: { src: "/app/home2/box-closed.png", x: -79, y: 924, w: 981, h: 446 },
+  flat: { src: "/app/home2/box-flat.webp", x: 0, y: 1056, w: 853, h: 306 },
+  open: { src: "/app/home2/box-open.webp", x: 0, y: 845, w: 853, h: 541 },
+  front: { src: "/app/home2/box-open-front.webp", x: 0, y: 845, w: 853, h: 541 },
+  closed: { src: "/app/home2/box-closed.webp", x: -79, y: 924, w: 981, h: 446 },
 };
 
 type Pose = { cx: number; cy: number; r: number; k: number };
 const PRODUCTS: { src: string; w: number; h: number; a: Pose; b: Pose; c: Pose; drop: [number, number] }[] = [
-  { src: "/app/home/tube.png", w: 175, h: 366, a: { cx: 514, cy: 865, r: 0, k: 1 }, b: { cx: 478, cy: 930, r: 14, k: 0.85 }, c: { cx: 455, cy: 1270, r: 6, k: 0.8 }, drop: [0.36, 0.44] },
-  { src: "/app/home/perfume.png", w: 222, h: 331, a: { cx: 208, cy: 875, r: 0, k: 1 }, b: { cx: 290, cy: 800, r: -12, k: 0.85 }, c: { cx: 330, cy: 1260, r: -4, k: 0.8 }, drop: [0.42, 0.5] },
-  { src: "/app/home/jar.png", w: 285, h: 267, a: { cx: 689, cy: 928, r: 0, k: 1 }, b: { cx: 640, cy: 815, r: 12, k: 0.8 }, c: { cx: 560, cy: 1250, r: 4, k: 0.72 }, drop: [0.48, 0.56] },
-  { src: "/app/home/lipstick.png", w: 93, h: 285, a: { cx: 368, cy: 910, r: 0, k: 1 }, b: { cx: 515, cy: 790, r: 24, k: 0.8 }, c: { cx: 500, cy: 1250, r: 10, k: 0.8 }, drop: [0.54, 0.62] },
+  { src: "/app/home/tube.webp", w: 175, h: 366, a: { cx: 514, cy: 865, r: 0, k: 1 }, b: { cx: 478, cy: 930, r: 14, k: 0.85 }, c: { cx: 455, cy: 1270, r: 6, k: 0.8 }, drop: [0.36, 0.44] },
+  { src: "/app/home/perfume.webp", w: 222, h: 331, a: { cx: 208, cy: 875, r: 0, k: 1 }, b: { cx: 290, cy: 800, r: -12, k: 0.85 }, c: { cx: 330, cy: 1260, r: -4, k: 0.8 }, drop: [0.42, 0.5] },
+  { src: "/app/home/jar.webp", w: 285, h: 267, a: { cx: 689, cy: 928, r: 0, k: 1 }, b: { cx: 640, cy: 815, r: 12, k: 0.8 }, c: { cx: 560, cy: 1250, r: 4, k: 0.72 }, drop: [0.48, 0.56] },
+  { src: "/app/home/lipstick.webp", w: 93, h: 285, a: { cx: 368, cy: 910, r: 0, k: 1 }, b: { cx: 515, cy: 790, r: 24, k: 0.8 }, c: { cx: 500, cy: 1250, r: 10, k: 0.8 }, drop: [0.54, 0.62] },
 ];
 
 const TEXTS = [
@@ -73,6 +74,9 @@ function num(p: number, input: number[], out: number[]) {
 }
 
 export function HomeScene() {
+  // первый кадр (плоская коробка) и товары нужны сразу — грузим их до гидрации
+  preload(BOX.flat.src, { as: "image", fetchPriority: "high" });
+  PRODUCTS.forEach((p) => preload(p.src, { as: "image" }));
   const wrapRef = useRef<HTMLDivElement>(null);
   const [p, setP] = useState(0);
   const [size, setSize] = useState({ w: 0, artH: 380 });

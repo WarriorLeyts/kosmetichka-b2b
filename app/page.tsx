@@ -1,6 +1,9 @@
 // v1.1.0
 import { prisma } from "@/lib/prisma";
+import type { Metadata } from "next";
 import { HomeClient } from "@/components/home/HomeClient";
+
+export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 // Категории приходят из 1С — без этого страница пререндерится один раз при сборке и не обновляется.
 export const revalidate = 300;

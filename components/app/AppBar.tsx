@@ -12,7 +12,7 @@ export function AppBar({ backHref = "/catalog", profile = false }: { backHref?: 
       <Link href={backHref} className="app-bar__back" aria-label="Назад">
         <ChevronLeft size={28} />
       </Link>
-      <Link href="/" className="app-bar__brand" aria-label="Косметичка — на главную">
+      <Link href="/" className="app-bar__brand" title="На главную">
         <Wordmark size={19} />
       </Link>
       <div className="app-bar__right">

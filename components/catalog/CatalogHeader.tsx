@@ -26,6 +26,7 @@ export function CatalogHeader({ total, sort, setSort }: Props) {
         value={sort}
         onChange={(event) => setSort(event.target.value)}
         className="app-select"
+        aria-label="Сортировка"
       >
         {SORT_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>

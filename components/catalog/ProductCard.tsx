@@ -261,6 +261,7 @@ export function ProductCard({ product, addToCart }: Props) {
                     toggleWishlist(product.id);
                     setBellAnim(true);
                   }}
+                  aria-label={isInWishlist ? "Убрать из листа ожидания" : "Уведомить о поступлении"}
                   className={`wishlist-bell flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border transition ${
                     isInWishlist
                       ? "border-indigo-200 bg-indigo-50 text-indigo-500"
@@ -323,6 +324,7 @@ export function ProductCard({ product, addToCart }: Props) {
           )}
 
           <button
+            aria-label={isFavorite ? "Убрать из избранного" : "В избранное"}
             className={`favorite-button ${isFavorite ? "active" : ""}`}
             onClick={(e) => {
               e.stopPropagation();
@@ -349,6 +351,7 @@ export function ProductCard({ product, addToCart }: Props) {
                 ? "Добавить в сравнение"
                 : "В сравнении уже 3 товара"
             }
+            aria-label={isInCompare ? "Убрать из сравнения" : "Добавить к сравнению"}
             className={`favorite-button ${isInCompare ? "active" : ""}`}
             style={isInCompare ? { color: "#6366f1", borderColor: "#c7d2fe", background: "#eef2ff" } : {}}
             disabled={!isInCompare && !canAddToCompare}
@@ -382,6 +385,7 @@ export function ProductCard({ product, addToCart }: Props) {
           {/* Share button */}
           <button
             title="Скопировать ссылку"
+            aria-label="Скопировать ссылку на товар"
             className="favorite-button"
             onClick={(e) => {
               e.stopPropagation();

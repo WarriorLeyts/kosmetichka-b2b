@@ -198,7 +198,7 @@ export function TopBar({
           {catalogButton}
         </div>
 
-        <Link href="/" className="app-header__brand" aria-label="Косметичка — на главную">
+        <Link href="/" className="app-header__brand" title="На главную">
           <Wordmark size={19} />
           <span className="app-header__subtitle">Сеть магазинов косметики и парфюмерии</span>
         </Link>

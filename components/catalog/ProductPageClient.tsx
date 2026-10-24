@@ -324,6 +324,7 @@ export function ProductPageClient({
                         <button
                           onClick={() => toggleWishlist(product.id)}
                           title={isInWishlist ? "Убрать из листа ожидания" : "Уведомить о наличии"}
+                          aria-label={isInWishlist ? "Убрать из листа ожидания" : "Уведомить о наличии"}
                           className={`flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border transition ${
                             isInWishlist
                               ? "border-indigo-200 bg-indigo-50 text-indigo-500"
@@ -377,6 +378,7 @@ export function ProductPageClient({
                       // Sync to server so favorites persist across devices
                       if (customer) toggleWishlist(product.id);
                     }}
+                    aria-label={isFavorite ? "Убрать из избранного" : "В избранное"}
                     className={`flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border transition ${
                       isFavorite
                         ? "border-pink-300 bg-pink-50 text-pink-500"
@@ -427,6 +429,7 @@ export function ProductPageClient({
                         });
                       }
                     }}
+                    aria-label={isInCompare ? "Убрать из сравнения" : "Добавить к сравнению"}
                     className={`flex h-12 w-12 flex-shrink-0 cursor-pointer items-center justify-center rounded-xl border transition ${
                       isInCompare
                         ? "border-indigo-300 bg-indigo-50 text-indigo-500"

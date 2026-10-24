@@ -458,8 +458,8 @@ html[data-theme="dark"] .app-header { background: rgba(43, 25, 61, 0.55); }
 .app-wordmark::before {
   content: ""; flex-shrink: 0; width: 1.1em; height: 1.1em; margin-right: 0.4em;
   background: #E8202A;
-  -webkit-mask: url(/app/home2/logo-white.png) center / contain no-repeat;
-  mask: url(/app/home2/logo-white.png) center / contain no-repeat;
+  -webkit-mask: url(/app/home2/logo-white.webp) center / contain no-repeat;
+  mask: url(/app/home2/logo-white.webp) center / contain no-repeat;
 }
 html[data-theme="dark"] .app-wordmark, .app-wordmark--light { color: #FAF7FD; }
 .app-wordmark--light { color: #fff; }
@@ -741,3 +741,12 @@ body:has(.cart-drawer--open) .orders-pending-fab,body:has(.cart-drawer--open) .c
 html[data-theme="dark"] .app-hijab-icon { color: #C9A5FF; }
 .app-inline-icon { display: inline-block; vertical-align: -3px; margin-right: 4px; }
 .app-inline-icon.app-hijab-icon{width:18px;height:18px;vertical-align:-4px}
+
+/* баннер cookie на телефоне — над нижним меню, а не поверх него */
+@media (max-width: 900px) {
+  .app-cookie { bottom: calc(86px + env(safe-area-inset-bottom, 0px)) !important; }
+}
+/* контраст метки «Больше 10 шт.» (WCAG AA) */
+.stock-high { color: #13702b !important; }
+.stock-low { color: #9a4d00 !important; }
+.stock-out { color: #b3211a !important; }

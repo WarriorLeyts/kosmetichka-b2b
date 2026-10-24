@@ -26,7 +26,7 @@ export function CookieBanner() {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-4 pointer-events-none"
+      className="app-cookie fixed bottom-0 left-0 right-0 z-50 px-4 pb-4 pointer-events-none"
       style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
     >
       <div className="mx-auto max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-xl px-5 py-4 pointer-events-auto flex flex-col sm:flex-row items-start sm:items-center gap-3">

@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
+
+export const metadata: Metadata = {
+  title: "Каталог косметики и парфюмерии оптом",
+  description: "Каталог оптового магазина «Косметичка»: косметика, парфюмерия, уход и бытовая химия. Актуальные остатки и цены из 1С.",
+  alternates: { canonical: "/catalog" },
+};
 import { Suspense } from "react";
 import { CatalogClient } from "@/components/catalog/CatalogClient";
 

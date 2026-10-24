@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { AppBar } from "@/components/app/AppBar";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/contacts" },
   title: "Контакты",
   robots: { index: true, follow: true },
 };

@@ -16,11 +16,11 @@ const ICONS: [RegExp, string][] = [
 
 export function categoryIcon(name: string): string | null {
   const n = name.toLowerCase();
-  for (const [re, key] of ICONS) if (re.test(n)) return `/app/categories/${key}.png`;
+  for (const [re, key] of ICONS) if (re.test(n)) return `/app/categories/${key}.webp`;
   return null;
 }
 
-export const ALL_CATEGORIES_ICON = "/app/categories/all.png";
+export const ALL_CATEGORIES_ICON = "/app/categories/all.webp";
 
 type Cat = { guid: string; parentGuid?: string | null };
 /** Верхний уровень дерева; если корень один (обёртка «Каталог»), — его дети. */

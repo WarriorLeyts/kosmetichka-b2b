@@ -14,7 +14,6 @@ export const metadata: Metadata = {
   description:
     "Оптовый интернет-магазин косметики и парфюмерии. Широкий ассортимент, выгодные цены для магазинов и салонов красоты.",
   metadataBase: new URL("https://kosmetichka-opt.ru"),
-  alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     locale: "ru_RU",

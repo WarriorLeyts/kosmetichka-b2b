@@ -40,8 +40,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!product) return {};
 
   const title = product.name;
-  const description = product.description
-    ? product.description.slice(0, 160)
+  const plain = product.description
+    ? product.description
+        .replace(/[*_`#>~]+/g, "")
+        .replace(/^\s*[-•]\s+/gm, "")
+        .replace(/\s+/g, " ")
+        .trim()
+    : "";
+  const description = plain
+    ? plain.length > 160 ? plain.slice(0, 157).replace(/\s+\S*$/, "") + "…" : plain
     : `Купить ${product.name} оптом в магазине Косметичка. Выгодные цены.`;
   const imageUrl = product.images[0]?.path
     ? product.images[0].path.startsWith("http")
