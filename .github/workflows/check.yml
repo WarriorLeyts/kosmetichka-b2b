@@ -8,6 +8,9 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://u:p@localhost:5432/db
+      JWT_SECRET: ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
