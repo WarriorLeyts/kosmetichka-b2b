@@ -757,3 +757,8 @@ html:not([data-theme="dark"]) .text-pink-500 { color: #c81e64 !important; }
 html:not([data-theme="dark"]) .bg-pink-500 { background-color: #c81e64 !important; }
 html:not([data-theme="dark"]) .hover\:bg-pink-600:hover { background-color: #ad1856 !important; }
 html:not([data-theme="dark"]) .border-pink-500 { border-color: #c81e64 !important; }
+
+html[data-consent="1"] .app-cookie { display: none !important; }
+
+.app-show-all-brands { display: block; width: 100%; margin-top: 6px; padding: 8px 10px; border-radius: 12px; border: 1px dashed var(--sep); background: none; color: var(--tint); font-weight: 700; font-size: 13px; cursor: pointer; }
+.app-show-all-brands:hover { background: var(--tint-soft); }

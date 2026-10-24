@@ -97,6 +97,7 @@ export function CatalogSidebar({
 }: Props) {
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [brandSearch, setBrandSearch] = useState("");
+  const [showAllBrands, setShowAllBrands] = useState(false);
 
   const catalog = categories.find(
     (category) => category.name.toLowerCase() === "каталог"
@@ -141,14 +142,21 @@ export function CatalogSidebar({
     }
   }
 
+  // 650+ брендов в списке — тысячи DOM-узлов и заметная нагрузка на телефон.
+  // Показываем первые 40 (выбранные — всегда), остальные — по кнопке «Показать все» или через поиск.
+  const BRANDS_PREVIEW = 40;
+  const brandsQuery = brandSearch.trim().toLowerCase();
+  const allMatchingBrands = useMemo(
+    () => (brandsQuery ? brands.filter((brand) => brand.name.toLowerCase().includes(brandsQuery)) : brands),
+    [brands, brandsQuery]
+  );
   const filteredBrands = useMemo(() => {
-    const query = brandSearch.trim().toLowerCase();
-    const list = query
-      ? brands.filter((brand) => brand.name.toLowerCase().includes(query))
-      : brands;
-
-    return list.slice(0, 150);
-  }, [brands, brandSearch]);
+    if (showAllBrands || brandsQuery) return allMatchingBrands.slice(0, brandsQuery ? 150 : allMatchingBrands.length);
+    const head = allMatchingBrands.slice(0, BRANDS_PREVIEW);
+    const selectedExtra = allMatchingBrands.filter((b) => brandGuids.includes(b.guid) && !head.includes(b));
+    return [...selectedExtra, ...head];
+  }, [allMatchingBrands, showAllBrands, brandsQuery, brandGuids]);
+  const hiddenBrandsCount = brandsQuery || showAllBrands ? 0 : Math.max(0, allMatchingBrands.length - filteredBrands.length);
 
   const boundsMin = priceBounds.min;
   const boundsMax = Math.max(priceBounds.max, boundsMin + 1);
@@ -360,6 +368,12 @@ export function CatalogSidebar({
             <p className="px-2 text-sm font-semibold text-slate-400">
               Бренды не найдены
             </p>
+          )}
+
+          {hiddenBrandsCount > 0 && (
+            <button type="button" className="app-show-all-brands" onClick={() => setShowAllBrands(true)}>
+              Показать все бренды ({allMatchingBrands.length})
+            </button>
           )}
         </div>
       </div>

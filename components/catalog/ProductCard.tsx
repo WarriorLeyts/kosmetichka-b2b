@@ -16,7 +16,7 @@ import {
 } from "@/lib/pricing";
 import { resolveImageUrl } from "@/lib/image";
 import { useCartStore } from "@/store/cartStore";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { toast } from "sonner";
 
 type Variant = { id: number; imageUrl: string; name: string };
@@ -26,7 +26,7 @@ type Props = {
   addToCart: (product: any) => void;
 };
 
-export function ProductCard({ product, addToCart }: Props) {
+function ProductCardBase({ product, addToCart }: Props) {
   const imagePath = product.images?.[0]?.path
     ? resolveImageUrl(product.images[0].path, 480)
     : null;
@@ -517,3 +517,6 @@ export function ProductCard({ product, addToCart }: Props) {
     </>
   );
 }
+
+/** memo: при подгрузке следующей страницы каталога уже показанные карточки не перерисовываются */
+export const ProductCard = memo(ProductCardBase);

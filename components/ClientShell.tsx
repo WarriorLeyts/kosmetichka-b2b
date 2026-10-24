@@ -12,7 +12,14 @@ import { Toaster } from "sonner";
 export function ClientShell() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
+  // нижнее меню и баннер cookie рендерятся сразу (в HTML), остальное — после монтирования
+  if (!mounted)
+    return (
+      <>
+        <MobileBottomNav key="nav" />
+        <CookieBanner key="cookie" />
+      </>
+    );
 
   return (
     <>
@@ -21,8 +28,8 @@ export function ClientShell() {
       <CartToast />
       <OrderNotifications />
       <CompareBar />
-      <MobileBottomNav />
-      <CookieBanner />
+      <MobileBottomNav key="nav" />
+      <CookieBanner key="cookie" />
       <Toaster position="top-center" richColors />
     </>
   );

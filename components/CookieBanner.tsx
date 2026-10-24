@@ -3,15 +3,18 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+/**
+ * Баннер приходит сразу в HTML (без ожидания скриптов — иначе он появлялся с задержкой ~4 с).
+ * Тем, кто уже согласился, его прячет CSS: скрипт в <head> ставит html[data-consent="1"] до отрисовки.
+ */
 export function CookieBanner() {
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
 
   useEffect(() => {
     try {
-      const accepted = localStorage.getItem("cookie_consent");
-      if (!accepted) setVisible(true);
+      if (localStorage.getItem("cookie_consent")) setVisible(false);
     } catch {
-      // localStorage unavailable — don't show banner
+      setVisible(false); // localStorage unavailable — don't show banner
     }
   }, []);
 
@@ -19,6 +22,7 @@ export function CookieBanner() {
     try {
       localStorage.setItem("cookie_consent", "1");
     } catch {}
+    document.documentElement.dataset.consent = "1";
     setVisible(false);
   }
 

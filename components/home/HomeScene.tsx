@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { preload } from "react-dom";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -73,30 +73,83 @@ function num(p: number, input: number[], out: number[]) {
   return out[out.length - 1];
 }
 
+// useLayoutEffect на сервере даёт предупреждение — там он не нужен
+const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 export function HomeScene() {
   // первый кадр (плоская коробка) и товары нужны сразу — грузим их до гидрации
   preload(BOX.flat.src, { as: "image", fetchPriority: "high" });
-  PRODUCTS.forEach((p) => preload(p.src, { as: "image" }));
+  PRODUCTS.forEach((it) => preload(it.src, { as: "image" }));
+
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [p, setP] = useState(0);
+  // Прогресс «видео» хранится в ref, а кадры рисуются прямо в DOM (opacity/transform),
+  // без перерисовки React 60 раз в секунду — так главная не грузит процессор телефона.
+  const pRef = useRef(0);
+  const kRef = useRef(0);
+  const textRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const layerRefs = useRef<Record<string, HTMLImageElement | null>>({});
+  const productRefs = useRef<(HTMLImageElement | null)[]>([]);
+  const dotRefs = useRef<(HTMLSpanElement | null)[]>([]);
   const [size, setSize] = useState({ w: 0, artH: 380 });
   const raf = useRef<number | null>(null);
+
+  const frame = useCallback((p: number) => {
+    const k = kRef.current;
+    const vis = [num(p, [0, 0.24, 0.36], [1, 1, 0]), num(p, [0.24, 0.36, 0.62, 0.74], [0, 1, 1, 0]), num(p, [0.62, 0.74], [0, 1])];
+    const openScale = num(p, [0.24, 0.36, 0.62, 0.74], [0.55, 1, 1, 0.86]);
+    const textShift = [num(p, [0.24, 0.36], [0, -12]), num(p, [0.24, 0.36, 0.62, 0.74], [12, 0, 0, -12]), num(p, [0.62, 0.74], [12, 0])];
+    textRefs.current.forEach((el, i) => {
+      if (!el) return;
+      el.style.opacity = String(vis[i]);
+      el.style.transform = `translateY(${textShift[i]}px)`;
+      el.setAttribute("aria-hidden", vis[i] < 0.5 ? "true" : "false");
+    });
+    const L = layerRefs.current;
+    const setLayer = (el: HTMLImageElement | null, o: number, sy: number) => {
+      if (!el) return;
+      el.style.opacity = String(o);
+      el.style.transform = `scaleY(${sy})`;
+    };
+    setLayer(L.flat, vis[0], num(p, [0.24, 0.36], [1, 1.12]));
+    setLayer(L.open, vis[1], openScale);
+    setLayer(L.front, vis[1], openScale);
+    setLayer(L.closed, vis[2], num(p, [0.62, 0.74], [0.82, 1]));
+    PRODUCTS.forEach((it, i) => {
+      const el = productRefs.current[i];
+      if (!el) return;
+      const [d0, d1] = it.drop;
+      const at = (f: (q: Pose) => number) => num(p, [0.24, 0.36, d0, d1], [f(it.a), f(it.b), f(it.b), f(it.c)]);
+      const tx = at((q) => (q.cx - it.a.cx) * k);
+      const ty = at((q) => (q.cy - it.a.cy) * k);
+      const rot = num(p, [0.24, 0.36, d0, d1], [it.a.r, it.b.r, it.b.r, it.c.r]);
+      el.style.opacity = String(num(p, [d1 - 0.01, d1], [1, 0]));
+      el.style.transform = `translate(${tx}px, ${ty}px) rotate(${rot}deg) scale(${at((q) => q.k)})`;
+    });
+    dotRefs.current.forEach((el, i) => {
+      if (!el) return;
+      el.style.opacity = String(
+        num(p, i === 0 ? [0, 0.3, 0.36] : i === 1 ? [0.3, 0.36, 0.68, 0.74] : [0.68, 0.74, 1], i === 0 ? [1, 1, 0.3] : i === 1 ? [0.3, 1, 1, 0.3] : [0.3, 1, 1])
+      );
+    });
+  }, []);
 
   const play = useCallback(() => {
     if (raf.current) cancelAnimationFrame(raf.current);
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (reduce) {
-      setP(END);
+      pRef.current = END;
+      frame(END);
       return;
     }
     const start = performance.now();
     const tick = (now: number) => {
       const ms = now - start;
-      setP(progressAt(ms));
+      pRef.current = progressAt(ms);
+      frame(pRef.current);
       if (ms < TOTAL) raf.current = requestAnimationFrame(tick);
     };
     raf.current = requestAnimationFrame(tick);
-  }, []);
+  }, [frame]);
 
   useEffect(() => {
     play();
@@ -120,7 +173,7 @@ export function HomeScene() {
       const mobile = window.innerWidth <= 900;
       // на телефоне сцена (заголовки + коробка + кнопка) помещается между шапкой и нижним меню
       const artH = mobile ? Math.max(220, Math.min(w * 0.95, window.innerHeight - 190 - 120 - 104 - 96)) : 400;
-      setSize({ w, artH });
+      setSize((s) => (s.w === w && s.artH === artH ? s : { w, artH }));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -134,31 +187,42 @@ export function HomeScene() {
 
   const W = size.w;
   const k = W ? Math.min((W - 24) / FW, size.artH / FH) : 0;
+  kRef.current = k;
+  // после каждой перерисовки (смена размера) восстанавливаем текущий кадр
+  useIsoLayoutEffect(() => frame(pRef.current));
 
-  const vis = [num(p, [0, 0.24, 0.36], [1, 1, 0]), num(p, [0.24, 0.36, 0.62, 0.74], [0, 1, 1, 0]), num(p, [0.62, 0.74], [0, 1])];
-  const openScale = num(p, [0.24, 0.36, 0.62, 0.74], [0.55, 1, 1, 0.86]);
-  const textShift = [num(p, [0.24, 0.36], [0, -12]), num(p, [0.24, 0.36, 0.62, 0.74], [12, 0, 0, -12]), num(p, [0.62, 0.74], [12, 0])];
-  const dot = (i: number) =>
-    num(p, i === 0 ? [0, 0.3, 0.36] : i === 1 ? [0.3, 0.36, 0.68, 0.74] : [0.68, 0.74, 1], i === 0 ? [1, 1, 0.3] : i === 1 ? [0.3, 1, 1, 0.3] : [0.3, 1, 1]);
   const titleSize = (t: { a: string; b: string }) => Math.min(W > 900 ? 54 : 40, (W - 36) / ((t.a.length + 1 + t.b.length) * 0.6));
+  const p0 = pRef.current;
+  const vis0 = [num(p0, [0, 0.24, 0.36], [1, 1, 0]), num(p0, [0.24, 0.36, 0.62, 0.74], [0, 1, 1, 0]), num(p0, [0.62, 0.74], [0, 1])];
 
-  const layer = (box: Box, opacity: number, scaleY = 1) => (
-    <img
-      src={box.src}
-      alt=""
-      draggable={false}
-      style={{
-        position: "absolute", left: box.x * k, top: (box.y - FY) * k, width: box.w * k, height: box.h * k,
-        opacity, transformOrigin: "bottom", transform: `scaleY(${scaleY})`, objectFit: "fill",
-      }}
-    />
-  );
+  const layer = (key: keyof typeof BOX, opacity: number) => {
+    const box = BOX[key];
+    return (
+      <img
+        ref={(el) => { layerRefs.current[key] = el; }}
+        src={box.src}
+        alt=""
+        draggable={false}
+        fetchPriority={key === "flat" ? "high" : undefined}
+        style={{
+          position: "absolute", left: box.x * k, top: (box.y - FY) * k, width: box.w * k, height: box.h * k,
+          opacity, transformOrigin: "bottom", objectFit: "fill", willChange: "opacity, transform",
+        }}
+      />
+    );
+  };
 
   return (
     <section className="home-scene" ref={wrapRef} aria-label="Косметичка — всё для вашей красоты">
       <div className="home-scene__texts">
         {TEXTS.map((t, i) => (
-          <div key={i} className="home-scene__text" style={{ opacity: vis[i], transform: `translateY(${textShift[i]}px)` }} aria-hidden={vis[i] < 0.5}>
+          <div
+            key={i}
+            ref={(el) => { textRefs.current[i] = el; }}
+            className="home-scene__text"
+            style={{ opacity: vis0[i] }}
+            aria-hidden={vis0[i] < 0.5}
+          >
             <h1 className="home-scene__title" style={{ fontSize: W ? titleSize(t) : 36 }}>
               <span>{t.a} </span>
               <span className="home-scene__accent" style={{ backgroundImage: t.grad }}>{t.b}</span>
@@ -171,38 +235,30 @@ export function HomeScene() {
       <div className="home-scene__art" style={{ height: size.artH }} aria-hidden>
         {k > 0 && (
           <div style={{ position: "relative", width: FW * k, height: FH * k }}>
-            {layer(BOX.flat, vis[0], num(p, [0.24, 0.36], [1, 1.12]))}
-            {layer(BOX.open, vis[1], openScale)}
+            {layer("flat", vis0[0])}
+            {layer("open", vis0[1])}
             <div style={{ position: "absolute", left: -40 * k, right: -40 * k, top: -200 * k, height: (CLIP - FY + 200) * k, overflow: "hidden" }}>
-              {PRODUCTS.map((it, i) => {
-                const [d0, d1] = it.drop;
-                const at = (f: (q: Pose) => number) => num(p, [0.24, 0.36, d0, d1], [f(it.a), f(it.b), f(it.b), f(it.c)]);
-                const tx = at((q) => (q.cx - it.a.cx) * k);
-                const ty = at((q) => (q.cy - it.a.cy) * k);
-                const rot = num(p, [0.24, 0.36, d0, d1], [it.a.r, it.b.r, it.b.r, it.c.r]);
-                const sc = at((q) => q.k);
-                return (
-                  <img
-                    key={i}
-                    src={it.src}
-                    alt=""
-                    draggable={false}
-                    style={{
-                      position: "absolute",
-                      left: (it.a.cx - it.w / 2 + 40) * k,
-                      top: (it.a.cy - it.h / 2 - FY + 200) * k,
-                      width: it.w * k,
-                      height: it.h * k,
-                      objectFit: "contain",
-                      opacity: num(p, [d1 - 0.01, d1], [1, 0]),
-                      transform: `translate(${tx}px, ${ty}px) rotate(${rot}deg) scale(${sc})`,
-                    }}
-                  />
-                );
-              })}
+              {PRODUCTS.map((it, i) => (
+                <img
+                  key={i}
+                  ref={(el) => { productRefs.current[i] = el; }}
+                  src={it.src}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    position: "absolute",
+                    left: (it.a.cx - it.w / 2 + 40) * k,
+                    top: (it.a.cy - it.h / 2 - FY + 200) * k,
+                    width: it.w * k,
+                    height: it.h * k,
+                    objectFit: "contain",
+                    willChange: "opacity, transform",
+                  }}
+                />
+              ))}
             </div>
-            {layer(BOX.front, vis[1], openScale)}
-            {layer(BOX.closed, vis[2], num(p, [0.62, 0.74], [0.82, 1]))}
+            {layer("front", vis0[1])}
+            {layer("closed", vis0[2])}
           </div>
         )}
       </div>
@@ -214,7 +270,7 @@ export function HomeScene() {
         </Link>
         <div className="home-scene__dots" aria-hidden>
           {[0, 1, 2].map((i) => (
-            <span key={i} style={{ opacity: dot(i) }} />
+            <span key={i} ref={(el) => { dotRefs.current[i] = el; }} style={{ opacity: i === 0 ? 1 : 0.3 }} />
           ))}
         </div>
       </div>

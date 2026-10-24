@@ -85,6 +85,8 @@ export function CatalogClient({
   const abortRef = useRef<AbortController | null>(null);
   // When true — skip the first filter-change effect (state was restored from sessionStorage)
   const isRestored = useRef(false);
+  // the very first load runs immediately; later filter changes are debounced
+  const firstLoad = useRef(true);
 
   // ── Restore scroll position + loaded products on back-navigation ──────────
   useEffect(() => {
@@ -241,9 +243,11 @@ export function CatalogClient({
 
     syncUrl();
 
+    const delay = firstLoad.current ? 0 : 300;
+    firstLoad.current = false;
     const timer = setTimeout(() => {
       loadProducts(true);
-    }, 300);
+    }, delay);
 
     return () => clearTimeout(timer);
   }, [
