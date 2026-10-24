@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyToken } from "@/lib/auth";
+import { attachmentPreview } from "@/lib/chatAttachments";
 
 // Lightweight endpoint — returns order statuses + latest manager message per order.
 // Used by OrderNotifications for polling (pending count + approval + unread messages).
@@ -46,7 +47,7 @@ export async function GET() {
       .map((o) => ({
         orderId: o.id,
         latestAt: o.messages[0].createdAt.toISOString(),
-        preview: o.messages[0].text.slice(0, 60),
+        preview: (attachmentPreview(o.messages[0].text) ?? o.messages[0].text).slice(0, 60),
       }));
 
     return NextResponse.json({

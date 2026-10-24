@@ -5,6 +5,8 @@
  * Used in: OrderChat, OrdersPageClient (inline chat), AdminOrderClient, PickerOrderClient.
  */
 
+import { formatFileSize } from "@/lib/chatAttachments";
+
 const IMAGES_BASE = process.env.NEXT_PUBLIC_IMAGES_BASE_URL ?? "https://kosmetichka-opt.ru";
 
 export function getProductImageUrl(imagePath: string | null, width?: number): string | null {
@@ -28,6 +30,41 @@ export function renderMsgContent(text: string): React.ReactNode {
             alt="фото"
             className="max-w-[200px] max-h-[200px] rounded-xl object-cover cursor-pointer hover:opacity-90"
           />
+        </a>
+      );
+    }
+
+    // Video attachment
+    if (obj._t === "video" && typeof obj.url === "string") {
+      return (
+        <video
+          src={obj.url}
+          controls
+          playsInline
+          preload="metadata"
+          className="max-w-[240px] max-h-[320px] rounded-xl bg-black"
+        />
+      );
+    }
+
+    // File attachment (PDF, documents, archives)
+    if (obj._t === "file" && typeof obj.url === "string") {
+      const name = typeof obj.name === "string" ? obj.name : "Файл";
+      const size = typeof obj.size === "number" ? formatFileSize(obj.size) : "";
+      const ext = (name.split(".").pop() || "").toUpperCase().slice(0, 4);
+      return (
+        <a
+          href={obj.url}
+          download={name}
+          className="flex items-center gap-3 rounded-xl border bg-white text-slate-800 px-3 py-2 w-60 shadow-sm hover:bg-slate-50 no-underline"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-[10px] font-bold text-violet-700">
+            {ext || "FILE"}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold">{name}</span>
+            <span className="block text-xs text-slate-500">{size ? `${size} · ` : ""}Скачать</span>
+          </span>
         </a>
       );
     }
