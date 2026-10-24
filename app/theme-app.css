@@ -714,3 +714,27 @@ main.app-page button.bg-indigo-600, main.app-page button.bg-blue-600 {
 }
 html[data-theme="dark"] .cart-drawer .cart-item { background: var(--cell-2) !important; border-color: var(--sep) !important; }
 .cart-drawer .cart-item { border-radius: 18px !important; }
+
+/* ---------- правки после проверки под пользователем ---------- */
+@media (max-width: 900px) {
+  /* карточка никогда не расширяет страницу */
+  .product-card { overflow: hidden; }
+  .card-actions, .card-actions > * { min-width: 0; }
+  .card-actions .cart-button { overflow: hidden; text-overflow: ellipsis; }
+  /* нет в наличии: кнопка + колокольчик (сердечко — на странице товара) */
+  .card-actions:has(.wishlist-bell) .favorite-button { display: none !important; }
+  /* в корзине: счётчик на всю ширину, корзина — в нижнем меню */
+  .card-actions > .flex-1 > .cart-button:not(:first-child) { display: none !important; }
+  .card-actions > .flex-1 > .rounded-xl.border:first-child { flex: 1; justify-content: space-between; }
+  .orders-pending-fab { bottom: calc(92px + env(safe-area-inset-bottom, 0px)) !important; }
+  .orders-toast-stack { bottom: calc(92px + env(safe-area-inset-bottom, 0px)) !important; }
+}
+.orders-pending-fab { background: var(--grad-cart) !important; box-shadow: 0 6px 18px rgba(139, 61, 255, 0.35) !important; }
+.order-chat-header { background: var(--grad-cart) !important; }
+html:not([data-area="staff"]) main button.bg-indigo-600 { background: var(--grad-primary) !important; border-radius: 14px !important; }
+/* кнопка «Нет в наличии» сжимается, колокольчик всегда виден */
+@media (max-width:900px){.card-actions .cart-button{min-width:0!important;flex:1 1 0%!important;font-size:12px!important;padding-left:8px!important;padding-right:8px!important}.card-actions>.flex-1{flex:1 1 0%!important}.card-actions .wishlist-bell{flex-shrink:0}}
+@media (max-width:900px){.product-card{align-items:stretch!important}.card-actions{width:100%!important;max-width:100%}}
+/* пока открыта корзина или категории — плавающие плашки не перекрывают кнопки */
+body:has(.cart-drawer--open) .orders-pending-fab,body:has(.cart-drawer--open) .cart-toast,body:has(.app-cat-drawer.open) .orders-pending-fab{display:none!important}
+.app-account__btn{position:relative}.app-account__btn .app-badge{position:absolute;top:-4px;right:-4px}

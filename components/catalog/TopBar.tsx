@@ -222,9 +222,9 @@ export function TopBar({
 
         <div className="app-header__actions">
           {loading ? (
-            <div className="app-glass" style={{ opacity: 0.5 }} />
+            <div className="app-glass hide-mobile" style={{ opacity: 0.5 }} />
           ) : customer ? (
-            <div className="app-account" ref={menuRef}>
+            <div className="app-account hide-mobile" ref={menuRef}>
               <button onClick={() => setMenuOpen(!menuOpen)} className="app-account__btn" aria-label="Аккаунт">
                 <span className="app-account__avatar">{customer.name?.charAt(0).toUpperCase()}</span>
                 <span className="app-account__name">{customer.name}</span>
@@ -253,7 +253,7 @@ export function TopBar({
               )}
             </div>
           ) : (
-            <Link href="/login" className="app-glass" aria-label="Войти" title="Войти">
+            <Link href="/login" className="app-glass hide-mobile" aria-label="Войти" title="Войти">
               <User size={20} />
             </Link>
           )}
@@ -263,7 +263,7 @@ export function TopBar({
             {mounted && favoriteCount > 0 && <span className="app-badge">{favoriteCount > 99 ? "99+" : favoriteCount}</span>}
           </button>
 
-          <button className="app-glass hide-mobile" onClick={openCart} aria-label="Корзина" title="Корзина">
+          <button className="app-glass" onClick={openCart} aria-label="Корзина" title="Корзина">
             <ShoppingBag size={20} />
             {cartCount > 0 && (
               <span key={cartCount} className="app-badge badge-bump">{cartCount > 99 ? "99+" : cartCount}</span>
