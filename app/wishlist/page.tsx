@@ -4,6 +4,7 @@ import { verifyToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { WishlistPageClient } from "./WishlistPageClient";
+import { AppBar } from "@/components/app/AppBar";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,8 @@ export default async function WishlistPage() {
   });
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4 md:p-8">
+    <main className="min-h-screen bg-slate-50 app-page">
+      <AppBar backHref="/orders" />
       <div className="mx-auto max-w-2xl">
 
         {/* Header */}

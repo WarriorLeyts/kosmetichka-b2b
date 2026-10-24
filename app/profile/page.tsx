@@ -5,6 +5,7 @@ import { verifyToken } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import PasswordInput from "@/components/PasswordInput";
 import { AuthInit } from "@/components/AuthInit";
+import { AppBar } from "@/components/app/AppBar";
 
 export const dynamic = "force-dynamic";
 
@@ -122,7 +123,8 @@ export default async function ProfilePage({
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4 md:p-8">
+    <main className="min-h-screen bg-slate-50 app-page">
+      <AppBar backHref="/orders" />
       <AuthInit />
       <div className="mx-auto max-w-xl">
 

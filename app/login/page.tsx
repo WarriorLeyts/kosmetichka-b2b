@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Heart, LogIn, Eye, EyeOff } from "lucide-react";
+import { LogIn, Eye, EyeOff, AlertCircle, ChevronLeft } from "lucide-react";
+import { Wordmark } from "@/components/app/Wordmark";
+import { ThemeToggle } from "@/components/app/ThemeToggle";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -43,84 +45,84 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-      <div className="w-full max-w-md rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
-        <div className="mb-8 text-center">
-          <div className="mb-3 flex justify-center">
-            <Heart className="h-10 w-10 text-pink-500" />
-          </div>
-
-          <h1 className="bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-3xl font-black text-transparent">
-            Вход клиента
-          </h1>
-
-          <p className="mt-2 text-sm font-semibold text-slate-500">
-            Войдите в B2B-кабинет Косметички
-          </p>
+    <main className="app-auth">
+      <div className="app-auth__blob" aria-hidden />
+      <div className="app-auth__wrap">
+        <div className="app-auth__top">
+          <Link href="/" className="app-auth__back" aria-label="На главную">
+            <ChevronLeft size={26} />
+          </Link>
+          <span className="app-auth__bar-title">Вход</span>
+          <ThemeToggle className="app-auth__theme" />
         </div>
+        <div className="app-auth__brand"><Wordmark size={22} /></div>
+        <h1 className="app-auth__h1">С возвращением!</h1>
+        <p className="app-auth__lead">Войдите, чтобы видеть свои цены и заказы</p>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <input
-            type="text"
-            inputMode="email"
-            placeholder="Email или телефон"
-            autoComplete="email"
-            className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none focus:border-pink-300"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+        <form onSubmit={handleLogin} className="app-panel">
+          <label className="app-field">
+            <span className="app-field__label">Телефон или email</span>
+            <span className="app-field__box">
+              <input
+                type="text"
+                inputMode="email"
+                placeholder="Телефон или email"
+                autoComplete="username"
+                autoCapitalize="none"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </span>
+          </label>
 
-          <div className="relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              placeholder="Пароль"
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pr-12 text-sm font-semibold outline-none focus:border-pink-300"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
-              tabIndex={-1}
-              aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
+          <label className="app-field">
+            <span className="app-field__label">Пароль</span>
+            <span className="app-field__box">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Пароль"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="app-field__eye"
+                tabIndex={-1}
+                aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
+              >
+                {showPassword ? <EyeOff size={22} /> : <Eye size={22} />}
+              </button>
+            </span>
+          </label>
 
           {error && (
-            <div className="rounded-2xl bg-red-50 p-3 text-sm font-bold text-red-500">
-              {error}
+            <div className="app-error" role="alert">
+              <AlertCircle size={18} />
+              <span>{error}</span>
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 font-black text-white disabled:opacity-50"
-          >
-            <LogIn size={18} />
-            {loading ? "Входим..." : "Войти"}
+          <button type="submit" disabled={loading} className="app-btn" style={{ width: "100%", marginTop: 4 }}>
+            <LogIn size={20} />
+            {loading ? "Входим…" : "Войти"}
           </button>
+
+          <Link href="/forgot-password" className="app-auth__forgot">Забыли пароль?</Link>
         </form>
 
-        <div className="mt-6 flex flex-col items-center gap-2 text-sm font-semibold text-slate-500">
-          <Link href="/forgot-password" className="text-slate-400 hover:text-pink-500 hover:underline">
-            Забыли пароль?
+        <div className="app-panel" style={{ marginTop: 16, paddingBottom: 18 }}>
+          <h2 className="app-auth__h2">Ещё нет аккаунта?</h2>
+          <Link href="/register" className="app-btn app-btn--outline" style={{ width: "100%" }}>
+            Зарегистрироваться
           </Link>
-          <span>
-            Нет аккаунта?{" "}
-            <Link href="/register" className="text-pink-500 hover:underline">
-              Зарегистрироваться
-            </Link>
-          </span>
         </div>
 
-        <div className="mt-4 pt-4 border-t border-slate-100 text-center text-xs text-slate-400 space-x-3">
-          <Link href="/privacy" className="hover:text-pink-500 hover:underline transition-colors">Политика конфиденциальности</Link>
+        <div className="app-auth__legal">
+          <Link href="/privacy">Политика конфиденциальности</Link>
           <span>·</span>
-          <Link href="/agreement" className="hover:text-pink-500 hover:underline transition-colors">Соглашение</Link>
+          <Link href="/agreement">Соглашение</Link>
         </div>
       </div>
     </main>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { AppBar } from "@/components/app/AppBar";
 
 export const metadata: Metadata = {
   title: "Политика конфиденциальности",
@@ -8,13 +9,8 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <main className="min-h-screen" style={{ background: "linear-gradient(135deg, #fdf2f8 0%, #f5f3ff 50%, #eff6ff 100%)" }}>
-      <nav className="bg-white/80 backdrop-blur border-b border-pink-100 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-        <Link href="/catalog" className="flex items-center gap-2">
-          <span className="text-pink-500 text-xl">♡</span>
-          <span className="bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-transparent text-lg font-black">Косметичка</span>
-        </Link>
-      </nav>
+    <main className="min-h-screen">
+      <AppBar backHref="/" />
 
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className="rounded-3xl bg-white shadow-sm border border-white/60 px-8 py-10">

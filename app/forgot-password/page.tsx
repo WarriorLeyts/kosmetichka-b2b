@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Heart, Mail } from "lucide-react";
+import { AppBar } from "@/components/app/AppBar";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -33,7 +34,8 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+    <main className="min-h-screen bg-slate-50 app-page">
+      <AppBar backHref="/login" />
       <div className="w-full max-w-md rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
         <div className="mb-8 text-center">
           <div className="mb-3 flex justify-center">

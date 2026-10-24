@@ -1,0 +1,694 @@
+/* =====================================================================
+   Оформление в стиле мобильного приложения «Косметичка»
+   (палитры — kosmetichka-app/native/src/theme.ts и ios.ts)
+   Светлая тема — по умолчанию, тёмная — html[data-theme="dark"].
+   ===================================================================== */
+
+:root {
+  --brand-violet: #7925D6;
+  --brand-pink: #EF419A;
+  --app-pink: #e82c87;
+  --app-violet: #8b3dff;
+  --grad-primary: linear-gradient(90deg, #8b1ee6 0%, #c21ad0 50%, #f0388f 100%);
+  --grad-cart: linear-gradient(90deg, #8b3dff 0%, #b832e0 50%, #e82c87 100%);
+  --grad-cta: linear-gradient(90deg, #6a2bf0 0%, #b62ee6 50%, #f0388f 100%);
+  --grad-scan: linear-gradient(135deg, #EF419A 0%, #A93BF2 100%);
+  --grad-text: linear-gradient(90deg, #6a2bf0, #b62ee6, #f0388f);
+
+  --page: #ffffff;
+  --cell: #ffffff;
+  --cell-2: #f6f3fb;
+  --label: #1f2937;
+  --label-2: #374151;
+  --label-3: #4b5563;
+  --secondary: #6b7280;
+  --faint: #9ca3af;
+  --sep: #ece8f3;
+  --soft: #f6f4fa;
+  --tint: #7a1ee8;
+  --tint-soft: #f5f3ff;
+  --tint-border: #ede9fe;
+  --pink-soft: #fdf2f8;
+  --price-bg: #fdf2f8;
+  --photo-bg: #ffffff;
+  --pic-bg: #F3ECFA;
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(121, 37, 214, 0.16);
+  --glass-shadow: 0 6px 16px rgba(121, 37, 214, 0.12);
+  --glass-icon: #7925D6;
+  --search-bg: rgba(250, 247, 255, 0.85);
+  --search-border: rgba(121, 37, 214, 0.22);
+  --search-text: #8A7CA6;
+  --bar-bg: rgba(250, 250, 255, 0.78);
+  --bar-border: rgba(81, 91, 137, 0.08);
+  --bar-inactive: #515B89;
+  --card-shadow: 0 4px 16px rgba(31, 41, 55, 0.07);
+  --popup-shadow: 0 18px 50px rgba(60, 40, 140, 0.18);
+  --overlay: rgba(23, 13, 37, 0.38);
+  --success: #059669; --success-bg: #ecfdf5;
+  --warning: #b45309; --warning-bg: #fffbeb;
+  --danger: #dc2626;  --danger-bg: #fef2f2;
+  --subtitle: #7A6A9A;
+  --hero-title: #170f33;
+  --hero-sub: #5b5d78;
+
+  /* старые переменные сайта → палитра приложения */
+  --pink: #e82c87;
+  --violet: #8b3dff;
+  --gradient: var(--grad-cart);
+  --bg: var(--page);
+  --card: var(--cell);
+  --text: var(--label);
+  --muted: var(--secondary);
+  --border: var(--sep);
+  --background: var(--page);
+  --foreground: var(--label);
+  --card-foreground: var(--label);
+  --popover: var(--cell);
+  --popover-foreground: var(--label);
+  --input: var(--sep);
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --app-pink: #EF419A;
+  --app-violet: #B57CFF;
+  --page: #170D25;
+  --cell: #2B193D;
+  --cell-2: #352044;
+  --label: #FAF7FD;
+  --label-2: #EDE3F7;
+  --label-3: #DCCBEA;
+  --secondary: #C3AECF;
+  --faint: #8E77A6;
+  --sep: rgba(200, 160, 255, 0.16);
+  --soft: #211032;
+  --tint: #D7B8FF;
+  --tint-soft: #2E1A48;
+  --tint-border: rgba(181, 124, 255, 0.3);
+  --pink-soft: #3A1934;
+  --price-bg: rgba(232, 44, 135, 0.1);
+  --photo-bg: #ffffff;
+  --pic-bg: #352044;
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(220, 190, 255, 0.24);
+  --glass-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  --glass-icon: #E7D9FF;
+  --search-bg: rgba(255, 255, 255, 0.09);
+  --search-border: rgba(200, 160, 255, 0.35);
+  --search-text: #C3AECF;
+  --bar-bg: rgba(33, 16, 50, 0.65);
+  --bar-border: rgba(255, 255, 255, 0.08);
+  --bar-inactive: #C3AECF;
+  --card-shadow: none;
+  --popup-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  --overlay: rgba(8, 3, 14, 0.6);
+  --success: #34d399; --success-bg: #123027;
+  --warning: #fbbf24; --warning-bg: #33260f;
+  --danger: #ff7a8a;  --danger-bg: #3a1526;
+  --subtitle: #E3D3F2;
+  --hero-title: #ffffff;
+  --hero-sub: #C3AECF;
+  --pink: #EF419A;
+  --violet: #B57CFF;
+  color-scheme: dark;
+}
+
+/* ---------- основа ---------- */
+
+body {
+  background: var(--page);
+  color: var(--label);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, "Segoe UI", Roboto, Arial, sans-serif;
+  letter-spacing: -0.01em;
+}
+/* фон всех страниц — как у шапки приложения: мягкое розовое сияние слева, лавандовое справа */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(80deg, rgba(239, 65, 154, 0.13) 0%, rgba(255, 255, 255, 0) 50%, rgba(155, 110, 240, 0.16) 100%),
+    #ffffff;
+}
+html[data-theme="dark"] body::before {
+  background:
+    linear-gradient(180deg, rgba(23, 13, 37, 0) 0%, rgba(23, 13, 37, 0.35) 50%, rgba(23, 13, 37, 0) 100%),
+    linear-gradient(75deg, rgba(214, 48, 150, 0.42) 0%, rgba(23, 13, 37, 0) 50%, rgba(110, 32, 210, 0.5) 100%),
+    #170D25;
+}
+.catalog-page, .orders-page { background: transparent !important; }
+@layer base {
+  button, input, select, textarea { color: var(--label); }
+}
+html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] select {
+  background-color: var(--soft);
+  border-color: var(--sep);
+  color: var(--label);
+}
+::selection { background: rgba(139, 61, 255, 0.25); }
+
+/* градиентный текст как в заголовках приложения */
+.app-grad-text {
+  background: var(--grad-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- кнопки ---------- */
+
+.app-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  height: 52px; padding: 0 22px; border-radius: 16px; border: 0;
+  font-size: 17px; font-weight: 700; color: #fff; cursor: pointer;
+  background: var(--grad-primary);
+  box-shadow: 0 8px 20px rgba(194, 26, 208, 0.28);
+  transition: transform .11s ease, opacity .15s ease, box-shadow .2s ease;
+  text-decoration: none;
+}
+.app-btn:active { transform: scale(0.98); }
+.app-btn:disabled { opacity: .5; cursor: not-allowed; }
+.app-btn--outline {
+  background: rgba(194, 26, 208, 0.06); color: #7a12d4; box-shadow: none;
+  border: 1.5px solid #8b1ee6;
+}
+html[data-theme="dark"] .app-btn--outline { color: #D7B8FF; border-color: #B57CFF; }
+
+.app-glass {
+  width: 42px; height: 42px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; position: relative;
+  background: var(--glass-bg); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
+  color: var(--glass-icon); cursor: pointer; flex-shrink: 0;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  transition: transform .11s ease;
+  text-decoration: none;
+}
+.app-glass:active { transform: scale(0.94); }
+.app-glass .app-badge { position: absolute; top: -3px; right: -3px; }
+.app-badge {
+  min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #e82c87; color: #fff; font-size: 10px; font-weight: 800;
+  border: 1.5px solid #fff;
+}
+html[data-theme="dark"] .app-badge { border-color: #2B193D; }
+
+/* старые кнопки сайта → градиенты приложения */
+.checkout-button, .home-hero-cta, .guest-cta-btn:not(.guest-cta-btn--secondary) {
+  background: var(--grad-primary) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 8px 20px rgba(194, 26, 208, 0.28) !important;
+  color: #fff !important;
+}
+.cart-button {
+  background: var(--grad-cart) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 4px 12px rgba(139, 61, 255, 0.3) !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+}
+.cart-button:disabled { background: #AEAEB2 !important; box-shadow: none !important; }
+.bg-gradient-to-r.from-pink-500.via-purple-500.to-blue-700:not(.bg-clip-text) { background-image: var(--grad-cart) !important; }
+.bg-clip-text.from-pink-500 { background-image: var(--grad-text) !important; }
+
+/* ---------- карточки и панели ---------- */
+
+.sidebar-card, .product-card, .order-card, .orders-stat-card, .home-feature-card, .confirm-modal,
+.qv-drawer, .cart-drawer, .cat-desktop-dropdown, .orders-empty, .order-chat-panel {
+  background: var(--cell) !important;
+  border-color: var(--sep) !important;
+  box-shadow: var(--card-shadow) !important;
+}
+.sidebar-card, .product-card, .order-card, .orders-stat-card, .home-feature-card { border-radius: 22px !important; }
+.cart-drawer, .qv-drawer { box-shadow: var(--popup-shadow) !important; }
+.cart-overlay { background: var(--overlay) !important; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+
+/* карточка товара в каталоге — как CatalogCard приложения */
+.product-card { padding: 10px !important; border: 1px solid transparent !important; }
+html[data-theme="dark"] .product-card { border-color: var(--sep) !important; }
+.product-image-box { background: var(--photo-bg) !important; border-radius: 16px !important; border: 0 !important; }
+.product-card h3, .product-card .product-title { color: var(--label) !important; }
+.product-code { color: var(--secondary) !important; }
+.stock-pill, .product-meta strong.stock-high, .product-meta strong.stock-low, .product-meta strong.stock-out {
+  display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 8px; font-weight: 500 !important;
+}
+.product-meta strong.stock-high::before, .product-meta strong.stock-low::before, .product-meta strong.stock-out::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0;
+}
+.stock-high { background: rgba(52, 199, 89, 0.12) !important; color: #1f8a3b !important; }
+.stock-low  { background: rgba(255, 149, 0, 0.13) !important; color: #b35f00 !important; }
+.stock-out  { background: rgba(255, 59, 48, 0.10) !important; color: #c4271d !important; }
+html[data-theme="dark"] .stock-high { color: #4ade80 !important; }
+html[data-theme="dark"] .stock-low  { color: #fbbf24 !important; }
+html[data-theme="dark"] .stock-out  { color: #ff7a8a !important; }
+.price-row { color: var(--label); }
+.price-row-active { background: var(--price-bg) !important; border-radius: 12px; }
+.accent-price, .price-row-active b { color: #e82c87 !important; }
+.favorite-button {
+  background: var(--glass-bg) !important; border: 1px solid var(--glass-border) !important;
+  color: var(--brand-violet) !important; border-radius: 50% !important;
+}
+html[data-theme="dark"] .favorite-button { color: #E7D9FF !important; }
+.favorite-button.active { color: #e82c87 !important; }
+
+/* чипы категорий/быстрых фильтров */
+.quick-filter-chip, .category-item {
+  border-radius: 999px !important;
+  border-color: var(--sep) !important;
+  color: var(--label) !important;
+}
+.category-item { border-radius: 14px !important; }
+.quick-filter-chip.active, .category-item.active {
+  background: var(--grad-cart) !important; color: #fff !important; border-color: transparent !important;
+  box-shadow: 0 4px 12px rgba(139, 61, 255, 0.25);
+}
+.sort-select, .reset-button, .price-inputs input, .brand-search { border-color: var(--sep) !important; border-radius: 14px !important; }
+.catalog-title-row h1, .catalog-title-row h2 { color: var(--label) !important; }
+.catalog-title-row h1.bg-clip-text, .catalog-title-row h2.bg-clip-text { color: transparent !important; }
+
+/* ---------- Tailwind-утилиты в тёмной теме ---------- */
+
+html[data-theme="dark"] .bg-white { background-color: var(--cell) !important; }
+html[data-theme="dark"] .bg-white\/80, html[data-theme="dark"] .bg-white\/90, html[data-theme="dark"] .bg-white\/95 { background-color: rgba(43, 25, 61, 0.88) !important; }
+html[data-theme="dark"] .bg-slate-50, html[data-theme="dark"] .bg-gray-50 { background-color: var(--soft) !important; }
+html[data-theme="dark"] .bg-slate-100, html[data-theme="dark"] .bg-gray-100 { background-color: var(--cell-2) !important; }
+html[data-theme="dark"] .bg-slate-200 { background-color: #3d2753 !important; }
+html[data-theme="dark"] .hover\:bg-slate-50:hover, html[data-theme="dark"] .hover\:bg-slate-100:hover, html[data-theme="dark"] .hover\:bg-gray-50:hover { background-color: var(--cell-2) !important; }
+html[data-theme="dark"] .text-slate-900, html[data-theme="dark"] .text-slate-800, html[data-theme="dark"] .text-gray-900, html[data-theme="dark"] .text-gray-800, html[data-theme="dark"] .text-black { color: var(--label) !important; }
+html[data-theme="dark"] .text-slate-700, html[data-theme="dark"] .text-gray-700 { color: var(--label-2) !important; }
+html[data-theme="dark"] .text-slate-600, html[data-theme="dark"] .text-gray-600 { color: var(--label-3) !important; }
+html[data-theme="dark"] .text-slate-500, html[data-theme="dark"] .text-gray-500 { color: var(--secondary) !important; }
+html[data-theme="dark"] .text-slate-400, html[data-theme="dark"] .text-gray-400 { color: var(--faint) !important; }
+html[data-theme="dark"] .text-slate-300 { color: #6E5A86 !important; }
+html[data-theme="dark"] .border-slate-100, html[data-theme="dark"] .border-slate-200, html[data-theme="dark"] .border-gray-100, html[data-theme="dark"] .border-gray-200, html[data-theme="dark"] .divide-slate-100 > * + * { border-color: var(--sep) !important; }
+html[data-theme="dark"] .border-slate-300, html[data-theme="dark"] .border-gray-300 { border-color: rgba(200, 160, 255, 0.28) !important; }
+html[data-theme="dark"] .bg-red-50, html[data-theme="dark"] .bg-red-100 { background-color: var(--danger-bg) !important; }
+html[data-theme="dark"] .text-red-500, html[data-theme="dark"] .text-red-600, html[data-theme="dark"] .text-red-700 { color: var(--danger) !important; }
+html[data-theme="dark"] .border-red-200, html[data-theme="dark"] .border-red-300 { border-color: rgba(255, 122, 138, 0.35) !important; }
+html[data-theme="dark"] .bg-green-50, html[data-theme="dark"] .bg-green-100, html[data-theme="dark"] .bg-emerald-50, html[data-theme="dark"] .bg-emerald-100 { background-color: var(--success-bg) !important; }
+html[data-theme="dark"] .text-green-500, html[data-theme="dark"] .text-green-600, html[data-theme="dark"] .text-green-700, html[data-theme="dark"] .text-green-800, html[data-theme="dark"] .text-emerald-600, html[data-theme="dark"] .text-emerald-700, html[data-theme="dark"] .text-emerald-800 { color: var(--success) !important; }
+html[data-theme="dark"] .border-green-200, html[data-theme="dark"] .border-emerald-200 { border-color: rgba(52, 211, 153, 0.3) !important; }
+html[data-theme="dark"] .bg-amber-50, html[data-theme="dark"] .bg-yellow-100, html[data-theme="dark"] .bg-orange-50, html[data-theme="dark"] .bg-orange-100 { background-color: var(--warning-bg) !important; }
+html[data-theme="dark"] .text-amber-600, html[data-theme="dark"] .text-amber-700, html[data-theme="dark"] .text-amber-800, html[data-theme="dark"] .text-yellow-700, html[data-theme="dark"] .text-orange-600, html[data-theme="dark"] .text-orange-700, html[data-theme="dark"] .text-orange-800 { color: var(--warning) !important; }
+html[data-theme="dark"] .border-amber-200, html[data-theme="dark"] .border-orange-200, html[data-theme="dark"] .border-orange-300 { border-color: rgba(251, 191, 36, 0.3) !important; }
+html[data-theme="dark"] .bg-blue-50, html[data-theme="dark"] .bg-blue-100, html[data-theme="dark"] .bg-indigo-50 { background-color: var(--tint-soft) !important; }
+html[data-theme="dark"] .text-blue-600, html[data-theme="dark"] .text-blue-700, html[data-theme="dark"] .text-indigo-500, html[data-theme="dark"] .text-indigo-600, html[data-theme="dark"] .text-indigo-700, html[data-theme="dark"] .text-purple-600 { color: #C9A5FF !important; }
+html[data-theme="dark"] .border-blue-200, html[data-theme="dark"] .border-blue-300, html[data-theme="dark"] .border-indigo-200 { border-color: var(--tint-border) !important; }
+html[data-theme="dark"] .bg-pink-50 { background-color: var(--pink-soft) !important; }
+html[data-theme="dark"] .border-pink-100, html[data-theme="dark"] .border-pink-300 { border-color: rgba(239, 65, 154, 0.35) !important; }
+html[data-theme="dark"] .text-pink-500 { color: #FF6FB5 !important; }
+html[data-theme="dark"] .shadow-sm, html[data-theme="dark"] .shadow, html[data-theme="dark"] .shadow-md, html[data-theme="dark"] .shadow-lg { --tw-shadow-color: rgba(0, 0, 0, 0.35); }
+
+/* ---------- шапка в стиле приложения ---------- */
+
+.app-header {
+  position: relative; z-index: 40;
+  display: grid;
+  grid-template-columns: auto auto minmax(260px, 1fr) auto;
+  align-items: center; gap: 14px 18px;
+  padding: 14px 18px; margin: 0 0 18px;
+  border-radius: 28px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+}
+html[data-theme="dark"] .app-header { background: rgba(43, 25, 61, 0.55); }
+.app-header__brand { display: flex; flex-direction: column; align-items: center; text-decoration: none; line-height: 1; }
+.app-header__subtitle { margin-top: 4px; font-size: 12px; font-weight: 500; color: var(--subtitle); white-space: nowrap; }
+.app-header__left, .app-header__actions { display: flex; align-items: center; gap: 8px; }
+.app-catalog-btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px; border-radius: 23px;
+  background: var(--grad-cart); color: #fff; font-weight: 700; font-size: 15px; border: 0; cursor: pointer;
+  box-shadow: 0 6px 16px rgba(139, 61, 255, 0.3); text-decoration: none; white-space: nowrap;
+}
+.app-search { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.app-search__field {
+  flex: 1; min-width: 0; height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 16px;
+  border-radius: 24px; background: var(--search-bg); border: 1px solid var(--search-border);
+  box-shadow: 0 8px 20px rgba(121, 37, 214, 0.08); color: var(--glass-icon);
+}
+.app-search__field input {
+  flex: 1; min-width: 0; border: 0 !important; outline: 0; background: transparent !important;
+  font-size: 15px; color: var(--label); height: 100%; padding: 0 !important;
+}
+.app-search__field input::placeholder { color: var(--search-text) !important; -webkit-text-fill-color: var(--search-text); }
+.app-search__go {
+  width: 48px; height: 48px; border-radius: 17px; border: 0; cursor: pointer; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; color: #fff;
+  background: var(--grad-scan); box-shadow: 0 8px 18px rgba(169, 59, 242, 0.32);
+}
+.app-account { position: relative; }
+.app-account__btn { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px 0 4px; border-radius: 21px; background: var(--glass-bg); border: 1px solid var(--glass-border); cursor: pointer; color: var(--label); font-weight: 700; font-size: 14px; }
+.app-account__avatar { width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; background: var(--grad-cart); }
+.app-account__name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-menu {
+  position: absolute; right: 0; top: 52px; z-index: 60; width: 240px; padding: 8px;
+  border-radius: 20px; background: var(--cell); border: 1px solid var(--sep); box-shadow: var(--popup-shadow);
+}
+.app-menu__head { padding: 8px 10px 10px; border-bottom: 1px solid var(--sep); margin-bottom: 6px; }
+.app-menu__head b { display: block; color: var(--label); }
+.app-menu__head span { font-size: 12px; color: var(--secondary); }
+.app-menu a, .app-menu button {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border-radius: 12px;
+  font-size: 14px; font-weight: 600; color: var(--label); background: none; border: 0; cursor: pointer; text-decoration: none;
+}
+.app-menu a:hover, .app-menu button:hover { background: var(--cell-2); }
+.app-menu .app-menu__danger { color: var(--danger); }
+.app-cart-total { font-size: 12px; font-weight: 800; color: var(--app-pink); white-space: nowrap; cursor: pointer; }
+
+/* выпадающее меню категорий (десктоп) и шторка (телефон) */
+.app-cat-wrap { position: relative; }
+.app-cat-dropdown {
+  position: absolute; left: 0; top: 56px; z-index: 70; width: 340px; max-height: 70vh; overflow: auto;
+  padding: 8px; border-radius: 22px; background: var(--cell); border: 1px solid var(--sep); box-shadow: var(--popup-shadow);
+  display: none;
+}
+.app-cat-dropdown.open { display: block; }
+.app-cat-row { display: flex; align-items: center; }
+.app-cat-item {
+  flex: 1; display: flex; align-items: center; gap: 10px; text-align: left; padding: 9px 10px; border-radius: 14px;
+  border: 0; background: none; cursor: pointer; color: var(--label); font-size: 14px; font-weight: 600;
+}
+.app-cat-item:hover { background: var(--cell-2); }
+.app-cat-item.active { background: var(--tint-soft); color: var(--tint); }
+.app-cat-item img { width: 30px; height: 30px; object-fit: contain; flex-shrink: 0; }
+.app-cat-toggle { width: 34px; height: 34px; border: 0; background: none; color: var(--faint); cursor: pointer; border-radius: 10px; transition: transform .2s; display: inline-flex; align-items: center; justify-content: center; }
+.app-cat-toggle.expanded { transform: rotate(90deg); color: var(--tint); }
+.app-cat-backdrop { position: fixed; inset: 0; z-index: 80; background: var(--overlay); opacity: 0; pointer-events: none; transition: opacity .2s; }
+.app-cat-backdrop.open { opacity: 1; pointer-events: auto; }
+.app-cat-drawer {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 81; max-height: 82vh; overflow: auto;
+  padding: 10px 14px 28px; border-radius: 28px 28px 0 0; background: var(--cell);
+  transform: translateY(100%); transition: transform .28s cubic-bezier(.2,.8,.2,1);
+}
+.app-cat-drawer.open { transform: translateY(0); }
+.app-cat-drawer__grip { width: 40px; height: 5px; border-radius: 3px; background: var(--sep); margin: 2px auto 10px; }
+.app-cat-drawer__head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 8px; }
+.app-cat-drawer__head b { font-size: 20px; color: var(--label); }
+
+@media (min-width: 901px) {
+  .app-cat-drawer, .app-cat-backdrop { display: none; }
+}
+@media (max-width: 1100px) {
+  .app-header { grid-template-columns: auto auto minmax(200px, 1fr) auto; gap: 12px; }
+  .app-header__subtitle { display: none; }
+  .top-label-hide-md { display: none; }
+}
+/* телефон: шапка как на главном экране приложения */
+@media (max-width: 900px) {
+  .app-header {
+    grid-template-columns: 1fr auto 1fr; gap: 0; padding: 8px 2px 12px; margin: 0 0 6px;
+    background: transparent; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 0;
+  }
+  html[data-theme="dark"] .app-header { background: transparent; }
+  .app-header__brand { display: contents; }
+  .app-header__brand .app-wordmark { grid-column: 2; grid-row: 1; justify-self: center; align-self: center; font-size: min(19px, calc((100vw - 236px) / 10.2)) !important; }
+  .app-header__subtitle { display: block; grid-column: 1 / -1; grid-row: 2; text-align: center; font-size: 14px; margin: 6px 0 0; }
+  .app-header__left { grid-column: 1; grid-row: 1; justify-self: start; }
+  .app-header__actions { grid-column: 3; grid-row: 1; justify-self: end; gap: 6px; }
+  .app-search { grid-column: 1 / -1; grid-row: 3; margin-top: 16px; }
+  .app-catalog-btn .app-catalog-btn__text, .app-account__name, .app-cart-total, .hide-mobile { display: none !important; }
+  .app-search__field { height: 52px; border-radius: 26px; }
+  .app-search__go { width: 52px; height: 52px; border-radius: 18px; }
+  .app-account__btn { padding: 0 3px; background: transparent; border: 0; }
+  .app-menu { right: 0; }
+}
+@media (max-width: 380px) {
+  .app-header .app-glass, .app-catalog-btn { width: 38px !important; height: 38px !important; }
+  .app-header__brand .app-wordmark { font-size: min(17px, calc((100vw - 220px) / 8.6)) !important; }
+}
+
+/* ---------- нижнее меню на телефоне — как TabBar приложения ---------- */
+
+.mobile-bottom-nav {
+  left: 10px !important; right: 10px !important; bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+  height: 70px !important; padding: 6px !important; border-radius: 35px !important;
+  background: var(--bar-bg) !important; border: 1px solid var(--bar-border) !important;
+  box-shadow: 0 8px 26px rgba(60, 40, 140, 0.12) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4);
+  gap: 0 !important;
+}
+.mobile-bottom-nav-item {
+  flex: 1 !important; height: 58px !important; border-radius: 29px !important;
+  color: var(--bar-inactive) !important; font-size: 12px !important; font-weight: 500 !important;
+  gap: 3px !important; position: relative; transition: color .2s, background .3s;
+  background: transparent !important; border: 0 !important;
+}
+.mobile-bottom-nav-item.active {
+  color: #fff !important; font-weight: 700 !important;
+  background: linear-gradient(135deg, #c400fb 0%, #7a05fd 42%, #5a06f6 62%, #b80dfc 100%) !important;
+  box-shadow: 0 6px 18px rgba(130, 0, 255, 0.45);
+}
+.mobile-bottom-nav-badge { background: #e82c87 !important; border: 1.5px solid #fff; }
+
+/* ---------- надпись «КОСМЕТИЧКА» ---------- */
+.app-wordmark {
+  position: relative; display: inline-flex; white-space: nowrap;
+  padding-top: 0.5em; line-height: 1.25;
+  font-weight: 400; letter-spacing: 0.17em; margin-right: -0.17em;
+  color: var(--brand-violet);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, "Segoe UI", Roboto, Arial, sans-serif;
+}
+html[data-theme="dark"] .app-wordmark, .app-wordmark--light { color: #FAF7FD; }
+.app-wordmark--light { color: #fff; }
+.app-wordmark__i { position: relative; }
+.app-wordmark__i::before {
+  content: ""; position: absolute;
+  width: 0.62em; height: 0.62em;
+  left: 50%; top: -0.27em; transform: translateX(-50%);
+  background: #E8202A;
+  -webkit-mask: url(/app/home2/logo-white.png) center / contain no-repeat;
+  mask: url(/app/home2/logo-white.png) center / contain no-repeat;
+}
+@media (max-width: 900px) {
+  /* на телефоне «Каталог» — стеклянная круглая кнопка рядом с переключателем темы */
+  .app-catalog-btn {
+    width: 42px !important; height: 42px !important; border-radius: 50% !important; padding: 0 !important;
+    background: var(--glass-bg) !important; border: 1px solid var(--glass-border) !important;
+    box-shadow: var(--glass-shadow) !important; color: var(--glass-icon) !important;
+  }
+}
+
+/* ---------- главная ---------- */
+.home-page { max-width: 1240px; margin: 0 auto; }
+.home-scene { display: flex; flex-direction: column; align-items: stretch; margin: 6px auto 8px; max-width: 900px; }
+.home-scene__texts { position: relative; height: 128px; }
+.home-scene__text { position: absolute; inset: 0; padding: 18px 18px 0; text-align: center; will-change: opacity, transform; }
+.home-scene__title { margin: 0; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; white-space: nowrap; color: var(--hero-title); }
+.home-scene__accent { -webkit-background-clip: text; background-clip: text; color: transparent; }
+.home-scene__sub { margin: 8px 0 0; font-size: 17px; line-height: 1.35; color: var(--hero-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-scene__art { display: flex; align-items: center; justify-content: center; pointer-events: none; user-select: none; }
+.home-scene__bottom { padding: 6px 36px 0; display: flex; flex-direction: column; align-items: center; }
+.home-scene__cta {
+  display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+  width: 100%; max-width: 420px; height: 60px; border-radius: 30px;
+  background: var(--grad-cta); color: #fff; font-size: 20px; font-weight: 600; text-decoration: none;
+  box-shadow: 0 12px 26px rgba(160, 40, 230, 0.32); transition: transform .11s ease;
+}
+.home-scene__cta:active { transform: scale(0.98); }
+.home-scene__dots { display: flex; gap: 6px; height: 30px; align-items: center; margin-top: 8px; }
+.home-scene__dots span { width: 22px; height: 5px; border-radius: 3px; background: #8b2be0; }
+
+.home-section-head { display: flex; align-items: center; justify-content: space-between; padding: 0 6px; margin: 26px 0 10px; }
+.home-section-head h2 { margin: 0; font-size: 24px; font-weight: 700; color: var(--label); }
+.home-link { display: inline-flex; align-items: center; gap: 6px; color: #7a1ee8; font-size: 17px; font-weight: 500; text-decoration: none; }
+html[data-theme="dark"] .home-link { color: #D7B8FF; }
+
+.home-cats__grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.home-cat {
+  position: relative; display: block; height: 176px; border-radius: 22px; overflow: hidden;
+  background: var(--cell); box-shadow: 0 4px 16px rgba(120, 60, 180, 0.08); text-decoration: none;
+  transition: transform .15s ease, box-shadow .2s ease;
+}
+html[data-theme="dark"] .home-cat { box-shadow: none; }
+.home-cat:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(120, 60, 180, 0.16); }
+.home-cat:active { transform: scale(0.98); }
+.home-cat__pic { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding-bottom: 50px; background: var(--pic-bg); }
+.home-cat__pic img { width: 78%; height: 92%; object-fit: contain; }
+.home-cat__label {
+  position: absolute; left: 6px; right: 6px; bottom: 6px; min-height: 50px; padding: 10px 12px 10px 14px; border-radius: 16px;
+  display: flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.94); color: var(--label);
+  font-size: 16px; font-weight: 600; line-height: 1.25;
+}
+html[data-theme="dark"] .home-cat__label { background: rgba(33, 16, 50, 0.92); }
+.home-cat__label span { flex: 1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.home-cat__label svg { color: #8b2be0; flex-shrink: 0; }
+html[data-theme="dark"] .home-cat__label svg { color: #D7B8FF; }
+
+.home-login-banner {
+  display: flex; align-items: center; gap: 12px; margin: 18px 0 0; padding: 14px 16px; border-radius: 20px;
+  background: var(--tint-soft); border: 1px solid var(--tint-border); color: var(--app-violet); text-decoration: none;
+}
+.home-login-banner__text { flex: 1; display: flex; flex-direction: column; }
+.home-login-banner__text b { color: var(--label); font-size: 15px; font-weight: 800; }
+.home-login-banner__text span { color: var(--secondary); font-size: 13px; margin-top: 2px; }
+
+.home-quick { display: flex; gap: 8px; overflow-x: auto; padding: 16px 0 2px; scrollbar-width: none; }
+.home-quick::-webkit-scrollbar { display: none; }
+.home-quick__chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border-radius: 999px; white-space: nowrap;
+  background: var(--cell); border: 1px solid var(--sep); color: var(--label); font-weight: 700; font-size: 14px; text-decoration: none;
+}
+.home-quick__chip svg { color: var(--app-pink); }
+.home-quick__chip:hover { border-color: rgba(232, 44, 135, 0.4); }
+
+.home-fresh__row { display: grid; grid-auto-flow: column; grid-auto-columns: 232px; gap: 12px; overflow-x: auto; padding: 4px 4px 14px; scroll-snap-type: x mandatory; scrollbar-width: thin; }
+.home-fresh__item { scroll-snap-align: start; }
+.home-fresh__item .product-card { height: 100%; }
+
+.app-footer { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 34px 0 10px; padding: 16px; color: var(--secondary) !important; background: transparent !important; border: 0 !important; font-size: 13px; }
+.app-footer__link { display: inline-flex; align-items: center; gap: 8px; color: var(--secondary); font-weight: 600; font-size: 15px; text-decoration: none; }
+
+@media (max-width: 1200px) { .home-cats__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 900px) {
+  .home-cats__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .home-scene { margin-top: 0; }
+  .home-scene__texts { height: 112px; }
+  .home-scene__sub { font-size: 15px; }
+  .home-section-head h2 { font-size: 22px; }
+  .home-fresh__row { grid-auto-columns: 180px; }
+  .home-page { padding-bottom: 110px !important; }
+}
+
+.app-quick-row .quick-filter-chip { display: inline-flex; align-items: center; gap: 6px; }
+.app-quick-row .quick-filter-chip svg { color: var(--app-pink); }
+.app-quick-row .quick-filter-chip.active svg { color: #fff; }
+
+/* страницы-обёртки со сплошным светлым фоном → прозрачные, чтобы был виден фон приложения */
+main.bg-slate-50, div.min-h-screen.bg-slate-50, main.min-h-screen.bg-white, div.min-h-screen.bg-white { background: transparent !important; }
+
+/* ---------- вход / регистрация — как экраны приложения ---------- */
+.app-auth { position: relative; min-height: 100vh; padding: 0 20px 40px; overflow: hidden; }
+.app-auth__blob { position: absolute; top: -120px; right: -110px; width: 300px; height: 300px; border-radius: 50%; background: rgba(232, 44, 135, 0.06); pointer-events: none; }
+html[data-theme="dark"] .app-auth__blob { background: rgba(239, 65, 154, 0.14); box-shadow: -60vw 90vh 0 20px rgba(121, 37, 214, 0.16); }
+.app-auth__wrap { position: relative; width: 100%; max-width: 520px; margin: 0 auto; }
+.app-auth__top { height: 50px; display: flex; align-items: center; justify-content: center; position: relative; margin-top: 8px; }
+.app-auth__bar-title { font-size: 17px; font-weight: 600; color: var(--label); }
+.app-auth__back { position: absolute; left: -6px; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; color: #8b3dff; }
+.app-auth__theme { position: absolute; right: 0; }
+.app-auth__brand { display: flex; justify-content: center; margin-top: 18px; }
+.app-auth__h1 { margin: 18px 0 0; font-size: 34px; font-weight: 800; color: var(--label); letter-spacing: -0.02em; }
+.app-auth__lead { margin: 6px 0 18px; font-size: 17px; line-height: 1.35; color: var(--secondary); }
+.app-auth__h2 { margin: 0 0 12px; font-size: 18px; font-weight: 700; color: var(--label); }
+.app-auth__forgot { display: block; text-align: center; padding: 14px 0 6px; color: #7a12d4; font-size: 17px; font-weight: 600; text-decoration: none; }
+html[data-theme="dark"] .app-auth__forgot { color: #D7B8FF; }
+.app-auth__legal { display: flex; justify-content: center; gap: 10px; margin-top: 22px; font-size: 13px; color: var(--faint); }
+.app-auth__legal a { color: var(--faint); text-decoration: none; }
+
+.app-panel { border-radius: 22px; padding: 18px 18px 10px; background: var(--cell); box-shadow: 0 6px 22px rgba(80, 40, 140, 0.07); }
+html[data-theme="dark"] .app-panel { box-shadow: none; }
+.app-field { display: block; margin-bottom: 14px; }
+.app-field__label { display: block; font-size: 15px; font-weight: 600; color: var(--label); margin-bottom: 7px; }
+.app-field__box {
+  display: flex; align-items: center; min-height: 52px; border-radius: 14px; border: 1.5px solid #E4E2EC;
+  background: #F8F7FB; transition: border-color .18s ease;
+}
+html[data-theme="dark"] .app-field__box { border-color: #43295A; background: #2B193D; }
+.app-field__box:focus-within { border-color: #8b3dff; }
+.app-field__box input, .app-field__box textarea, .app-field__box select {
+  flex: 1; min-width: 0; border: 0 !important; outline: 0; background: transparent !important;
+  font-size: 17px; padding: 12px 16px; color: var(--label);
+}
+.app-field__eye { width: 48px; height: 48px; border: 0; background: none; color: var(--secondary); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.app-error { display: flex; align-items: center; gap: 8px; padding: 10px; margin-bottom: 12px; border-radius: 12px; background: rgba(255, 59, 48, 0.08); color: #FF3B30; font-size: 14px; }
+
+/* ---------- страница товара ---------- */
+.app-float-back { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+.app-tabs-bar { background: var(--bar-bg); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.home-fresh__row { grid-auto-columns: 262px; }
+.home-fresh__item .card-actions .favorite-button ~ .favorite-button { display: none; }
+@media (max-width: 900px) { .home-fresh__row { grid-auto-columns: 210px; } }
+
+/* ---------- каталог на телефоне — сетка 2 колонки, как в приложении ---------- */
+@media (max-width: 900px) {
+  .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
+  .product-card { display: flex !important; flex-direction: column !important; padding: 10px !important; min-width: 0; }
+  .product-image-box { grid-row: auto !important; width: 100% !important; height: 150px !important; margin-bottom: 8px !important; }
+  .product-image-box img { max-height: 138px !important; }
+  .product-card h2 { font-size: 14px !important; line-height: 1.3 !important; height: 2.6em !important; overflow: hidden; margin-bottom: 4px !important; }
+  .product-meta { flex-wrap: wrap; gap: 4px; }
+  .product-meta > span.truncate { display: none; }
+  .price-row { height: auto !important; font-size: 12px !important; padding: 2px 6px; }
+  .card-actions { display: flex !important; gap: 6px; margin-top: auto; padding-top: 8px !important; }
+  .card-actions .cart-button { flex: 1; height: 40px; font-size: 13px !important; min-width: 0; }
+  .card-actions .favorite-button ~ .favorite-button { display: none !important; }
+  .card-actions .favorite-button { width: 40px !important; height: 40px !important; flex-shrink: 0; }
+  .mobile-filters-button {
+    display: inline-flex !important; align-items: center; gap: 8px; height: 40px; padding: 0 16px !important; margin-bottom: 10px;
+    border-radius: 999px !important; background: var(--cell) !important; border: 1px solid var(--sep) !important;
+    color: var(--label) !important; font-weight: 700 !important; font-size: 14px !important;
+  }
+  .app-quick-row { flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; margin-bottom: 12px !important; }
+  .app-quick-row::-webkit-scrollbar { display: none; }
+  .app-quick-row .quick-filter-chip { white-space: nowrap; flex-shrink: 0; }
+  .catalog-page { padding-bottom: 110px !important; }
+}
+@media (max-width: 380px) {
+  .product-image-box { height: 128px !important; }
+}
+
+.app-catalog-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.app-large-title { margin: 0; font-size: 34px; line-height: 41px; font-weight: 800; letter-spacing: 0.01em; color: var(--label); }
+.app-catalog-head__count { margin: 2px 0 0; font-size: 15px; color: var(--secondary); }
+.app-select {
+  height: 42px; padding: 0 36px 0 16px; border-radius: 21px; border: 1px solid var(--sep); background: var(--cell);
+  color: var(--label); font-size: 14px; font-weight: 600; outline: none; cursor: pointer; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238b3dff' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center;
+}
+html[data-theme="dark"] .app-select { background-color: var(--cell) !important; }
+@media (max-width: 900px) {
+  .app-large-title { font-size: 30px; line-height: 36px; }
+  .app-select { height: 38px; font-size: 13px; max-width: 52vw; }
+}
+.catalog-layout > *, .catalog-layout > section { min-width: 0; }
+
+/* ---------- панель внутренних страниц (BackBar приложения) ---------- */
+.app-bar {
+  position: sticky; top: 0; z-index: 30;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  height: 60px; padding: 0 12px;
+  background: var(--bar-bg); border-bottom: 1px solid var(--bar-border);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3);
+}
+.app-bar__back { justify-self: start; width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; color: #8b3dff; border-radius: 12px; }
+html[data-theme="dark"] .app-bar__back { color: #D7B8FF; }
+.app-bar__brand { text-decoration: none; display: inline-flex; }
+.app-bar__right { justify-self: end; display: flex; gap: 8px; align-items: center; }
+.app-bar .app-glass { width: 38px; height: 38px; }
+@media (max-width: 380px) { .app-bar__brand .app-wordmark { font-size: 16px !important; } }
+
+.app-page { padding: 0 0 110px; }
+.app-page > div:not(.app-bar) { padding-left: 16px; padding-right: 16px; }
+.app-page > .max-w-md { margin: 28px auto 0; }
+@media (min-width: 769px) { .app-page { padding-bottom: 40px; } .app-page > div.mx-auto { padding-top: 24px; } }
+
+/* регистрация: поля и карточки «Кто вы?» в стиле приложения */
+.app-register-panel { padding-bottom: 18px; }
+.app-register-panel input:not([type="checkbox"]):not([type="radio"]) {
+  border: 1.5px solid #E4E2EC !important; background: #F8F7FB !important; border-radius: 14px !important; min-height: 52px; font-size: 16px !important;
+}
+html[data-theme="dark"] .app-register-panel input:not([type="checkbox"]):not([type="radio"]) { border-color: #43295A !important; background: #2B193D !important; }
+.app-register-panel input:focus { border-color: #8b3dff !important; }
+.app-register-panel button[type="submit"] { background: var(--grad-primary) !important; border-radius: 16px !important; height: 52px; box-shadow: 0 8px 20px rgba(194, 26, 208, 0.28); color: #fff !important; }
+
+/* всплывашка «добавлено в корзину» — карточка приложения */
+.cart-toast {
+  background: var(--cell) !important; color: var(--label) !important; border: 1px solid var(--sep) !important;
+  border-radius: 20px !important; box-shadow: var(--popup-shadow) !important;
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+}
+.cart-toast-title, .cart-toast-title strong { color: var(--label) !important; }
+.cart-toast-title svg { color: #34C759 !important; }
+.cart-toast-body > span { background: var(--price-bg) !important; color: var(--app-pink) !important; }
+@media (max-width: 768px) { .cart-toast { bottom: calc(92px + env(safe-area-inset-bottom, 0px)) !important; } }
+/* карточка: «поделиться» — на странице товара; в карточке оставляем корзину, избранное и сравнение */
+.card-actions .favorite-button + .favorite-button + .favorite-button { display: none !important; }
+.card-actions .cart-button { white-space: nowrap; padding-left: 12px !important; padding-right: 12px !important; }
+.app-page > .max-w-md { margin: 28px auto 0; width: calc(100% - 32px); }

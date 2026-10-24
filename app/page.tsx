@@ -1,23 +1,15 @@
-// v1.0.1
+// v1.1.0
 import { prisma } from "@/lib/prisma";
 import { HomeClient } from "@/components/home/HomeClient";
 
-// Счётчики товаров/брендов/категорий меняются после обмена с 1С —
-// без этого страница пререндерится один раз при сборке и не обновляется.
+// Категории приходят из 1С — без этого страница пререндерится один раз при сборке и не обновляется.
 export const revalidate = 300;
 
 export default async function Home() {
-  const [totalProducts, totalBrands, totalCategories] = await Promise.all([
-    prisma.product.count(),
-    prisma.brand.count(),
-    prisma.category.count(),
-  ]);
+  const categories = await prisma.category.findMany({
+    select: { id: true, guid: true, name: true, parentGuid: true },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+  });
 
-  return (
-    <HomeClient
-      totalProducts={totalProducts}
-      totalBrands={totalBrands}
-      totalCategories={totalCategories}
-    />
-  );
+  return <HomeClient categories={categories} />;
 }

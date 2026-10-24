@@ -1,147 +1,119 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowRight,
-  Boxes,
-  Heart,
-  LogIn,
-  RefreshCw,
-  ShieldCheck,
-  Sparkles,
-  Tag,
-} from "lucide-react";
+import { ArrowRight, ChevronRight, Gift, Phone, Sparkles, Tag, Tags } from "lucide-react";
 import { TopBar } from "@/components/catalog/TopBar";
+import { HomeScene } from "@/components/home/HomeScene";
+import { ProductCard } from "@/components/catalog/ProductCard";
+import { useAuthStore } from "@/store/authStore";
+import { useCartStore } from "@/store/cartStore";
+import { categoryIcon, topLevelCategories } from "@/lib/categoryIcon";
+
+type Category = { id: number; guid: string; name: string; parentGuid: string | null };
 
 type Props = {
-  totalProducts: number;
-  totalBrands: number;
-  totalCategories: number;
+  categories: Category[];
 };
 
-const FEATURES = [
-  {
-    icon: RefreshCw,
-    title: "Синхронизация с 1С:УНФ",
-    text: "Остатки и цены подтягиваются прямо со склада — вы видите то, что реально есть в наличии.",
-  },
-  {
-    icon: Tag,
-    title: "Опт и розница",
-    text: "У каждого товара сразу видна розничная и оптовая цена — без лишних запросов менеджеру.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Заказ с подтверждением",
-    text: "Заявка попадает менеджеру на проверку и уходит в 1С только после подтверждения.",
-  },
-  {
-    icon: Boxes,
-    title: "Личный кабинет",
-    text: "История заказов, статусы и возможность отменить или повторить заказ в один клик.",
-  },
+const QUICK = [
+  { key: "new", label: "Новинки", Icon: Sparkles },
+  { key: "sale", label: "Со скидкой", Icon: Tag },
+  { key: "gift", label: "Подарочные наборы", Icon: Gift },
 ];
 
-export function HomeClient({
-  totalProducts,
-  totalBrands,
-  totalCategories,
-}: Props) {
+export function HomeClient({ categories }: Props) {
   const [search, setSearch] = useState("");
+  const customer = useAuthStore((s) => s.customer);
+  const authLoading = useAuthStore((s) => s.loading);
+  const addToCart = useCartStore((s) => s.addToCart);
+  const [fresh, setFresh] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/catalog/products?page=1&quick=new&onlyStock=true&sort=popularity")
+      .then((r) => r.json())
+      .then((d) => setFresh((d.products || []).slice(0, 12)))
+      .catch(() => {});
+  }, []);
+
+  const tops = topLevelCategories(categories).slice(0, 12);
 
   return (
-    <main className="catalog-page">
+    <main className="catalog-page home-page">
       <TopBar search={search} setSearch={setSearch} />
 
-      <section className="home-hero">
-        <div className="home-hero-glow" />
+      <HomeScene />
 
-        <div className="home-hero-content">
-          <span className="catalog-hero-badge">Опт и розница</span>
-
-          <h1>
-            Косметика и парфюмерия
-            <br />
-            для вашего магазина
-          </h1>
-
-          <p>
-            Каталог из {totalProducts.toLocaleString("ru-RU")} товаров,{" "}
-            {totalBrands.toLocaleString("ru-RU")} брендов и актуальные
-            остатки — напрямую из 1С:УНФ.
-          </p>
-
-          <div className="home-hero-actions">
-            <Link href="/catalog" className="checkout-button home-hero-cta">
-              Перейти в каталог
-              <ArrowRight size={18} />
-            </Link>
-
-            <Link href="/login" className="home-hero-secondary">
-              <LogIn size={18} />
-              Войти в кабинет
+      {tops.length > 0 && (
+        <section className="home-cats" aria-labelledby="home-cats-title">
+          <div className="home-section-head">
+            <h2 id="home-cats-title">Категории товаров</h2>
+            <Link href="/catalog" className="home-link">
+              Все категории <ArrowRight size={18} />
             </Link>
           </div>
-
-          <div className="catalog-hero-stats home-hero-stats">
-            <div className="catalog-hero-stat">
-              <strong>{totalProducts.toLocaleString("ru-RU")}</strong>
-              <span>товаров</span>
-            </div>
-
-            <div className="catalog-hero-stat">
-              <strong>{totalBrands.toLocaleString("ru-RU")}</strong>
-              <span>брендов</span>
-            </div>
-
-            <div className="catalog-hero-stat">
-              <strong>{totalCategories.toLocaleString("ru-RU")}</strong>
-              <span>категорий</span>
-            </div>
+          <div className="home-cats__grid">
+            {tops.map((cat) => {
+              const icon = categoryIcon(cat.name);
+              return (
+                <Link key={cat.guid} href={`/catalog?categoryId=${cat.id}`} className="home-cat">
+                  <span className="home-cat__pic">
+                    {icon ? <img src={icon} alt="" loading="lazy" /> : <Sparkles size={40} color="#c28be8" />}
+                  </span>
+                  <span className="home-cat__label">
+                    <span>{cat.name}</span>
+                    <ChevronRight size={20} />
+                  </span>
+                </Link>
+              );
+            })}
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
-      <section className="home-features">
-        {FEATURES.map((feature) => {
-          const Icon = feature.icon;
-
-          return (
-            <div className="home-feature-card" key={feature.title}>
-              <div className="home-feature-icon">
-                <Icon size={20} />
-              </div>
-
-              <h3>{feature.title}</h3>
-              <p>{feature.text}</p>
-            </div>
-          );
-        })}
-      </section>
-
-      <section className="home-cta">
-        <div className="home-cta-content">
-          <Sparkles size={28} />
-          <h2>Готовы оформить первый заказ?</h2>
-          <p>
-            Загляните в каталог, добавьте товары в корзину — мы свяжемся с
-            вами, как только заявку подтвердит менеджер.
-          </p>
-        </div>
-
-        <Link href="/catalog" className="checkout-button home-cta-button">
-          Открыть каталог
-          <ArrowRight size={18} />
+      {!authLoading && !customer && (
+        <Link href="/login" className="home-login-banner">
+          <Tags size={22} />
+          <span className="home-login-banner__text">
+            <b>Войдите, чтобы видеть оптовые цены</b>
+            <span>И оформлять заказы с подтверждением менеджера</span>
+          </span>
+          <ChevronRight size={20} />
         </Link>
-      </section>
+      )}
 
-      <footer className="home-footer">
-        <div className="home-footer-brand">
-          <Heart size={16} />
-          Косметичка — сеть магазинов косметики и парфюмерии
-        </div>
-        <span>© {new Date().getFullYear()} Все права защищены</span>
+      <div className="home-quick" role="group" aria-label="Подборки">
+        {QUICK.map(({ key, label, Icon }) => (
+          <Link key={key} href={`/catalog?quick=${key}`} className="home-quick__chip">
+            <Icon size={18} />
+            {label}
+          </Link>
+        ))}
+      </div>
+
+      {fresh.length > 0 && (
+        <section className="home-fresh" aria-labelledby="home-fresh-title">
+          <div className="home-section-head">
+            <h2 id="home-fresh-title">Новинки</h2>
+            <Link href="/catalog?quick=new" className="home-link">
+              Все новинки <ArrowRight size={18} />
+            </Link>
+          </div>
+          <div className="home-fresh__row">
+            {fresh.map((p) => (
+              <div key={p.id} className="home-fresh__item">
+                <ProductCard product={p} addToCart={addToCart} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <footer className="home-footer app-footer">
+        <Link href="/contacts" className="app-footer__link">
+          <Phone size={17} /> Контакты и документы
+        </Link>
+        <span>© {new Date().getFullYear()} Косметичка — сеть магазинов косметики и парфюмерии</span>
       </footer>
     </main>
   );

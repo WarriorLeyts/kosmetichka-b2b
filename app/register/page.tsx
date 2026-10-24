@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { Wordmark } from "@/components/app/Wordmark";
+import { ThemeToggle } from "@/components/app/ThemeToggle";
 import Script from "next/script";
 import { useState, useRef, useCallback } from "react";
-import { Heart, Send, MessageSquare, RefreshCw, Eye, EyeOff } from "lucide-react";
+import { Heart, Send, MessageSquare, RefreshCw, Eye, EyeOff, ChevronLeft } from "lucide-react";
 
 const SMARTCAPTCHA_CLIENT_KEY =
   process.env.NEXT_PUBLIC_SMARTCAPTCHA_CLIENT_KEY ?? "";
@@ -211,21 +213,20 @@ export default function RegisterPage() {
         onLoad={initCaptcha}
       />
 
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-        <div className="w-full max-w-md rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
-          <div className="mb-8 text-center">
-            <div className="mb-3 flex justify-center">
-              <Heart className="h-10 w-10 text-pink-500" />
-            </div>
-
-            <h1 className="bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 bg-clip-text text-3xl font-black text-transparent">
-              Регистрация
-            </h1>
-
-            <p className="mt-2 text-sm font-semibold text-slate-500">
-              Создайте аккаунт для доступа к B2B-каталогу
-            </p>
-          </div>
+      <main className="app-auth">
+        <div className="app-auth__blob" aria-hidden />
+        <div className="app-auth__wrap">
+        <div className="app-auth__top">
+          <Link href="/login" className="app-auth__back" aria-label="Назад">
+            <ChevronLeft size={26} />
+          </Link>
+          <span className="app-auth__bar-title">Регистрация</span>
+          <ThemeToggle className="app-auth__theme" />
+        </div>
+        <div className="app-auth__brand"><Wordmark size={22} /></div>
+        <h1 className="app-auth__h1">Регистрация</h1>
+        <p className="app-auth__lead">Создайте аккаунт для доступа к оптовому каталогу</p>
+        <div className="app-panel app-register-panel">
 
           <form onSubmit={handleRegister} className="space-y-4">
             <input
@@ -451,6 +452,7 @@ export default function RegisterPage() {
               Войти
             </Link>
           </p>
+        </div>
         </div>
       </main>
     </>

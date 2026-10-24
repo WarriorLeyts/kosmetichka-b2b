@@ -69,12 +69,15 @@ font-family: Manrope, Montserrat, Inter, Arial, sans-serif;
 -webkit-font-smoothing: antialiased;
 }
 
-button,
-input,
-select,
-textarea {
-font-family: inherit;
-color: #1e293b;
+/* in @layer base so Tailwind utilities (text-white on gradient buttons, etc.) win over it */
+@layer base {
+  button,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+    color: var(--label, #1e293b);
+  }
 }
 
 /* Ensure placeholder text is always visible on all browsers incl. Android */

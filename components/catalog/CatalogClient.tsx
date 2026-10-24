@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, Sparkles, Tag, Gift } from "lucide-react";
 import { TopBar } from "./TopBar";
 import { CatalogSidebar } from "./CatalogSidebar";
 import { CatalogHeader } from "./CatalogHeader";
@@ -18,6 +18,12 @@ function getDescendantGuids(categories: any[], parentGuid: string): string[] {
   }
   return result;
 }
+
+const QUICK_FILTERS = [
+  { key: "new", label: "Новинки", Icon: Sparkles },
+  { key: "sale", label: "Со скидкой", Icon: Tag },
+  { key: "gift", label: "Подарочные наборы", Icon: Gift },
+] as const;
 
 export function CatalogClient({
   categories,
@@ -44,6 +50,10 @@ export function CatalogClient({
     return v ? Number(v) : null;
   });
   const [sort, setSort] = useState(() => searchParams.get("sort") || "popularity");
+  // Быстрые фильтры, как в приложении: новинки / со скидкой / подарочные наборы (?quick=new&quick=sale…)
+  const [quick, setQuick] = useState<string[]>(() =>
+    searchParams.getAll("quick").filter((q) => QUICK_FILTERS.some((f) => f.key === q))
+  );
 
   const [priceBounds, setPriceBounds] = useState({ min: 0, max: 10000 });
 
@@ -57,9 +67,10 @@ export function CatalogClient({
     if (priceMin !== null) params.set("priceMin", String(priceMin));
     if (priceMax !== null) params.set("priceMax", String(priceMax));
     if (sort !== "popularity") params.set("sort", sort);
+    quick.forEach((q) => params.append("quick", q));
     const qs = params.toString();
     router.replace(qs ? `/catalog?${qs}` : "/catalog", { scroll: false });
-  }, [search, categoryId, brandGuids, onlyStock, priceMin, priceMax, sort, router]);
+  }, [search, categoryId, brandGuids, onlyStock, priceMin, priceMax, sort, quick, router]);
 
   const [products, setProducts] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -87,7 +98,8 @@ export function CatalogClient({
         searchParams.get("onlyStock") ||
         searchParams.get("priceMin") ||
         searchParams.get("priceMax") ||
-        searchParams.get("sort");
+        searchParams.get("sort") ||
+        searchParams.getAll("quick").length > 0;
       if (urlHasFilters) return;
 
       const savedScroll = sessionStorage.getItem("catalog_scroll");
@@ -193,6 +205,7 @@ export function CatalogClient({
 
     if (priceMin !== null) params.set("priceMin", String(priceMin));
     if (priceMax !== null) params.set("priceMax", String(priceMax));
+    quick.forEach((q) => params.append("quick", q));
 
     try {
       const res = await fetch(`/api/catalog/products?${params.toString()}`, {
@@ -241,6 +254,7 @@ export function CatalogClient({
     priceMin,
     priceMax,
     sort,
+    quick,
   ]);
 
   useEffect(() => {
@@ -311,6 +325,23 @@ export function CatalogClient({
             <SlidersHorizontal size={16} />
             Фильтры и цена
           </button>
+
+          <div className="quick-filters app-quick-row" role="group" aria-label="Быстрые фильтры">
+            {QUICK_FILTERS.map((f) => {
+              const on = quick.includes(f.key);
+              return (
+                <button
+                  key={f.key}
+                  type="button"
+                  className={`quick-filter-chip${on ? " active" : ""}`}
+                  aria-pressed={on}
+                  onClick={() => setQuick((q) => (on ? q.filter((x) => x !== f.key) : [...q, f.key]))}
+                >
+                  <f.Icon size={16} aria-hidden /> {f.label}
+                </button>
+              );
+            })}
+          </div>
 
           <CatalogHeader total={total} sort={sort} setSort={setSort} />
 

@@ -218,7 +218,7 @@ export function ProductPageClient({
       {/* ── Mobile floating back button — always visible while scrolling ── */}
       <button
         onClick={() => goBack()}
-        className="fixed bottom-20 left-4 z-40 flex md:hidden items-center gap-1.5 rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 px-4 py-2.5 text-sm font-black text-white shadow-xl transition active:scale-95"
+        className="app-float-back fixed left-4 z-40 flex md:hidden items-center gap-1.5 rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-blue-700 px-4 py-2.5 text-sm font-black text-white shadow-xl transition active:scale-95"
         style={{ color: "#fff" }}
         aria-label="Назад в каталог"
       >
@@ -473,7 +473,7 @@ export function ProductPageClient({
         </section>
 
         {/* ── Sticky inner nav (WB-style tabs) ────────────────────────── */}
-        <div className="sticky top-0 z-20 border-b border-slate-200 bg-white shadow-sm">
+        <div className="app-tabs-bar sticky top-0 z-20 border-b border-slate-200">
           <div className="mx-auto max-w-7xl px-4 md:px-6">
             <div className="flex gap-0 overflow-x-auto">
               {tabs.map((tab) => (
