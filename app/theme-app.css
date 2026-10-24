@@ -561,7 +561,8 @@ html[data-theme="dark"] .home-cat__label svg { color: #D7B8FF; }
 .app-quick-row .quick-filter-chip.active svg { color: #fff; }
 
 /* страницы-обёртки со сплошным светлым фоном → прозрачные, чтобы был виден фон приложения */
-main.bg-slate-50, div.min-h-screen.bg-slate-50, main.min-h-screen.bg-white, div.min-h-screen.bg-white { background: transparent !important; }
+main.bg-slate-50, div.min-h-screen.bg-slate-50, main.min-h-screen.bg-white, div.min-h-screen.bg-white,
+html[data-theme="dark"] main.bg-slate-50, html[data-theme="dark"] div.min-h-screen.bg-slate-50, html[data-theme="dark"] main.min-h-screen.bg-white, html[data-theme="dark"] div.min-h-screen.bg-white { background: transparent !important; }
 
 /* ---------- вход / регистрация — как экраны приложения ---------- */
 .app-auth { position: relative; min-height: 100vh; padding: 0 20px 40px; overflow: hidden; }
@@ -692,3 +693,24 @@ html[data-theme="dark"] .app-register-panel input:not([type="checkbox"]):not([ty
 .card-actions .favorite-button + .favorite-button + .favorite-button { display: none !important; }
 .card-actions .cart-button { white-space: nowrap; padding-left: 12px !important; padding-right: 12px !important; }
 .app-page > .max-w-md { margin: 28px auto 0; width: calc(100% - 32px); }
+
+/* нижнее меню — на всех ширинах, где шапка в мобильном виде (≤900px), иначе корзина недоступна */
+@media (max-width: 900px) {
+  .mobile-bottom-nav { display: flex !important; position: fixed !important; z-index: 40 !important; align-items: center !important; }
+  .mobile-bottom-nav-item {
+    display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important;
+    text-decoration: none; cursor: pointer; padding: 6px 4px !important;
+  }
+  .mobile-bottom-nav-item:hover:not(.active) { color: #8b3dff !important; }
+  .mobile-bottom-nav-badge {
+    position: absolute; top: -4px; right: -10px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+    color: #fff; font-size: 9.5px; font-weight: 800; line-height: 14px; text-align: center;
+  }
+  .app-page, .catalog-page, .orders-page { padding-bottom: 110px !important; }
+}
+/* основные кнопки внутренних страниц (профиль и т.п.) — градиент приложения */
+main.app-page button.bg-indigo-600, main.app-page button.bg-blue-600 {
+  background: var(--grad-primary) !important; border-radius: 16px !important; box-shadow: 0 8px 20px rgba(194, 26, 208, 0.28);
+}
+html[data-theme="dark"] .cart-drawer .cart-item { background: var(--cell-2) !important; border-color: var(--sep) !important; }
+.cart-drawer .cart-item { border-radius: 18px !important; }

@@ -11,6 +11,21 @@ TXT = {
 }
 BORDER = r'#e2e8f0|#e5e7eb|#f1f5f9|#eef2f7|#e8eaf0|#edf0f5|#f3f4f6|#cbd5e1|#d1d5db'
 out = []
+def is_light(value):
+    # every colour in the value is near-white (light hex, white, light rgba) and there is at least one
+    cols = re.findall(r'#([0-9a-f]{6}|[0-9a-f]{3})\b|rgba?\(([^)]*)\)|\b(white)\b', value)
+    if not cols or 'url(' in value: return False
+    for hx, rgb, w in cols:
+        if w: continue
+        if hx:
+            if len(hx) == 3: hx = ''.join(c * 2 for c in hx)
+            ch = [int(hx[i:i + 2], 16) for i in (0, 2, 4)]
+        else:
+            parts = [x.strip() for x in rgb.split(',')]
+            ch = [float(x) for x in parts[:3]]
+            if len(parts) > 3 and float(parts[3]) < 0.5: continue  # mostly transparent — ignore
+        if min(ch) < 236: return False
+    return True
 def walk(text, prefix=''):
     i = 0
     while i < len(text):
@@ -29,8 +44,8 @@ def walk(text, prefix=''):
         elif not sel.startswith('@') and sel not in (':root', '*', 'html', 'body') and '%' not in sel and sel not in ('from', 'to'):
             decl = []
             b = body.lower()
-            m = re.search(r'background(-color)?\s*:\s*' + BG, b)
-            if m: decl.append('background: var(--cell)')
+            m = re.search(r'background(-color)?\s*:\s*([^;]+)', b)
+            if m and (re.match(BG, m.group(2).strip()) or is_light(m.group(2))): decl.append('background: var(--cell)')
             m = re.search(r'(?:^|;|\s)color\s*:\s*(#[0-9a-f]{6})', b)
             if m and m.group(1) in TXT: decl.append('color: ' + TXT[m.group(1)])
             m = re.search(r'(border(?:-top|-bottom|-left|-right)?)\s*:\s*([^;]*?)(' + BORDER + ')', b)
