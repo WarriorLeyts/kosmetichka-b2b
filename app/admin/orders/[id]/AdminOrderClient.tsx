@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { renderMsgContent, getProductImageUrl } from "@/lib/renderMsgContent";
+import { CHAT_ACCEPT, attachmentMessage, type ChatUpload } from "@/lib/chatAttachments";
 import type { IScannerControls } from "@zxing/browser";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -386,9 +387,14 @@ export default function AdminOrderClient({
       const formData = new FormData();
       formData.append("file", file);
       const res = await fetch("/api/uploads/chat", { method: "POST", body: formData });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        alert(err?.error || "Не удалось загрузить файл");
+      }
       if (res.ok) {
-        const data = await res.json();
-        const msgJson = JSON.stringify({ _t: "img", url: data.url });
+        const data = (await res.json()) as ChatUpload;
+        // photo, video or file — the same message format the site and the app show
+        const msgJson = attachmentMessage({ ...data, kind: data.kind ?? "img" });
         if (target === "picker") await sendPickerMessage(msgJson);
         else await sendCustomerMessage(msgJson);
       }
@@ -1449,11 +1455,11 @@ export default function AdminOrderClient({
               </div>
               <div className="border-t p-3 flex gap-2 items-center">
                 {/* Image upload */}
-                <label className="cursor-pointer rounded-xl border px-3 py-2 text-lg hover:bg-slate-50 shrink-0">
-                  {uploadingImg === "customer" ? "⏳" : "📷"}
+                <label className="cursor-pointer rounded-xl border px-3 py-2 text-lg hover:bg-slate-50 shrink-0" title="Фото, видео или файл">
+                  {uploadingImg === "customer" ? "⏳" : "📎"}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept={CHAT_ACCEPT}
                     className="hidden"
                     disabled={uploadingImg !== null}
                     onChange={(e) => {
@@ -1518,11 +1524,11 @@ export default function AdminOrderClient({
               </div>
               <div className="border-t p-3 flex gap-2 items-center">
                 {/* Image upload */}
-                <label className="cursor-pointer rounded-xl border px-3 py-2 text-lg hover:bg-slate-50 shrink-0">
-                  {uploadingImg === "picker" ? "⏳" : "📷"}
+                <label className="cursor-pointer rounded-xl border px-3 py-2 text-lg hover:bg-slate-50 shrink-0" title="Фото, видео или файл">
+                  {uploadingImg === "picker" ? "⏳" : "📎"}
                   <input
                     type="file"
-                    accept="image/*"
+                    accept={CHAT_ACCEPT}
                     className="hidden"
                     disabled={uploadingImg !== null}
                     onChange={(e) => {
