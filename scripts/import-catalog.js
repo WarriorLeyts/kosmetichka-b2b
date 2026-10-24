@@ -19,7 +19,12 @@ function toArray(value) {
 function getBrandGuid(product) {
   const properties = toArray(product.ЗначенияСвойств?.ЗначенияСвойства);
   const brandProp = properties.find((p) => p.Ид === BRAND_PROPERTY_ID);
-  return brandProp?.Значение || null;
+  const value = brandProp?.Значение ? String(brandProp.Значение) : null;
+  // 1С присылает пустую ссылку 00000000-... для товаров без бренда. Такой бренд
+  // в справочнике отсутствует, upsert падал по внешнему ключу, и в повторной
+  // попытке у товара обнулялась ещё и категория.
+  if (!value || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(value)) return null;
+  return value;
 }
 
 function getRequisite(product, names) {
