@@ -408,7 +408,7 @@ html[data-theme="dark"] .app-header { background: rgba(43, 25, 61, 0.55); }
   }
   html[data-theme="dark"] .app-header { background: transparent; }
   .app-header__brand { display: contents; }
-  .app-header__brand .app-wordmark { grid-column: 2; grid-row: 1; justify-self: center; align-self: center; font-size: min(19px, calc((100vw - 236px) / 10.2)) !important; }
+  .app-header__brand .app-wordmark { grid-column: 2; grid-row: 1; justify-self: center; align-self: center; font-size: min(19px, calc((100vw - 236px) / 11.8)) !important; }
   .app-header__subtitle { display: block; grid-column: 1 / -1; grid-row: 2; text-align: center; font-size: 14px; margin: 6px 0 0; }
   .app-header__left { grid-column: 1; grid-row: 1; justify-self: start; }
   .app-header__actions { grid-column: 3; grid-row: 1; justify-self: end; gap: 6px; }
@@ -421,7 +421,7 @@ html[data-theme="dark"] .app-header { background: rgba(43, 25, 61, 0.55); }
 }
 @media (max-width: 380px) {
   .app-header .app-glass, .app-catalog-btn { width: 38px !important; height: 38px !important; }
-  .app-header__brand .app-wordmark { font-size: min(17px, calc((100vw - 220px) / 8.6)) !important; }
+  .app-header__brand .app-wordmark { font-size: min(17px, calc((100vw - 220px) / 11.8)) !important; }
 }
 
 /* ---------- нижнее меню на телефоне — как TabBar приложения ---------- */
@@ -448,24 +448,21 @@ html[data-theme="dark"] .app-header { background: rgba(43, 25, 61, 0.55); }
 .mobile-bottom-nav-badge { background: #e82c87 !important; border: 1.5px solid #fff; }
 
 /* ---------- надпись «КОСМЕТИЧКА» ---------- */
+/* логотип-сердце (красный) — перед надписью */
 .app-wordmark {
-  position: relative; display: inline-flex; white-space: nowrap;
-  padding-top: 0.5em; line-height: 1.25;
-  font-weight: 400; letter-spacing: 0.17em; margin-right: -0.17em;
+  position: relative; display: inline-flex; align-items: center; white-space: nowrap;
+  line-height: 1.25; font-weight: 400; letter-spacing: 0.17em; margin-right: -0.17em;
   color: var(--brand-violet);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, "Segoe UI", Roboto, Arial, sans-serif;
 }
-html[data-theme="dark"] .app-wordmark, .app-wordmark--light { color: #FAF7FD; }
-.app-wordmark--light { color: #fff; }
-.app-wordmark__i { position: relative; }
-.app-wordmark__i::before {
-  content: ""; position: absolute;
-  width: 0.62em; height: 0.62em;
-  left: 50%; top: -0.27em; transform: translateX(-50%);
+.app-wordmark::before {
+  content: ""; flex-shrink: 0; width: 1.1em; height: 1.1em; margin-right: 0.4em;
   background: #E8202A;
   -webkit-mask: url(/app/home2/logo-white.png) center / contain no-repeat;
   mask: url(/app/home2/logo-white.png) center / contain no-repeat;
 }
+html[data-theme="dark"] .app-wordmark, .app-wordmark--light { color: #FAF7FD; }
+.app-wordmark--light { color: #fff; }
 @media (max-width: 900px) {
   /* на телефоне «Каталог» — стеклянная круглая кнопка рядом с переключателем темы */
   .app-catalog-btn {
