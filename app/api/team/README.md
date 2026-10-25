@@ -364,6 +364,9 @@ Body `{ login: string; password: string }`.
 200 `{ success: true; role: string }` + Set-Cookie `admin_token`. 401 `{ error: "Неверный логин или пароль" }`.
 После входа: `role === "picker"` → экран сборщика, иначе — админ-экраны.
 
+**POST /api/team/logout** — A, M, P. Удаляет cookie `admin_token`. 200 `{ success: true }`.
+Приложение выходит через него (для сборщика `/api/admin/logout` закрыт middleware).
+
 **POST /api/admin/logout** — A, M. 200 `{ success: true }`, удаляет cookie.
 ⚠ Для `picker` middleware отвечает 403 и cookie **не** удаляется — приложение должно просто
 стереть cookie у себя (то же происходит и на сайте).
