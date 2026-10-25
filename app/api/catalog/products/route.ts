@@ -13,6 +13,37 @@ function maskGuestPrices(product: any) {
   return { ...rest, prices: [] };
 }
 
+/**
+ * Wholesale prices and «sale» guids for the whole catalog, kept for 2 minutes.
+ * Price sort / price range / sale used to send IN-lists of ~12k guids to the DB
+ * on every page; one cached pass over ProductPrice is far cheaper.
+ */
+type PriceIndex = { at: number; wholesale: Map<string, number>; sale: Set<string> };
+let priceMemo: PriceIndex | null = null;
+let priceMemoLoading: Promise<PriceIndex> | null = null;
+async function priceIndex(): Promise<PriceIndex> {
+  if (priceMemo && Date.now() - priceMemo.at < 120_000) return priceMemo;
+  if (!priceMemoLoading) {
+    priceMemoLoading = prisma.productPrice
+      .findMany({ where: { priceType: { in: ["wholesale", "discount"] } }, select: { productGuid: true, priceType: true, price: true } })
+      .then((rows) => {
+        const wholesale = new Map<string, number>();
+        const sale = new Set<string>();
+        for (const r of rows) {
+          if (r.priceType === "wholesale") wholesale.set(r.productGuid, r.price);
+          else sale.add(r.productGuid);
+        }
+        const next: PriceIndex = { at: Date.now(), wholesale, sale };
+        priceMemo = next;
+        return next;
+      })
+      .finally(() => {
+        priceMemoLoading = null;
+      });
+  }
+  return priceMemoLoading;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
@@ -81,6 +112,8 @@ export async function GET(request: Request) {
     images: { take: 1 },
     prices: true,
   };
+  // ?lite=1 (mobile apps): no description — it is ~65% of the page and cards don't show it
+  const omit = searchParams.get("lite") === "1" ? { description: true } : undefined;
 
   const applyPrices = (product: any) => {
     const flat = withFlatPrices(product);
@@ -113,6 +146,7 @@ export async function GET(request: Request) {
         skip: (page - 1) * limit,
         take: limit,
         include,
+        omit,
         orderBy,
       }),
       prisma.product.count({ where }),
@@ -135,42 +169,19 @@ export async function GET(request: Request) {
   // key lives in a separate relation), but even then the candidate set is
   // already price-filtered before it reaches memory.
 
-  // ── Step 1: resolve price-range filter via ProductPrice table ────────────
-  let priceRangeGuids: string[] | null = null;
-  if (priceMin !== null || priceMax !== null) {
-    const priceWhere: any = { priceType: "wholesale" };
-    if (priceMin !== null && priceMax !== null) {
-      priceWhere.price = { gte: priceMin, lte: priceMax };
-    } else if (priceMin !== null) {
-      priceWhere.price = { gte: priceMin };
-    } else {
-      priceWhere.price = { lte: priceMax! };
+  // ── Steps 1–3: price range / sale → guid constraint (from the cached index) ──
+  const prices = await priceIndex();
+  if (priceMin !== null || priceMax !== null || quick.includes("sale")) {
+    const merged: string[] = [];
+    for (const [guid, price] of prices.wholesale) {
+      if (priceMin !== null && price < priceMin) continue;
+      if (priceMax !== null && price > priceMax) continue;
+      if (quick.includes("sale") && !prices.sale.has(guid)) continue;
+      merged.push(guid);
     }
-    const rows = await prisma.productPrice.findMany({
-      where: priceWhere,
-      select: { productGuid: true },
-    });
-    priceRangeGuids = rows.map((r) => r.productGuid);
-  }
-
-  // ── Step 2: resolve sale filter via ProductPrice table ───────────────────
-  let saleGuids: string[] | null = null;
-  if (quick.includes("sale")) {
-    const rows = await prisma.productPrice.findMany({
-      where: { priceType: "discount" },
-      select: { productGuid: true },
-    });
-    saleGuids = rows.map((r) => r.productGuid);
-  }
-
-  // ── Step 3: merge guid constraints and inject into product where ─────────
-  if (priceRangeGuids !== null || saleGuids !== null) {
-    let merged: string[];
-    if (priceRangeGuids !== null && saleGuids !== null) {
-      const saleSet = new Set(saleGuids);
-      merged = priceRangeGuids.filter((g) => saleSet.has(g));
-    } else {
-      merged = (priceRangeGuids ?? saleGuids)!;
+    // sale without a price range: products with a discount but no wholesale price count too
+    if (quick.includes("sale") && priceMin === null && priceMax === null) {
+      for (const guid of prices.sale) if (!prices.wholesale.has(guid)) merged.push(guid);
     }
     where.guid = { in: merged };
   }
@@ -192,6 +203,7 @@ export async function GET(request: Request) {
         skip: (page - 1) * limit,
         take: limit,
         include,
+        omit,
         orderBy,
       }),
       prisma.product.count({ where }),
@@ -221,12 +233,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ nameAnyApplied: nameAny.length > 0, products: [], total: 0, page, hasMore: false });
   }
 
-  const matchedGuids = matched.map((p) => p.guid);
-  const sortPrices = await prisma.productPrice.findMany({
-    where: { productGuid: { in: matchedGuids }, priceType: "wholesale" },
-    select: { productGuid: true, price: true },
-  });
-  const priceByGuid = new Map(sortPrices.map((r) => [r.productGuid, r.price]));
+  const priceByGuid = prices.wholesale;
 
   matched.sort((a, b) => {
     const pa = priceByGuid.get(a.guid) ?? Infinity;
@@ -240,6 +247,7 @@ export async function GET(request: Request) {
   const products = await prisma.product.findMany({
     where: { id: { in: pageIds } },
     include,
+    omit,
   });
 
   const productById = new Map(products.map((p) => [p.id, p]));
