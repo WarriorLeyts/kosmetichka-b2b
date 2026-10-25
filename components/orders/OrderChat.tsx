@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Send, MessageSquare, ChevronDown, ChevronUp, X } from "lucide-react";
+import { Send, MessageSquare, ChevronDown, ChevronUp, X, Paperclip, Loader2 } from "lucide-react";
 import { renderMsgContent } from "@/lib/renderMsgContent";
+import { CHAT_ACCEPT, attachmentMessage, type ChatUpload } from "@/lib/chatAttachments";
 
 type Message = {
   id: number;
@@ -23,6 +24,8 @@ export function OrderChat({ orderId, onOpenChange }: Props) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unread, setUnread] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -134,6 +137,39 @@ export function OrderChat({ orderId, onOpenChange }: Props) {
     }
   }
 
+  /** photo, video or file: upload, then send it as a chat message */
+  async function sendAttachment(file: File) {
+    if (uploading) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const up = await fetch("/api/uploads/chat", { method: "POST", body: form });
+      const data = await up.json().catch(() => null);
+      if (!up.ok || !data?.url) {
+        setError(data?.error || "Не удалось загрузить файл");
+        return;
+      }
+      const res = await fetch(`/api/orders/${orderId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: attachmentMessage(data as ChatUpload) }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        setError(d?.error || "Ошибка отправки");
+        return;
+      }
+      await fetchMessages();
+      setTimeout(scrollToBottom, 50);
+    } catch {
+      setError("Нет соединения");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -201,6 +237,27 @@ export function OrderChat({ orderId, onOpenChange }: Props) {
 
           {/* Input */}
           <div className="order-chat-input-wrap">
+            <button
+              type="button"
+              className="order-chat-attach"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              aria-label="Прикрепить фото, видео или файл"
+              title="Фото, видео или файл"
+            >
+              {uploading ? <Loader2 size={16} className="animate-spin" /> : <Paperclip size={16} />}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept={CHAT_ACCEPT}
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) sendAttachment(f);
+                e.target.value = "";
+              }}
+            />
             <textarea
               ref={inputRef}
               className="order-chat-input"

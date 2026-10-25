@@ -21,4 +21,4 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
       - name: Lint changed files
-        run: npx eslint app/api/team || true
+        run: npx eslint app/api/team lib/chatAttachments.ts lib/renderMsgContent.tsx components/orders/OrderChat.tsx app/api/uploads/chat || true
