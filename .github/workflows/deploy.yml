@@ -1,0 +1,57 @@
+name: Deploy
+
+# Выкладка на сервер kosmetichka-opt.ru: после каждого изменения в main
+# и вручную (Actions → Deploy → Run workflow).
+# Нужны секреты репозитория: DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY
+# (и DEPLOY_PORT, если SSH не на 22-м порту).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Команда на сервере (по умолчанию bash ~/deploy.sh)"
+        required: false
+        default: ""
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: SSH key
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$HOST" ]; then
+            echo "::error::Не заданы секреты DEPLOY_SSH_KEY / DEPLOY_HOST"; exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "${PORT:-22}" "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Run deploy on server
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+          CMD: ${{ github.event.inputs.command }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "${PORT:-22}" -o ServerAliveInterval=30 \
+            "${USER:-root}@$HOST" "bash -lc $(printf '%q' "${CMD:-bash ~/deploy.sh}")"
+
+      - name: Check site
+        run: |
+          for i in $(seq 1 20); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://kosmetichka-opt.ru/)
+            echo "home: $code"; [ "$code" = 200 ] && exit 0; sleep 15
+          done
+          echo "::error::Сайт не ответил 200 после выкладки"; exit 1
