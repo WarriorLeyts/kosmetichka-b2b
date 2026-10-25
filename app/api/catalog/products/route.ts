@@ -28,6 +28,13 @@ export async function GET(request: Request) {
   const categoryGuids = searchParams.getAll("categoryGuid").filter(Boolean);
   const brandGuids = searchParams.getAll("brandGuid").filter(Boolean);
   const search = searchParams.get("search");
+  // Product-type filter of the mobile app («Мисты», «Спреи»…): the name contains
+  // any of these fragments. Combined with everything else via AND.
+  const nameAny = searchParams
+    .getAll("nameAny")
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 2)
+    .slice(0, 20);
   const onlyStock = searchParams.get("onlyStock") === "true";
 
   const priceMinParam = searchParams.get("priceMin");
@@ -53,6 +60,9 @@ export async function GET(request: Request) {
     ...(quick.includes("new") ? { createdAt: { gte: newSince } } : {}),
     ...(quick.includes("gift")
       ? { name: { contains: "Подарок", mode: "insensitive" } }
+      : {}),
+    ...(nameAny.length > 0
+      ? { AND: [{ OR: nameAny.map((s) => ({ name: { contains: s, mode: "insensitive" } })) }] }
       : {}),
     ...(search
       ? {
@@ -109,6 +119,7 @@ export async function GET(request: Request) {
     ]);
 
     return NextResponse.json({
+      nameAnyApplied: nameAny.length > 0,
       products: products.map(applyPrices),
       total,
       page,
@@ -187,6 +198,7 @@ export async function GET(request: Request) {
     ]);
 
     return NextResponse.json({
+      nameAnyApplied: nameAny.length > 0,
       products: products.map(applyPrices),
       total,
       page,
@@ -206,7 +218,7 @@ export async function GET(request: Request) {
   });
 
   if (matched.length === 0) {
-    return NextResponse.json({ products: [], total: 0, page, hasMore: false });
+    return NextResponse.json({ nameAnyApplied: nameAny.length > 0, products: [], total: 0, page, hasMore: false });
   }
 
   const matchedGuids = matched.map((p) => p.guid);
@@ -236,6 +248,7 @@ export async function GET(request: Request) {
     .filter((p): p is NonNullable<typeof p> => Boolean(p));
 
   return NextResponse.json({
+    nameAnyApplied: nameAny.length > 0,
     products: ordered.map(applyPrices),
     total,
     page,
