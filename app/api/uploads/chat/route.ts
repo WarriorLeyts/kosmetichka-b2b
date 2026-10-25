@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
 import { verifyToken } from "@/lib/auth";
+import { verifyCustomerToken } from "@/lib/customerAuth";
 import { writeFile, mkdir } from "fs/promises";
+import { randomBytes } from "crypto";
 import path from "path";
 import { CHAT_DIR, typeForExt } from "./storage";
-
-function getSecret() {
-  return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
-}
 
 async function getAnyUser(): Promise<boolean> {
   const cookieStore = await cookies();
@@ -16,17 +13,15 @@ async function getAnyUser(): Promise<boolean> {
   // Try admin_token (admin, manager, picker)
   const adminToken = cookieStore.get("admin_token")?.value;
   if (adminToken) {
-    try {
-      const { payload } = await jwtVerify(adminToken, getSecret());
-      const role = payload.role as string;
-      if (["admin", "manager", "picker"].includes(role)) return true;
-    } catch {}
+    const payload = await verifyToken(adminToken);
+    const role = payload?.role as string | undefined;
+    if (role && ["admin", "manager", "picker"].includes(role)) return true;
   }
 
   // Try auth_token (customer — site and mobile app)
   const authToken = cookieStore.get("auth_token")?.value;
   if (authToken) {
-    const payload = await verifyToken(authToken);
+    const payload = await verifyCustomerToken(authToken);
     if (payload?.id) return true;
   }
 
@@ -62,7 +57,7 @@ export async function POST(request: Request) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
   await mkdir(CHAT_DIR, { recursive: true });
-  const filename = `chat-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const filename = `chat-${Date.now()}-${randomBytes(8).toString("hex")}.${ext}`;
   await writeFile(path.join(CHAT_DIR, filename), buffer);
 
   const name = (file.name || filename).slice(0, 120);

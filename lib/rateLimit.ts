@@ -69,3 +69,22 @@ export const messageLimiter = new RateLimiter({
   windowMs: 10 * 60 * 1000, // 10 minutes
   max: 30,
 });
+
+// ── Client IP ────────────────────────────────────────────────────────────────
+
+/**
+ * Client IP for rate-limit keys. nginx sets `X-Real-IP $remote_addr`, which the
+ * client cannot forge, so it wins. Without it, take the LAST X-Forwarded-For
+ * entry (the one appended by our proxy) — the first entries are client-supplied
+ * and trivially spoofable.
+ */
+export function getClientIp(request: Request, fallback = "unknown"): string {
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) {
+    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    if (parts.length) return parts[parts.length - 1];
+  }
+  return fallback;
+}

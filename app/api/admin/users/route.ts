@@ -1,30 +1,36 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminRole } from "@/lib/auth";
+
+const VALID_ROLES = ["manager", "picker", "admin"];
 
 export async function POST(request: Request) {
-  if (!(await requireAdmin())) {
-    return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+  // Staff accounts are managed by admins only (same as the /admin/users pages)
+  if (!(await requireAdminRole())) {
+    return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
   }
 
-  const { name, login, password, role } = await request.json();
+  const body = await request.json().catch(() => null);
+  const { name, login, password, role } = body ?? {};
 
-  if (!name || !login || !password) {
+  if (
+    !name || !login || !password ||
+    typeof name !== "string" || typeof login !== "string" || typeof password !== "string"
+  ) {
     return NextResponse.json(
       { error: "Заполните имя, логин и пароль" },
       { status: 400 }
     );
   }
 
-  const VALID_ROLES = ["manager", "picker", "admin"];
-  const safeRole = VALID_ROLES.includes(role) ? role : "manager";
   if (role && !VALID_ROLES.includes(role)) {
     return NextResponse.json(
       { error: "Недопустимая роль. Разрешено: manager, picker, admin" },
       { status: 400 }
     );
   }
+  const safeRole = VALID_ROLES.includes(role) ? role : "manager";
 
   const exists = await prisma.user.findUnique({
     where: { login },

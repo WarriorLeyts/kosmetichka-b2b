@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
 import { messageLimiter } from "@/lib/rateLimit";
 
@@ -8,7 +8,7 @@ async function getCustomer() {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
   if (!token) return null;
-  const payload = await verifyToken(token);
+  const payload = await verifyCustomerToken(token);
   if (!payload?.id) return null;
   return { id: payload.id as number };
 }

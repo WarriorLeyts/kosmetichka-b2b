@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { verifyCustomerToken } from "@/lib/customerAuth";
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -11,7 +11,7 @@ export async function GET() {
     return NextResponse.json({ customer: null });
   }
 
-  const payload = await verifyToken(token);
+  const payload = await verifyCustomerToken(token);
 
   if (!payload?.id) {
     return NextResponse.json({ customer: null });

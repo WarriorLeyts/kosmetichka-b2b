@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../_auth";
+import { normalizePhone } from "@/lib/phone";
 
 const SELECT = {
   id: true,
@@ -56,6 +57,24 @@ export async function PATCH(request: Request) {
     if (email !== current?.email) {
       const taken = await prisma.customer.findFirst({ where: { email, NOT: { id } } });
       if (taken) return fail("email_taken");
+    }
+  }
+
+  // Another customer's phone can't be taken over (phone is used as a login)
+  if (phone.trim()) {
+    const current = await prisma.customer.findUnique({ where: { id }, select: { phone: true } });
+    if (phone !== current?.phone) {
+      const variants = Array.from(new Set([phone, phone.trim(), normalizePhone(phone)].filter(Boolean)));
+      const taken = await prisma.customer.findFirst({
+        where: { phone: { in: variants }, NOT: { id } },
+        select: { id: true },
+      });
+      if (taken) {
+        return NextResponse.json(
+          { error: "Этот телефон уже используется другим аккаунтом", code: "phone_taken" },
+          { status: 409 }
+        );
+      }
     }
   }
 

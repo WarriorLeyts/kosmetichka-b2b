@@ -1,30 +1,41 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { denyIfNotAllowed, getPickerUser, parseId, type PickerUser } from "../../_access";
 
-async function getStaffUser() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token")?.value;
-  if (!token) return null;
-  const payload = await verifyToken(token);
-  if (!payload) return null;
-  const role = payload.role as string;
-  if (!["admin", "manager", "picker"].includes(role)) return null;
-  return { id: payload.id as number, role };
+/** Validates the order id and the caller's access to the order. */
+async function checkOrder(
+  user: PickerUser,
+  rawId: string
+): Promise<{ orderId: number } | { response: NextResponse }> {
+  const orderId = parseId(rawId);
+  if (!orderId) {
+    return { response: NextResponse.json({ error: "Неверный ID" }, { status: 400 }) };
+  }
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { pickerId: true },
+  });
+  if (!order) {
+    return { response: NextResponse.json({ error: "Заказ не найден" }, { status: 404 }) };
+  }
+  const denied = denyIfNotAllowed(user, order);
+  if (denied) return { response: denied };
+  return { orderId };
 }
 
 export async function GET(
   _: Request,
   { params }: { params: Promise<{ orderId: string }> }
 ) {
-  const user = await getStaffUser();
+  const user = await getPickerUser();
   if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
 
-  const { orderId } = await params;
+  const checked = await checkOrder(user, (await params).orderId);
+  if ("response" in checked) return checked.response;
+  const { orderId } = checked;
 
   const msgs = await prisma.orderMessage.findMany({
-    where: { orderId: Number(orderId), source: "picker" },
+    where: { orderId, source: "picker" },
     orderBy: { createdAt: "asc" },
     include: { user: { select: { name: true } } },
   });
@@ -45,12 +56,14 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ orderId: string }> }
 ) {
-  const user = await getStaffUser();
+  const user = await getPickerUser();
   if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
 
-  const { orderId } = await params;
+  const checked = await checkOrder(user, (await params).orderId);
+  if ("response" in checked) return checked.response;
+  const { orderId } = checked;
 
-  const { text } = await request.json();
+  const { text } = (await request.json().catch(() => null)) ?? {};
   if (!text || typeof text !== "string" || text.trim().length === 0) {
     return NextResponse.json({ error: "Пустое сообщение" }, { status: 400 });
   }
@@ -62,7 +75,7 @@ export async function POST(
 
   const msg = await prisma.orderMessage.create({
     data: {
-      orderId: Number(orderId),
+      orderId,
       text: text.trim(),
       source: "picker",
       isFromPicker,

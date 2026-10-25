@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { verifyCustomerToken } from "@/lib/customerAuth";
 
 async function bitrixCall(webhookUrl: string, method: string, body: object): Promise<any> {
   const res = await fetch(`${webhookUrl}${method}.json`, {
@@ -61,7 +61,7 @@ export async function POST(request: Request, { params }: Props) {
     return NextResponse.json({ error: "Нужно войти в аккаунт" }, { status: 401 });
   }
 
-  const payload = await verifyToken(token);
+  const payload = await verifyCustomerToken(token);
 
   if (!payload?.id) {
     return NextResponse.json({ error: "Ошибка авторизации" }, { status: 401 });

@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { verifyCustomerToken } from "@/lib/customerAuth";
 import { sendMail } from "@/lib/mail";
 import { effectivePriceType } from "@/lib/pricing";
 import { orderCreationLimiter } from "@/lib/rateLimit";
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Нужно войти в аккаунт" }, { status: 401 });
   }
 
-  const payload = await verifyToken(token);
+  const payload = await verifyCustomerToken(token);
 
   if (!payload?.id) {
     return NextResponse.json({ error: "Ошибка авторизации" }, { status: 401 });
