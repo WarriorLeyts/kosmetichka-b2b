@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
+import { normalizePhone } from "@/lib/phone";
 import bcrypt from "bcryptjs";
 import PasswordInput from "@/components/PasswordInput";
 import { AuthInit } from "@/components/AuthInit";
@@ -47,6 +48,19 @@ async function updateProfile(formData: FormData) {
     }
   }
 
+  // Another customer's phone can't be taken over (phone is used as a login)
+  if (phone.trim()) {
+    const current = await prisma.customer.findUnique({ where: { id }, select: { phone: true } });
+    if (phone !== current?.phone) {
+      const variants = Array.from(new Set([phone, phone.trim(), normalizePhone(phone)].filter(Boolean)));
+      const phoneTaken = await prisma.customer.findFirst({
+        where: { phone: { in: variants }, NOT: { id } },
+        select: { id: true },
+      });
+      if (phoneTaken) redirect("/profile?error=phone_taken");
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: any = { name, companyName, phone, email, city, address };
 
@@ -80,6 +94,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   password_mismatch: "Пароли не совпадают",
   password_too_short: "Пароль должен быть не короче 6 символов",
   email_taken: "Этот email уже используется другим аккаунтом",
+  phone_taken: "Этот телефон уже используется другим аккаунтом",
   current_password_required: "Введите текущий пароль для смены пароля",
   current_password_wrong: "Текущий пароль введён неверно",
 };

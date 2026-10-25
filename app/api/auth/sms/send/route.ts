@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { toSmsAeroPhone } from "@/lib/phone";
+import { getClientIp } from "@/lib/rateLimit";
 
 function generateCode(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -57,10 +58,7 @@ export async function POST(request: Request) {
     }
 
     // Rate limit: не более 10 SMS в час с одного IP
-    const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-      request.headers.get("x-real-ip") ||
-      "unknown";
+    const ip = getClientIp(request);
 
     const SMS_IP_MAX = 10;
     const SMS_IP_WINDOW_MS = 60 * 60 * 1000; // 1 час

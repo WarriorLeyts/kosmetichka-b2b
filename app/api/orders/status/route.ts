@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { verifyCustomerToken } from "@/lib/customerAuth";
 import { attachmentPreview } from "@/lib/chatAttachments";
 
 // Lightweight endpoint — returns order statuses + latest manager message per order.
@@ -12,7 +12,7 @@ export async function GET() {
     const token = cookieStore.get("auth_token")?.value;
     if (!token) return NextResponse.json({ pending: 0, statuses: [], managerMessages: [] });
 
-    const payload = await verifyToken(token);
+    const payload = await verifyCustomerToken(token);
     if (!payload?.id) return NextResponse.json({ pending: 0, statuses: [], managerMessages: [] });
 
     const [orders, customerRow] = await Promise.all([

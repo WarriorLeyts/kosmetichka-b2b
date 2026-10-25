@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
 
 // Customers can modify their own pending orders: change quantities or remove items.
@@ -12,7 +12,7 @@ export async function PUT(
   const token = cookieStore.get("auth_token")?.value;
   if (!token) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
 
-  const payload = await verifyToken(token);
+  const payload = await verifyCustomerToken(token);
   if (!payload?.id) return NextResponse.json({ error: "Ошибка авторизации" }, { status: 401 });
 
   const { id } = await params;

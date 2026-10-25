@@ -71,3 +71,14 @@ export async function requireAdmin() {
 
   return payload;
 }
+
+/**
+ * Like requireAdmin(), but only for role "admin" (managers are rejected).
+ * Used for staff-account management (/api/admin/users*), matching the
+ * /admin/users pages, which are admin-only.
+ */
+export async function requireAdminRole() {
+  const payload = await requireAdmin();
+  if (!payload || payload.role !== "admin") return null;
+  return payload;
+}

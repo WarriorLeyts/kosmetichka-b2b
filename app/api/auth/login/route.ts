@@ -3,47 +3,17 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { createToken } from "@/lib/auth";
+import { getClientIp } from "@/lib/rateLimit";
+import { checkLoginAttempt, clearLoginAttempts } from "@/lib/loginAttempts";
 
 const MAX_ATTEMPTS = 10;
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
-/**
- * DB-based rate limiter — survives server restarts and multi-instance deploys.
- * Returns false if the IP has exceeded the attempt limit within the window.
- */
-async function checkRateLimit(ip: string): Promise<boolean> {
-  const now = new Date();
-
-  const existing = await prisma.loginAttempt.findUnique({ where: { ip } });
-
-  if (!existing || existing.resetAt < now) {
-    // First attempt or window expired — start a fresh window
-    await prisma.loginAttempt.upsert({
-      where: { ip },
-      update: { count: 1, resetAt: new Date(now.getTime() + WINDOW_MS) },
-      create: { ip, count: 1, resetAt: new Date(now.getTime() + WINDOW_MS) },
-    });
-    return true;
-  }
-
-  if (existing.count >= MAX_ATTEMPTS) return false;
-
-  await prisma.loginAttempt.update({
-    where: { ip },
-    data: { count: { increment: 1 } },
-  });
-  return true;
-}
-
-async function clearAttempts(ip: string) {
-  await prisma.loginAttempt.deleteMany({ where: { ip } }).catch(() => {});
-}
+const checkRateLimit = (ip: string) => checkLoginAttempt(ip, MAX_ATTEMPTS, WINDOW_MS);
+const clearAttempts = (ip: string) => clearLoginAttempts(ip);
 
 export async function POST(request: Request) {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown";
+  const ip = getClientIp(request);
 
   if (!(await checkRateLimit(ip))) {
     return NextResponse.json(
