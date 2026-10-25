@@ -16,6 +16,8 @@ model ProductImage {
   productId Int
   product   Product @relation(fields: [productId], references: [id])
 
+  @@index([productId])
+
   variants ProductVariant[]
 }
 
@@ -71,6 +73,8 @@ model Product {
   updatedAt DateTime @updatedAt
 
   @@index([categoryGuid])
+  @@index([updatedAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
   @@index([brandGuid])
   @@index([name])
 }
@@ -83,6 +87,8 @@ model ProductVariant {
   image     ProductImage @relation(fields: [imageId], references: [id])
   name      String
   sortOrder Int          @default(0)
+
+  @@index([productId])
 }
 
 model ProductPrice {
