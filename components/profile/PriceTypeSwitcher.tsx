@@ -14,8 +14,8 @@ type Info = {
 const LABELS: Record<string, string> = { retail: "Розница", wholesale: "Опт", big_wholesale: "Крупный опт" };
 const HINTS: Record<string, string> = {
   retail: "Розничные цены, бонусы MAXMA начисляются и списываются",
-  wholesale: "Оптовые цены от 5 000 ₽, крупный опт от 50 000 ₽ в корзине",
-  big_wholesale: "Цены крупного опта на любой заказ",
+  wholesale: "Оптовые цены, заказ от 5 000 ₽, без бонусов",
+  big_wholesale: "Цены крупного опта, заказ от 50 000 ₽, без бонусов",
 };
 
 /**

@@ -4,10 +4,10 @@ import {
   priceFor,
   rawCartTotal,
   effectivePriceType,
-  amountUntilWholesale,
-  amountUntilBigWholesale,
-  WHOLESALE_THRESHOLD,
-  BIG_WHOLESALE_THRESHOLD,
+  amountUntilMinOrder,
+  minOrderFor,
+  WHOLESALE_MIN_ORDER,
+  BIG_WHOLESALE_MIN_ORDER,
 } from "./pricing";
 import type { CartItem } from "./types";
 
@@ -122,96 +122,49 @@ describe("rawCartTotal", () => {
 
 // ── effectivePriceType ────────────────────────────────────────────────────────
 
-describe("effectivePriceType", () => {
-  const wItem = (wholesalePrice: number, qty: number) =>
-    makeItem({ wholesalePrice, quantity: qty });
+describe("effectivePriceType — always the customer's own type", () => {
+  const item = (qty: number) => makeItem({ quantity: qty });
 
-  it("returns guest for null customer", () => {
-    expect(effectivePriceType([wItem(100, 1)], null)).toBe("guest");
+  it("guest / retail / discount", () => {
+    expect(effectivePriceType([item(1)], null)).toBe("guest");
+    expect(effectivePriceType([item(1000)], { priceType: "retail" })).toBe("retail");
+    expect(effectivePriceType([item(1000)], { priceType: "discount" })).toBe("discount");
   });
 
-  it("always returns retail for retail customer", () => {
-    expect(effectivePriceType([wItem(100, 100)], { priceType: "retail" })).toBe("retail");
+  it("wholesale gets wholesale prices on a small cart", () => {
+    expect(effectivePriceType([item(1)], { priceType: "wholesale" })).toBe("wholesale");
   });
 
-  it("always returns big_wholesale for big_wholesale customer", () => {
-    expect(effectivePriceType([wItem(1, 1)], { priceType: "big_wholesale" })).toBe("big_wholesale");
+  it("wholesale stays wholesale on a huge cart (no auto-upgrade)", () => {
+    expect(effectivePriceType([item(10_000)], { priceType: "wholesale" })).toBe("wholesale");
   });
 
-  it("always returns discount for discount customer (no upgrade)", () => {
-    const bigCart = [wItem(100, 1000)]; // 100 000 wholesale — above big threshold
-    expect(effectivePriceType(bigCart, { priceType: "discount" })).toBe("discount");
-  });
-
-  it("wholesale customer below threshold → discount", () => {
-    const cart = [wItem(100, 1)]; // 100 < 5000
-    expect(effectivePriceType(cart, { priceType: "wholesale" })).toBe("discount");
-  });
-
-  it(`wholesale customer at exactly ${WHOLESALE_THRESHOLD} → wholesale`, () => {
-    const cart = [wItem(WHOLESALE_THRESHOLD, 1)];
-    expect(effectivePriceType(cart, { priceType: "wholesale" })).toBe("wholesale");
-  });
-
-  it("wholesale customer between thresholds → wholesale", () => {
-    const cart = [wItem(10_000, 1)];
-    expect(effectivePriceType(cart, { priceType: "wholesale" })).toBe("wholesale");
-  });
-
-  it(`wholesale customer at exactly ${BIG_WHOLESALE_THRESHOLD} → big_wholesale`, () => {
-    const cart = [wItem(BIG_WHOLESALE_THRESHOLD, 1)];
-    expect(effectivePriceType(cart, { priceType: "wholesale" })).toBe("big_wholesale");
-  });
-
-  it("wholesale customer above big threshold → big_wholesale", () => {
-    const cart = [wItem(100, 600)]; // 60 000 > 50 000
-    expect(effectivePriceType(cart, { priceType: "wholesale" })).toBe("big_wholesale");
-  });
-
-  it("upgrade is based on wholesale total, not retail total", () => {
-    // retail = 200, wholesale = 1 — never reaches threshold
-    const cart = [makeItem({ retailPrice: 200, wholesalePrice: 1, quantity: 1 })];
-    expect(effectivePriceType(cart, { priceType: "wholesale" })).toBe("discount");
+  it("big wholesale gets big prices on a small cart", () => {
+    expect(effectivePriceType([item(1)], { priceType: "big_wholesale" })).toBe("big_wholesale");
   });
 });
 
-// ── amountUntilWholesale ──────────────────────────────────────────────────────
+// ── minimum order ─────────────────────────────────────────────────────────────
 
-describe("amountUntilWholesale", () => {
-  it("returns 0 for non-wholesale customer", () => {
-    expect(amountUntilWholesale([], { priceType: "retail" })).toBe(0);
-    expect(amountUntilWholesale([], null)).toBe(0);
+describe("minOrderFor / amountUntilMinOrder", () => {
+  it("no minimum for guest, retail, discount", () => {
+    expect(minOrderFor(null)).toBe(0);
+    expect(minOrderFor({ priceType: "retail" })).toBe(0);
+    expect(minOrderFor({ priceType: "discount" })).toBe(0);
+    expect(amountUntilMinOrder([makeItem({ quantity: 1 })], { priceType: "retail" })).toBe(0);
   });
 
-  it("returns remaining amount for wholesale customer below threshold", () => {
-    const cart = [makeItem({ wholesalePrice: 1000, quantity: 2 })]; // 2000 total
-    expect(amountUntilWholesale(cart, { priceType: "wholesale" })).toBe(WHOLESALE_THRESHOLD - 2000);
+  it("wholesale: from 5 000 in wholesale prices", () => {
+    expect(minOrderFor({ priceType: "wholesale" })).toBe(WHOLESALE_MIN_ORDER);
+    // 10 × 60 = 600
+    expect(amountUntilMinOrder([makeItem({ quantity: 10 })], { priceType: "wholesale" })).toBe(WHOLESALE_MIN_ORDER - 600);
+    expect(amountUntilMinOrder([makeItem({ quantity: 100 })], { priceType: "wholesale" })).toBe(0);
   });
 
-  it("returns 0 when threshold is already reached", () => {
-    const cart = [makeItem({ wholesalePrice: WHOLESALE_THRESHOLD, quantity: 1 })];
-    expect(amountUntilWholesale(cart, { priceType: "wholesale" })).toBe(0);
-  });
-});
-
-// ── amountUntilBigWholesale ───────────────────────────────────────────────────
-
-describe("amountUntilBigWholesale", () => {
-  it("returns 0 for big_wholesale customer", () => {
-    expect(amountUntilBigWholesale([], { priceType: "big_wholesale" })).toBe(0);
-  });
-
-  it("returns 0 for guest", () => {
-    expect(amountUntilBigWholesale([], null)).toBe(0);
-  });
-
-  it("returns remaining for wholesale customer", () => {
-    const cart = [makeItem({ wholesalePrice: 10_000, quantity: 1 })];
-    expect(amountUntilBigWholesale(cart, { priceType: "wholesale" })).toBe(BIG_WHOLESALE_THRESHOLD - 10_000);
-  });
-
-  it("returns 0 when big threshold is already reached", () => {
-    const cart = [makeItem({ wholesalePrice: BIG_WHOLESALE_THRESHOLD, quantity: 1 })];
-    expect(amountUntilBigWholesale(cart, { priceType: "wholesale" })).toBe(0);
+  it("big wholesale: from 50 000 in big wholesale prices", () => {
+    expect(minOrderFor({ priceType: "big_wholesale" })).toBe(BIG_WHOLESALE_MIN_ORDER);
+    // 100 × 50 = 5 000
+    expect(amountUntilMinOrder([makeItem({ quantity: 100 })], { priceType: "big_wholesale" })).toBe(BIG_WHOLESALE_MIN_ORDER - 5_000);
+    expect(amountUntilMinOrder([makeItem({ quantity: 1000 })], { priceType: "big_wholesale" })).toBe(0);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { Minus, Plus, Trash2, X, CheckCircle2, Clock, LogIn, Zap } from "lucide-react";
+import { Minus, Plus, Trash2, X, CheckCircle2, Clock, LogIn } from "lucide-react";
 import { resolveImageUrl } from "@/lib/image";
 import Link from "next/link";
 import { useCartStore } from "@/store/cartStore";
@@ -14,10 +14,8 @@ import {
   priceTypeLabel,
   rawCartTotal,
   resolveCustomerPriceType,
-  amountUntilWholesale,
-  amountUntilBigWholesale,
-  WHOLESALE_THRESHOLD,
-  BIG_WHOLESALE_THRESHOLD,
+  amountUntilMinOrder,
+  minOrderFor,
 } from "@/lib/pricing";
 
 type CalcBonuses = { canSpend: boolean; balance: number | null; maxToApply: number; applied: number; collected: number };
@@ -43,10 +41,10 @@ export function CartDrawer() {
 
   const base = resolveCustomerPriceType(customer);
   const activePriceType = effectivePriceType(cart, customer);
-  const wholesaleCartTotal = rawCartTotal(cart, "wholesale");
   const total = rawCartTotal(cart, activePriceType);
-  const remainingToWholesale = amountUntilWholesale(cart, customer);
-  const remainingToBigWholesale = amountUntilBigWholesale(cart, customer);
+  // опт — заказ от 5 000 ₽, крупный опт — от 50 000 ₽ (цены сразу по типу клиента)
+  const minOrder = minOrderFor(customer);
+  const remainingToMin = amountUntilMinOrder(cart, customer);
 
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
@@ -382,67 +380,22 @@ export function CartDrawer() {
                     </div>
                   )}
 
-                  {/* === Tier 1: progress toward Опт (только оптовые клиенты) === */}
-                  {customer && base === "wholesale" && activePriceType === "discount" && remainingToWholesale > 0 && (
+                  {/* === Опт / крупный опт: минимальная сумма заказа === */}
+                  {customer && minOrder > 0 && remainingToMin > 0 && (
                     <div className="cart-progress-banner">
                       <div className="cart-progress-text">
-                        <span>До оптовых цен осталось</span>
-                        <strong>{remainingToWholesale.toLocaleString("ru-RU")} ₽</strong>
+                        <span>До минимальной суммы заказа осталось</span>
+                        <strong>{remainingToMin.toLocaleString("ru-RU")} ₽</strong>
                       </div>
                       <div className="cart-progress-bar">
                         <div
                           className="cart-progress-fill"
-                          style={{
-                            width: `${Math.min(100, (wholesaleCartTotal / WHOLESALE_THRESHOLD) * 100)}%`,
-                          }}
+                          style={{ width: `${Math.min(100, (total / minOrder) * 100)}%` }}
                         />
                       </div>
                       <div className="cart-progress-hint">
-                        Добавьте ещё товаров и получите цены <strong>«{priceTypeLabel("wholesale")}»</strong>
+                        Заказ по ценам <strong>«{priceTypeLabel(base)}»</strong> — от {minOrder.toLocaleString("ru-RU")} ₽
                       </div>
-                    </div>
-                  )}
-
-                  {/* === Tier 1 achieved: Опт activated === */}
-                  {customer && base === "wholesale" && activePriceType === "wholesale" && (
-                    <div className="cart-upgrade-banner">
-                      <Zap size={16} className="flex-shrink-0" />
-                      <span>
-                        Сумма от {WHOLESALE_THRESHOLD.toLocaleString("ru-RU")} ₽ — применены цены{" "}
-                        <strong>«{priceTypeLabel("wholesale")}»</strong>!
-                      </span>
-                    </div>
-                  )}
-
-                  {/* === Tier 2: progress toward Крупный опт === */}
-                  {customer && base === "wholesale" && activePriceType === "wholesale" && remainingToBigWholesale > 0 && (
-                    <div className="cart-progress-banner">
-                      <div className="cart-progress-text">
-                        <span>До крупного опта осталось</span>
-                        <strong>{remainingToBigWholesale.toLocaleString("ru-RU")} ₽</strong>
-                      </div>
-                      <div className="cart-progress-bar">
-                        <div
-                          className="cart-progress-fill"
-                          style={{
-                            width: `${Math.min(100, (wholesaleCartTotal / BIG_WHOLESALE_THRESHOLD) * 100)}%`,
-                          }}
-                        />
-                      </div>
-                      <div className="cart-progress-hint">
-                        Добавьте ещё товаров и получите цены <strong>«{priceTypeLabel("big_wholesale")}»</strong>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* === Tier 2 achieved: Крупный опт activated === */}
-                  {customer && base === "wholesale" && activePriceType === "big_wholesale" && (
-                    <div className="cart-upgrade-banner">
-                      <Zap size={16} className="flex-shrink-0" />
-                      <span>
-                        Сумма от {BIG_WHOLESALE_THRESHOLD.toLocaleString("ru-RU")} ₽ — применены цены{" "}
-                        <strong>«{priceTypeLabel("big_wholesale")}»</strong>!
-                      </span>
                     </div>
                   )}
 
@@ -559,7 +512,7 @@ export function CartDrawer() {
                   {customer ? (
                     <button
                       onClick={checkout}
-                      disabled={loading || cart.length === 0}
+                      disabled={loading || cart.length === 0 || remainingToMin > 0}
                       className="checkout-button disabled:opacity-50"
                     >
                       {loading ? "Оформляем..." : "Оформить заказ"}

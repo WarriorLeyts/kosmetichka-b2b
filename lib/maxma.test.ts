@@ -17,10 +17,11 @@ const lines = [
 ];
 
 describe("canSpendBonuses (retail rule)", () => {
-  it("only retail customers with a linked card", () => {
+  it("only retail buyers (bonus or discount card) with a linked card", () => {
     expect(canSpendBonuses({ loyaltyCard: "2000123", priceType: "retail" })).toBe(true);
+    expect(canSpendBonuses({ loyaltyCard: "2000123", priceType: "discount" })).toBe(true);
     expect(canSpendBonuses({ loyaltyCard: "2000123", priceType: "wholesale" })).toBe(false);
-    expect(canSpendBonuses({ loyaltyCard: "2000123", priceType: "discount" })).toBe(false);
+    expect(canSpendBonuses({ loyaltyCard: "2000123", priceType: "big_wholesale" })).toBe(false);
     expect(canSpendBonuses({ loyaltyCard: null, priceType: "retail" })).toBe(false);
     expect(canSpendBonuses({ loyaltyCard: "  ", priceType: "retail" })).toBe(false);
     expect(canSpendBonuses(null)).toBe(false);

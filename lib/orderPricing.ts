@@ -58,7 +58,7 @@ export async function priceOrderItems(
     };
   });
 
-  // Compute effective price type based on actual cart total (handles auto-upgrade)
+  // Price type = the customer's type (no thresholds; the minimum order is checked in /api/orders)
   const appliedPriceType = effectivePriceType(cartForPricing, customer);
 
   return items.map((item) => {
@@ -68,7 +68,10 @@ export async function priceOrderItems(
       throw new Error(`Товар ${item.id} не найден`);
     }
 
-    const matchedPrice = product.prices.find((p) => p.priceType === appliedPriceType);
+    const matchedPrice =
+      product.prices.find((p) => p.priceType === appliedPriceType) ??
+      // as in priceFor(): big wholesale without its own price → wholesale; guest/discount → retail
+      (appliedPriceType === "big_wholesale" ? product.prices.find((p) => p.priceType === "wholesale") : undefined);
     const fallbackPrice = product.prices.find((p) => p.priceType === "retail");
 
     const rawPrice = matchedPrice?.price ?? fallbackPrice?.price;
