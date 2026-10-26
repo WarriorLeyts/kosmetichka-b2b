@@ -64,6 +64,8 @@ type Order = {
   total: number;
   promoCode?: string | null;
   discount?: number;
+  bonusesApplied?: number;
+  bonusesCollected?: number;
   comment: string | null;
   customerConfirmed: boolean;
   pickerId: number | null;
@@ -83,6 +85,14 @@ type Order = {
 };
 
 type PickerUser = { id: number; name: string };
+
+type MaxmaStuck = { action: string; attempts: number; lastError: string | null; status: string; createdAt: string };
+
+const MAXMA_ACTION_LABELS: Record<string, string> = {
+  set: "регистрация заказа (set-order)",
+  confirm: "подтверждение (confirm-order)",
+  cancel: "отмена (cancel-order)",
+};
 
 type EditItem = {
   id: number | null; // null = new
@@ -193,14 +203,38 @@ export default function AdminOrderClient({
   pickers,
   customerMessages: initialCustomerMessages,
   productImages = {},
+  maxmaStuck = null,
 }: {
   order: Order;
   pickers: PickerUser[];
   customerMessages: CustomerMessage[];
   productImages?: Record<number, string | null>;
+  maxmaStuck?: MaxmaStuck | null;
 }) {
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
+
+  // ── MAXMA sync (promo code / bonuses not synced) ──
+  const [maxmaRetrying, setMaxmaRetrying] = useState(false);
+  async function retryMaxma() {
+    setMaxmaRetrying(true);
+    try {
+      const res = await fetch("/api/admin/maxma/retry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: order.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) toast.error(data.error || "Не удалось повторить");
+      else if (data.ok) toast.success("Синхронизировано с MAXMA");
+      else toast.error("MAXMA снова не ответила — повторим автоматически");
+      router.refresh();
+    } catch {
+      toast.error("Ошибка сети");
+    } finally {
+      setMaxmaRetrying(false);
+    }
+  }
 
   // Sync local state when server re-renders (after router.refresh())
   useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
@@ -756,13 +790,19 @@ export default function AdminOrderClient({
       setOrder(data.order);
       setEditMode(false);
       setEditItems([]);
-      if (data.promoWarning) {
-        setPromoNotice({ kind: "removed", text: data.promoWarning });
-        toast.warning(data.promoWarning);
+      const warning = [data.promoWarning, data.loyaltyWarning].filter(Boolean).join(" ");
+      if (warning) {
+        setPromoNotice({ kind: "removed", text: warning });
+        toast.warning(warning);
       } else if (data.promo?.status === "unchanged-error") {
         setPromoNotice({
           kind: "error",
           text: `Промокод ${data.promo.code} не пересчитан: ${data.promo.reason || "сервис лояльности недоступен"}. Скидка позиций сохранена.`,
+        });
+      } else if (data.loyalty?.status === "unchanged-error") {
+        setPromoNotice({
+          kind: "error",
+          text: "Бонусы не пересчитаны: сервис лояльности недоступен. Списание бонусов по позициям сохранено.",
         });
       } else {
         setPromoNotice(null);
@@ -972,10 +1012,39 @@ export default function AdminOrderClient({
                 Промокод {order.promoCode} — скидка {(order.discount ?? 0).toLocaleString("ru-RU")} ₽
               </div>
             )}
+            {(order.bonusesApplied ?? 0) > 0 && (
+              <div className="text-xs font-semibold text-emerald-600">
+                Списано бонусов −{(order.bonusesApplied ?? 0).toLocaleString("ru-RU")} ₽
+              </div>
+            )}
+            {(order.bonusesCollected ?? 0) > 0 && (
+              <div className="text-xs font-semibold text-indigo-500">
+                Начислится бонусов: {(order.bonusesCollected ?? 0).toLocaleString("ru-RU")}
+              </div>
+            )}
             <div className="text-xs text-slate-400">{order.items.length} позиций</div>
           </div>
         </div>
       </div>
+
+      {/* MAXMA: promo code / bonuses not synced */}
+      {maxmaStuck && (
+        <div className="no-print mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+          <span className="flex-1">
+            ⚠️ <b>Бонусы/промокод не синхронизированы с MAXMA:</b>{" "}
+            {MAXMA_ACTION_LABELS[maxmaStuck.action] ?? maxmaStuck.action}, попыток {maxmaStuck.attempts}
+            {maxmaStuck.lastError ? `, ошибка: ${maxmaStuck.lastError}` : ""}
+            {maxmaStuck.status === "failed" ? " — автоповторы остановлены" : ""}
+          </span>
+          <button
+            onClick={retryMaxma}
+            disabled={maxmaRetrying}
+            className="rounded-xl border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
+          >
+            {maxmaRetrying ? "Повторяем…" : "Повторить"}
+          </button>
+        </div>
+      )}
 
       {/* Customer confirmed badge */}
       {order.customerConfirmed && (
@@ -1323,6 +1392,12 @@ export default function AdminOrderClient({
                 <span className="font-bold text-emerald-700">−{(order.discount ?? 0).toLocaleString("ru-RU")} ₽</span>
               </div>
             )}
+            {(order.bonusesApplied ?? 0) > 0 && (
+              <div className="rounded-xl border bg-emerald-50 p-3 flex justify-between items-center text-sm">
+                <span className="font-semibold text-emerald-700">Списано бонусов</span>
+                <span className="font-bold text-emerald-700">−{(order.bonusesApplied ?? 0).toLocaleString("ru-RU")} ₽</span>
+              </div>
+            )}
             <div className="rounded-xl border bg-slate-50 p-3 flex justify-between items-center">
               <span className="text-sm font-semibold text-slate-600">Итого:</span>
               <span className="text-lg font-black">{order.total.toLocaleString("ru-RU")} ₽</span>
@@ -1434,6 +1509,17 @@ export default function AdminOrderClient({
                     </td>
                     <td className="p-3 text-right font-bold text-emerald-700">
                       −{(order.discount ?? 0).toLocaleString("ru-RU")} ₽
+                    </td>
+                    <td />
+                  </tr>
+                )}
+                {(order.bonusesApplied ?? 0) > 0 && (
+                  <tr>
+                    <td colSpan={3} className="p-3 font-semibold text-right text-emerald-700">
+                      Списано бонусов:
+                    </td>
+                    <td className="p-3 text-right font-bold text-emerald-700">
+                      −{(order.bonusesApplied ?? 0).toLocaleString("ru-RU")} ₽
                     </td>
                     <td />
                   </tr>

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
+import { maxmaStuckByOrder } from "@/lib/maxmaQueue";
 import AdminOrderClient from "./AdminOrderClient";
 
 export const dynamic = "force-dynamic";
@@ -64,7 +65,7 @@ export default async function AdminOrderPage({
 
   // Fetch product images and barcodes for all items in the order
   const productIds = order.items.map((i) => i.productId);
-  const [productImageRows, productRows] = await Promise.all([
+  const [productImageRows, productRows, maxmaStuck] = await Promise.all([
     prisma.productImage.findMany({
       where: { productId: { in: productIds } },
       select: { productId: true, path: true },
@@ -74,6 +75,7 @@ export default async function AdminOrderPage({
       where: { id: { in: productIds } },
       select: { id: true, barcode: true },
     }),
+    maxmaStuckByOrder([order.id]),
   ]);
   const productImages: Record<number, string | null> = {};
   for (const img of productImageRows) {
@@ -110,6 +112,7 @@ export default async function AdminOrderPage({
       price: item.price,
       total: item.total,
       discount: item.discount,
+      bonusDiscount: item.bonusDiscount,
       check: item.check
         ? {
             status: item.check.status,
@@ -151,6 +154,7 @@ export default async function AdminOrderPage({
       pickers={pickers}
       customerMessages={serialized.customerMessages}
       productImages={productImages}
+      maxmaStuck={maxmaStuck.get(order.id) ?? null}
     />
   );
 }

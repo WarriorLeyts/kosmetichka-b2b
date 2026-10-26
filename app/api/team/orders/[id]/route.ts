@@ -6,6 +6,7 @@ import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_TRANSITIONS,
 } from "@/lib/orderStatus";
+import { maxmaActionLabel, maxmaStuckByOrder } from "@/lib/maxmaQueue";
 import { ADMIN_MANAGER, requireStaff } from "../../_auth";
 import { badId, notFound, parseId, productImageUrl } from "../../_shared";
 
@@ -72,7 +73,7 @@ export async function GET(
 
   // First product image (by image id) and catalog barcode for each item
   const productIds = order.items.map((i) => i.productId);
-  const [productImageRows, productRows] = await Promise.all([
+  const [productImageRows, productRows, maxmaStuckMap] = await Promise.all([
     prisma.productImage.findMany({
       where: { productId: { in: productIds } },
       select: { productId: true, path: true },
@@ -82,7 +83,9 @@ export async function GET(
       where: { id: { in: productIds } },
       select: { id: true, barcode: true },
     }),
+    maxmaStuckByOrder([order.id]),
   ]);
+  const maxmaStuck = maxmaStuckMap.get(order.id) ?? null;
   const productImages = new Map<number, string>();
   for (const img of productImageRows) {
     if (!productImages.has(img.productId)) productImages.set(img.productId, img.path);
@@ -104,6 +107,17 @@ export async function GET(
       total: order.total,
       promoCode: order.promoCode ?? null,
       discount: order.discount,
+      bonusesApplied: order.bonusesApplied,
+      bonusesCollected: order.bonusesCollected,
+      // Promo code / bonuses not synced with MAXMA for over an hour (retry: POST /api/admin/maxma/retry)
+      maxmaStuck: Boolean(maxmaStuck),
+      ...(maxmaStuck
+        ? {
+            maxmaError: `${maxmaActionLabel(maxmaStuck.action)}, попыток ${maxmaStuck.attempts}${
+              maxmaStuck.lastError ? `, ошибка: ${maxmaStuck.lastError}` : ""
+            }`,
+          }
+        : {}),
       comment: order.comment ?? null,
       customerConfirmed: order.customerConfirmed,
       changesSnapshot: order.changesSnapshot ?? null,
@@ -136,6 +150,7 @@ export async function GET(
           price: item.price,
           total: item.total,
           discount: item.discount,
+          bonusDiscount: item.bonusDiscount,
           variantName: item.variantName ?? null,
           variantImageUrl: item.variantImageUrl ?? null,
           imagePath,

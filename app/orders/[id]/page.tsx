@@ -35,6 +35,8 @@ export default async function OrderDetailPage({
     total: order.total,
     promoCode: order.promoCode ?? null,
     discount: order.discount,
+    bonusesApplied: order.bonusesApplied,
+    bonusesCollected: order.bonusesCollected,
     comment: order.comment,
     createdAt: order.createdAt.toISOString(),
     items: order.items.map((item) => ({
@@ -46,6 +48,7 @@ export default async function OrderDetailPage({
       quantity: item.quantity,
       price: item.price,
       total: item.total,
+      bonusDiscount: item.bonusDiscount,
     })),
   };
 

@@ -106,15 +106,19 @@ export async function priceOrderItems(
 
 /**
  * Order sums from its lines after an edit: the promo discount of a line never exceeds
- * the line total; order total = Σ(line total − line discount).
+ * the line total, the bonus discount never exceeds what is left;
+ * order total = Σ(line total − line discount − line bonus discount).
  */
-export function orderSums(lines: { total: number; discount?: number | null }[]) {
+export function orderSums(lines: { total: number; discount?: number | null; bonusDiscount?: number | null }[]) {
   let total = 0;
   let discount = 0;
+  let bonuses = 0;
   for (const l of lines) {
     const d = Math.min(Math.max(0, l.discount ?? 0), Math.max(0, l.total));
-    total += l.total - d;
+    const b = Math.min(Math.max(0, l.bonusDiscount ?? 0), Math.max(0, l.total - d));
+    total += l.total - d - b;
     discount += d;
+    bonuses += b;
   }
-  return { total, discount };
+  return { total, discount, bonuses };
 }

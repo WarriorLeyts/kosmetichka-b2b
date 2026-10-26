@@ -170,6 +170,10 @@ model Order {
   // Promo code (validated and calculated by MAXMA); discount in whole roubles, total already reduced by it
   promoCode String?
   discount  Int     @default(0)
+  // MAXMA bonuses: ₽ discount from spent bonuses (1 bonus = 1 ₽, total already reduced by it)
+  // and the accrual expected on confirm-order (shown to the customer)
+  bonusesApplied   Int @default(0)
+  bonusesCollected Int @default(0)
 
   items OrderItem[]
 
@@ -206,6 +210,8 @@ model OrderItem {
   total       Int
   // Promo-code discount for this line, whole roubles (line sum to pay = total - discount)
   discount    Int     @default(0)
+  // Discount from spent MAXMA bonuses for this line, whole roubles (to pay = total - discount - bonusDiscount)
+  bonusDiscount Int   @default(0)
 
   variantName     String?
   variantImageUrl String?
@@ -341,4 +347,24 @@ model LoginAttempt {
   updatedAt DateTime @updatedAt
 
   @@index([resetAt])
+}
+
+// Outbox of MAXMA lifecycle calls for site orders «site-<orderId>» (v2/set-order, confirm-order,
+// cancel-order). Tasks of one order run strictly in order (createdAt, id); failures are retried
+// with backoff by lib/maxmaQueue.ts (worker started from instrumentation.ts). No FK: a "cancel"
+// may refer to an order whose creation was rolled back (its MAXMA reservation must be released).
+model MaxmaTask {
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  action    String // "set" | "confirm" | "cancel"
+  payload   Json? // "set": the v2 calculationQuery to send
+  status    String   @default("pending") // "pending" | "done" | "failed"
+  attempts  Int      @default(0)
+  lastError String?
+  nextAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, nextAt])
+  @@index([orderId])
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { promoWarning, recalcOrderPromo } from "@/lib/maxmaOrders";
+import { isMaxmaOrder, loyaltyWarning, promoWarning, recalcOrderLoyalty } from "@/lib/maxmaOrders";
 
 // Битрикс24 вызывает этот endpoint когда сделка переходит в стадию "Оплачен"
 // Настройка: CRM → Автоматизация → стадия "Оплачен" → Робот "Вебхук"
@@ -149,13 +149,14 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        if (order.promoCode) {
-          // MAXMA recalculates the promo discount for the new items (or the code is removed)
+        if (isMaxmaOrder(order)) {
+          // MAXMA recalculates the promo discount / bonuses for the new items
           if (itemsChanged) {
-            const promo = await recalcOrderPromo(orderId);
-            const warning = promoWarning(promo);
+            const loyalty = await recalcOrderLoyalty(orderId);
+            const warning = [promoWarning(loyalty?.promo), loyaltyWarning(loyalty)].filter(Boolean).join(" ");
             console.log(
-              `[Bitrix webhook] Заказ №${orderId} — товары обновлены, промокод: ${promo?.status ?? "-"}` +
+              `[Bitrix webhook] Заказ №${orderId} — товары обновлены, промокод: ${loyalty?.promo?.status ?? "-"}, ` +
+                `бонусы: ${loyalty?.bonuses ? `−${loyalty.bonuses.applied} +${loyalty.bonuses.collected}` : "-"}` +
                 (warning ? ` (${warning})` : "")
             );
           }

@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
 import { orderSums } from "@/lib/orderPricing";
-import { promoWarning, recalcOrderPromo } from "@/lib/maxmaOrders";
+import { isMaxmaOrder, loyaltyResponse, recalcOrderLoyalty } from "@/lib/maxmaOrders";
 
 // Customers can modify their own pending orders: change quantities or remove items.
 export async function PUT(
@@ -94,8 +94,8 @@ export async function PUT(
       });
     }
 
-    // Recalculate order total (with a promo code recalcOrderPromo below does it)
-    if (!order.promoCode) {
+    // Recalculate order total (with a promo code / bonuses recalcOrderLoyalty below does it)
+    if (!isMaxmaOrder(order)) {
       const remaining = await tx.orderItem.findMany({ where: { orderId } });
       const sums = orderSums(remaining);
       await tx.order.update({
@@ -105,8 +105,8 @@ export async function PUT(
     }
   });
 
-  // Promo code: MAXMA recalculates the discount for the new items (or it's removed)
-  const promo = order.promoCode ? await recalcOrderPromo(orderId) : null;
+  // Promo code / bonuses: MAXMA recalculates them for the new items
+  const loyalty = isMaxmaOrder(order) ? await recalcOrderLoyalty(orderId) : null;
 
   // Return updated order
   const updatedOrder = await prisma.order.findUnique({
@@ -123,6 +123,7 @@ export async function PUT(
           price: true,
           total: true,
           discount: true,
+          bonusDiscount: true,
           variantImageUrl: true,
           variantName: true,
         },
@@ -130,7 +131,6 @@ export async function PUT(
     },
   });
 
-  if (!promo) return NextResponse.json({ order: updatedOrder });
-  const warning = promoWarning(promo);
-  return NextResponse.json({ order: updatedOrder, promo, ...(warning ? { promoWarning: warning } : {}) });
+  if (!loyalty) return NextResponse.json({ order: updatedOrder });
+  return NextResponse.json({ order: updatedOrder, ...loyaltyResponse(loyalty) });
 }

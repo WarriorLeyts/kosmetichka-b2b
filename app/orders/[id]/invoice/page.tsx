@@ -180,17 +180,23 @@ export default async function CustomerInvoicePage({
               const subtotal = order.total - vatAmount;
               return (
                 <>
+                  {((order.promoCode && order.discount > 0) || order.bonusesApplied > 0) && (
+                    <div className="flex justify-between py-1.5 text-sm text-slate-500">
+                      <span>Сумма без скидки:</span>
+                      <span>{(order.total + order.discount + order.bonusesApplied).toLocaleString("ru-RU")} ₽</span>
+                    </div>
+                  )}
                   {order.promoCode && order.discount > 0 && (
-                    <>
-                      <div className="flex justify-between py-1.5 text-sm text-slate-500">
-                        <span>Сумма без скидки:</span>
-                        <span>{(order.total + order.discount).toLocaleString("ru-RU")} ₽</span>
-                      </div>
-                      <div className="flex justify-between py-1.5 text-sm text-slate-500">
-                        <span>Скидка (промокод {order.promoCode}):</span>
-                        <span>−{order.discount.toLocaleString("ru-RU")} ₽</span>
-                      </div>
-                    </>
+                    <div className="flex justify-between py-1.5 text-sm text-slate-500">
+                      <span>Скидка (промокод {order.promoCode}):</span>
+                      <span>−{order.discount.toLocaleString("ru-RU")} ₽</span>
+                    </div>
+                  )}
+                  {order.bonusesApplied > 0 && (
+                    <div className="flex justify-between py-1.5 text-sm text-slate-500">
+                      <span>Списано бонусов:</span>
+                      <span>−{order.bonusesApplied.toLocaleString("ru-RU")} ₽</span>
+                    </div>
                   )}
                   {hasVat && (
                     <>
@@ -213,6 +219,12 @@ export default async function CustomerInvoicePage({
                       {order.total.toLocaleString("ru-RU")} ₽
                     </span>
                   </div>
+                  {order.bonusesCollected > 0 && (
+                    <div className="flex justify-between py-1.5 text-sm text-slate-500">
+                      <span>Начислится бонусов:</span>
+                      <span>{order.bonusesCollected.toLocaleString("ru-RU")}</span>
+                    </div>
+                  )}
                 </>
               );
             })()}
