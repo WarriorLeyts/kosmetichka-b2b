@@ -231,6 +231,8 @@ export default function AdminOrderClient({
   const [editItems, setEditItems] = useState<EditItem[]>([]);
   const [editError, setEditError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Promo code after the last item save: removed (red) or not recalculated — MAXMA unavailable (yellow)
+  const [promoNotice, setPromoNotice] = useState<{ kind: "removed" | "error"; text: string } | null>(null);
   const [discountPct, setDiscountPct] = useState("");
 
   // ── Catalog modal ──
@@ -754,6 +756,17 @@ export default function AdminOrderClient({
       setOrder(data.order);
       setEditMode(false);
       setEditItems([]);
+      if (data.promoWarning) {
+        setPromoNotice({ kind: "removed", text: data.promoWarning });
+        toast.warning(data.promoWarning);
+      } else if (data.promo?.status === "unchanged-error") {
+        setPromoNotice({
+          kind: "error",
+          text: `Промокод ${data.promo.code} не пересчитан: ${data.promo.reason || "сервис лояльности недоступен"}. Скидка позиций сохранена.`,
+        });
+      } else {
+        setPromoNotice(null);
+      }
     } else {
       const data = await res.json();
       setEditError(data.error || "Ошибка сохранения");
@@ -1098,6 +1111,20 @@ export default function AdminOrderClient({
       {/* ── ITEMS TAB ── */}
       {activeTab === "items" && (
         <div>
+          {promoNotice && (
+            <div
+              className={`mb-4 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm font-semibold ${
+                promoNotice.kind === "removed"
+                  ? "border-red-300 bg-red-50 text-red-700"
+                  : "border-amber-300 bg-amber-50 text-amber-800"
+              }`}
+            >
+              <span>⚠️ {promoNotice.text}</span>
+              <button onClick={() => setPromoNotice(null)} className="opacity-60 hover:opacity-100" aria-label="Скрыть">
+                ✕
+              </button>
+            </div>
+          )}
           {/* Edit mode bar */}
           {!editMode ? (
             <div className="no-print mb-4 flex flex-wrap gap-2">

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { promoWarning, recalcOrderPromo } from "@/lib/maxmaOrders";
 
 // Битрикс24 вызывает этот endpoint когда сделка переходит в стадию "Оплачен"
 // Настройка: CRM → Автоматизация → стадия "Оплачен" → Робот "Вебхук"
@@ -113,7 +114,7 @@ export async function POST(request: NextRequest) {
         const updatedIds = new Set<number>();
 
         let newTotal = 0;
-        let newDiscount = 0; // promo-code discount kept on the lines
+        let itemsChanged = false;
 
         for (const row of rows) {
           const rowName   = String(row.PRODUCT_NAME || "").trim();
@@ -133,28 +134,35 @@ export async function POST(request: NextRequest) {
           updatedIds.add(orderItem.id);
 
           if (price > 0 && quantity > 0) {
-            const lineDiscount = Math.min(orderItem.discount, price * quantity);
             await prisma.orderItem.update({
               where: { id: orderItem.id },
               data: {
                 price,
                 quantity,
                 total: price * quantity,
-                ...(lineDiscount !== orderItem.discount ? { discount: lineDiscount } : {}),
               },
             });
-            newTotal += price * quantity - lineDiscount;
-            newDiscount += lineDiscount;
+            newTotal += price * quantity;
+            if (price !== orderItem.price || quantity !== orderItem.quantity) itemsChanged = true;
           } else {
-            newTotal += orderItem.price * orderItem.quantity - orderItem.discount;
-            newDiscount += orderItem.discount;
+            newTotal += orderItem.price * orderItem.quantity;
           }
         }
 
-        if (newTotal > 0) {
+        if (order.promoCode) {
+          // MAXMA recalculates the promo discount for the new items (or the code is removed)
+          if (itemsChanged) {
+            const promo = await recalcOrderPromo(orderId);
+            const warning = promoWarning(promo);
+            console.log(
+              `[Bitrix webhook] Заказ №${orderId} — товары обновлены, промокод: ${promo?.status ?? "-"}` +
+                (warning ? ` (${warning})` : "")
+            );
+          }
+        } else if (newTotal > 0) {
           await prisma.order.update({
             where: { id: orderId },
-            data: { total: newTotal, ...(order.promoCode ? { discount: newDiscount } : {}) },
+            data: { total: newTotal },
           });
           console.log(`[Bitrix webhook] Заказ №${orderId} — товары обновлены, итог: ${newTotal} ₽`);
         }

@@ -122,6 +122,7 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
   const [editItems, setEditItems] = useState<EditableItem[]>([]);
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [promoWarning, setPromoWarning] = useState("");
 
   const label = STATUS_LABELS[order.status] ?? order.status;
   const colorClass = STATUS_COLORS[order.status] ?? "bg-slate-100 text-slate-700";
@@ -196,6 +197,7 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
         }));
         setEditMode(false);
         setEditItems([]);
+        setPromoWarning(typeof data.promoWarning === "string" ? data.promoWarning : "");
       } else {
         setSaveError(data.error || "Ошибка сохранения");
       }
@@ -301,6 +303,12 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
 
       {expanded && (
         <div className="border-t px-5 py-4">
+
+          {promoWarning && (
+            <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              ⚠️ {promoWarning}
+            </div>
+          )}
 
           {/* Edit mode UI */}
           {editMode ? (
