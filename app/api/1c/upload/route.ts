@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { DATA_ROOT } from "@/lib/dataDir";
 
 const ALLOWED_FILES = ["import.xml", "offers.xml", "customers.xml"];
 
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Empty body" }, { status: 400 });
   }
 
-  const dir = path.join(process.cwd(), "data", "1c");
+  const dir = path.join(DATA_ROOT, "1c");
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, filename), body, "utf8");
 

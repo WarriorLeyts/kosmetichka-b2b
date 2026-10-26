@@ -2,6 +2,9 @@ import { PrismaClient } from "@prisma/client";
 import { XMLParser } from "fast-xml-parser";
 import nodemailer from "nodemailer";
 import fs from "fs";
+import nodePath from "path";
+// 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
+const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
 
 const prisma = new PrismaClient();
 
@@ -100,7 +103,7 @@ async function sendWishlistNotifications(productIds) {
 }
 
 async function main() {
-  const xml = fs.readFileSync("./data/1c/offers.xml", "utf8");
+  const xml = fs.readFileSync(nodePath.join(DATA_1C, "offers.xml"), "utf8");
   const data = parser.parse(xml);
 
   const packageData = data.КоммерческаяИнформация.ПакетПредложений;

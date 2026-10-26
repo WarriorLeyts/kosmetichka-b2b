@@ -6,13 +6,14 @@ import crypto from "crypto";
 import { dropThumbs } from "@/lib/thumb";
 import { cmlComment, cmlItemDiscounts, cmlItemSum } from "@/lib/commerceml";
 import { MAXMA_ORDER_WHERE, onOrderStatus } from "@/lib/maxmaOrders";
+import { DATA_ROOT } from "@/lib/dataDir";
 
 // Auth: any login + SYNC_API_KEY as password (set in .env)
 const COOKIE_NAME = "1C_SESS";
-const DATA_DIR = path.join(process.cwd(), "data", "1c");
+const DATA_DIR = path.join(DATA_ROOT, "1c");
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const SESSIONS_FILE = path.join(process.cwd(), "data", "1c", ".sessions.json");
+const SESSIONS_FILE = path.join(DATA_ROOT, "1c", ".sessions.json");
 
 function loadSessions(): Map<string, number> {
   try {

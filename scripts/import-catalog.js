@@ -1,6 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 import { XMLParser } from "fast-xml-parser";
 import fs from "fs";
+import nodePath from "path";
+// 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
+const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
 
 const prisma = new PrismaClient();
 
@@ -94,7 +97,7 @@ async function importBrands(classifier) {
 }
 
 async function main() {
-  const xml = fs.readFileSync("./data/1c/import.xml", "utf8");
+  const xml = fs.readFileSync(nodePath.join(DATA_1C, "import.xml"), "utf8");
   const data = parser.parse(xml);
 
   const info = data.КоммерческаяИнформация;

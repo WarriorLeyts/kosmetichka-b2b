@@ -4,10 +4,13 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import sharp from "sharp";
+import nodePath from "path";
+// 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
+const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
 
 // Уменьшенные копии (data/1c/.thumbs) отдаёт nginx напрямую — после замены фото их удаляем.
 function dropThumbs(filePath) {
-  const base = path.join(process.cwd(), "data", "1c");
+  const base = DATA_1C;
   const rel = path.relative(base, filePath);
   if (!rel || rel.startsWith("..")) return;
   for (const w of [160, 320, 480, 800, 1200]) {
@@ -23,7 +26,7 @@ const ROOT = process.cwd();
 const prisma = new PrismaClient();
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
-const xml = fs.readFileSync(path.join(ROOT, "data", "1c", "import.xml"), "utf8");
+const xml = fs.readFileSync(path.join(DATA_1C, "import.xml"), "utf8");
 const data = parser.parse(xml);
 const raw = data["КоммерческаяИнформация"]?.["Каталог"]?.["Товары"]?.["Товар"] ?? [];
 const products = Array.isArray(raw) ? raw : [raw];
@@ -90,7 +93,7 @@ async function main() {
 
     const validImgs = imgs.filter((imgPath) => {
       const rel = String(imgPath).replace(/\\/g, "/");
-      return fs.existsSync(path.join(ROOT, "data", "1c", rel));
+      return fs.existsSync(path.join(DATA_1C, rel));
     });
 
     if (!validImgs.length) { skipped++; continue; }
@@ -102,7 +105,7 @@ async function main() {
 
     for (const imgPath of validImgs) {
       const rel = String(imgPath).replace(/\\/g, "/");
-      await compressInPlace(path.join(ROOT, "data", "1c", rel));
+      await compressInPlace(path.join(DATA_1C, rel));
       await prisma.productImage.create({ data: { productId: product.id, path: rel } });
       saved++;
     }
@@ -113,7 +116,7 @@ async function main() {
   // ── Проход 2: матчинг по GUID-префиксу имени файла ────────────────────────
   console.log("\nПроход 2 (GUID-матчинг)...");
 
-  const importFilesDir = path.join(ROOT, "data", "1c", "import_files");
+  const importFilesDir = path.join(DATA_1C, "import_files");
   if (!fs.existsSync(importFilesDir)) {
     console.log("Папка import_files не найдена, пропускаем.");
     return;
@@ -165,13 +168,13 @@ async function main() {
     if (hasImageSet.has(productId)) { alreadyHas++; continue; }
 
     const validPaths = filePaths
-      .filter((p) => fs.existsSync(path.join(ROOT, "data", "1c", p)))
+      .filter((p) => fs.existsSync(path.join(DATA_1C, p)))
       .sort();
     if (!validPaths.length) continue;
 
     // Берём только первую картинку (главную)
     const relPath = validPaths[0].replace(/\\/g, "/");
-    await compressInPlace(path.join(ROOT, "data", "1c", relPath));
+    await compressInPlace(path.join(DATA_1C, relPath));
     await prisma.productImage.create({ data: { productId, path: relPath } });
     hasImageSet.add(productId); // чтобы не дублировать если несколько файлов на один GUID
     linked++;
