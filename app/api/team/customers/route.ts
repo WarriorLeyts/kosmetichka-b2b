@@ -34,6 +34,8 @@ export async function GET(request: NextRequest) {
         ? { isApproved: false }
         : statusFilter === "blocked"
         ? { isActive: false }
+        : statusFilter === "requests"
+        ? { roleRequestStatus: "pending" }
         : {},
     ],
   };
@@ -51,6 +53,8 @@ export async function GET(request: NextRequest) {
         inn: true,
         city: true,
         priceType: true,
+        roleRequest: true,
+        roleRequestStatus: true,
         isActive: true,
         isApproved: true,
         manager: true,

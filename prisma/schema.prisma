@@ -125,6 +125,14 @@ model Customer {
   manager String?
 
   priceType String @default("wholesale")
+  /// Highest wholesale price type the admin granted ("wholesale" | "big_wholesale"); null — retail only.
+  /// The customer switches freely between retail and anything up to this level.
+  wholesaleAccess String?
+  /// Customer's request for a higher price type ("wholesale" | "big_wholesale"), decided by an admin
+  roleRequest       String?
+  /// "pending" | "rejected"
+  roleRequestStatus String?
+  roleRequestedAt   DateTime?
 
   isActive   Boolean @default(true)
   /// MAXMA loyalty card number linked in the app (confirmed by an SMS code from MAXMA)
@@ -165,6 +173,8 @@ model Order {
 
   status  String  @default("pending")
   total   Int     @default(0)
+  /// Customer's price type when the order was placed (the customer can switch it later)
+  priceType String?
   comment String? @db.Text
 
   // Promo code (validated and calculated by MAXMA); discount in whole roubles, total already reduced by it

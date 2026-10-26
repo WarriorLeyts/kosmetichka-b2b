@@ -4,11 +4,10 @@ import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 import PasswordInput from "@/components/PasswordInput";
+import { ROLE_LABELS, isWholesaleRole, maxAccess } from "@/lib/roles";
+import { decideRoleRequest } from "@/lib/roleRequest";
 
-async function updateCustomer(formData: FormData) {
-  "use server";
-
-  // Auth guard inside server action
+async function guard() {
   const cookieStore = await cookies();
   const token = cookieStore.get("admin_token")?.value;
   if (!token) redirect("/admin");
@@ -16,6 +15,23 @@ async function updateCustomer(formData: FormData) {
   if (!payload?.id || !["admin", "manager"].includes(payload.role as string)) {
     redirect("/admin");
   }
+}
+
+/** Approve / reject the customer's request for a wholesale price type. */
+async function decideRoleRequestAction(formData: FormData) {
+  "use server";
+  await guard();
+  const id = Number(formData.get("id"));
+  const action = String(formData.get("action") || "");
+  if (action === "approve" || action === "reject") await decideRoleRequest(id, action);
+  redirect(`/admin/customers/${id}`);
+}
+
+async function updateCustomer(formData: FormData) {
+  "use server";
+
+  // Auth guard inside server action
+  await guard();
 
   const id = Number(formData.get("id"));
 
@@ -32,6 +48,9 @@ async function updateCustomer(formData: FormData) {
   const manager = String(formData.get("manager") || "");
   const oneCId = String(formData.get("oneCId") || "");
   const password = String(formData.get("password") || "");
+  const accessRaw = String(formData.get("wholesaleAccess") || "");
+  // a wholesale price type always implies at least that access
+  const wholesaleAccess = maxAccess(isWholesaleRole(accessRaw) ? accessRaw : null, priceType);
 
   const data: any = {
     name,
@@ -42,6 +61,7 @@ async function updateCustomer(formData: FormData) {
     city,
     address,
     priceType,
+    wholesaleAccess,
     isActive,
     isApproved,
     manager: manager || null,
@@ -83,6 +103,34 @@ export default async function EditCustomerPage({
         <h1 className="mb-6 text-3xl font-black">
           Редактирование клиента #{customer.id}
         </h1>
+
+        {customer.roleRequestStatus === "pending" && customer.roleRequest ? (
+          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <p className="font-black text-amber-800">
+              Заявка на «{ROLE_LABELS[customer.roleRequest] ?? customer.roleRequest}»
+            </p>
+            <p className="mt-1 text-sm text-amber-700">
+              Сейчас: {ROLE_LABELS[customer.priceType] ?? customer.priceType}
+              {customer.roleRequestedAt ? ` · отправлена ${customer.roleRequestedAt.toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })}` : ""}
+            </p>
+            <div className="mt-3 flex gap-2">
+              <form action={decideRoleRequestAction}>
+                <input type="hidden" name="id" value={customer.id} />
+                <input type="hidden" name="action" value="approve" />
+                <button type="submit" className="rounded-xl bg-green-600 px-4 py-2 text-sm font-black text-white">
+                  Одобрить
+                </button>
+              </form>
+              <form action={decideRoleRequestAction}>
+                <input type="hidden" name="id" value={customer.id} />
+                <input type="hidden" name="action" value="reject" />
+                <button type="submit" className="rounded-xl border border-red-300 bg-white px-4 py-2 text-sm font-black text-red-600">
+                  Отклонить
+                </button>
+              </form>
+            </div>
+          </div>
+        ) : null}
 
         <form action={updateCustomer} className="space-y-4">
           <input type="hidden" name="id" defaultValue={customer.id} />
@@ -163,6 +211,22 @@ export default async function EditCustomerPage({
               <option value="wholesale">Опт</option>
               <option value="big_wholesale">Крупный опт</option>
             </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-bold">Доступ к оптовым ценам</label>
+            <select
+              name="wholesaleAccess"
+              defaultValue={maxAccess(customer.wholesaleAccess, customer.priceType) ?? ""}
+              className="w-full rounded-xl border p-3"
+            >
+              <option value="">Нет (только розница)</option>
+              <option value="wholesale">Опт</option>
+              <option value="big_wholesale">Крупный опт</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Клиент сам переключается между «Розница» и разрешёнными оптовыми ценами в профиле.
+            </p>
           </div>
 
           <div>

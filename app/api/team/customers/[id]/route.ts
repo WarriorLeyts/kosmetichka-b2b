@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ADMIN_MANAGER, requireStaff } from "../../_auth";
 import { PRICE_TYPE_LABELS, badId, notFound, parseId } from "../../_shared";
+import { maxAccess } from "@/lib/roles";
 
 // GET /api/team/customers/:id — fields shown on app/admin/customers/[id]/page.tsx (password hash excluded)
 export async function GET(
@@ -29,6 +30,10 @@ export async function GET(
       oneCId: true,
       manager: true,
       priceType: true,
+      wholesaleAccess: true,
+      roleRequest: true,
+      roleRequestStatus: true,
+      roleRequestedAt: true,
       isActive: true,
       isApproved: true,
       role: true,
@@ -47,6 +52,9 @@ export async function GET(
       ...rest,
       displayName: rest.companyName || rest.name || "—",
       priceTypeLabel: PRICE_TYPE_LABELS[rest.priceType] ?? rest.priceType,
+      wholesaleAccess: maxAccess(rest.wholesaleAccess, rest.priceType),
+      roleRequestLabel: rest.roleRequest ? PRICE_TYPE_LABELS[rest.roleRequest] ?? rest.roleRequest : null,
+      roleRequestedAt: rest.roleRequestedAt?.toISOString() ?? null,
       ordersCount: _count.orders,
       createdAt: rest.createdAt.toISOString(),
       updatedAt: rest.updatedAt.toISOString(),

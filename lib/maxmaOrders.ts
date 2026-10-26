@@ -183,6 +183,7 @@ export async function recalcOrderLoyalty(orderId: number): Promise<LoyaltyRecalc
         promoCode: true,
         bonusesApplied: true,
         bonusesCollected: true,
+        priceType: true,
         customer: { select: { phone: true, loyaltyCard: true, priceType: true } },
         items: {
           orderBy: { id: "asc" },
@@ -197,7 +198,8 @@ export async function recalcOrderLoyalty(orderId: number): Promise<LoyaltyRecalc
     const prevCollected = order.bonusesCollected ?? 0;
     if (!code && previous <= 0 && prevCollected <= 0) return null;
     const items = order.items;
-    const customer = order.customer ?? {};
+    // the price type the order was placed with — the customer may have switched it since
+    const customer = { ...(order.customer ?? {}), priceType: order.priceType ?? order.customer?.priceType };
 
     const products = await prisma.product.findMany({
       where: { id: { in: items.map((i) => i.productId) } },

@@ -82,6 +82,12 @@ export const checkoutCalcLimiter = new RateLimiter({
   max: 60,
 });
 
+/** Price-type switches and wholesale requests: max 20 per customer per hour */
+export const roleChangeLimiter = new RateLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20,
+});
+
 // ── Client IP ────────────────────────────────────────────────────────────────
 
 /**

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { createToken } from "@/lib/auth";
 import { normalizePhone, toSmsAeroPhone } from "@/lib/phone";
 import { getClientIp } from "@/lib/rateLimit";
+import { isWholesaleRole } from "@/lib/roles";
 
 async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
   const serverKey = process.env.SMARTCAPTCHA_SERVER_KEY;
@@ -159,6 +160,8 @@ export async function POST(request: Request) {
       manager: oneCCustomer?.manager || null,
       role: "customer",
       priceType: effectivePriceType,
+      // wholesale level the customer can switch back to after choosing retail (login still needs approval)
+      wholesaleAccess: isWholesaleRole(effectivePriceType) ? effectivePriceType : null,
     },
   });
 

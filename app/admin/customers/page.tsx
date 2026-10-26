@@ -34,6 +34,8 @@ export default async function AdminCustomersPage({
           ? { isApproved: false }
           : statusFilter === "blocked"
           ? { isActive: false }
+          : statusFilter === "requests"
+          ? { roleRequestStatus: "pending" }
           : {},
       ],
   };
@@ -51,6 +53,8 @@ export default async function AdminCustomersPage({
       inn: true,
       city: true,
       priceType: true,
+      roleRequest: true,
+      roleRequestStatus: true,
       isActive: true,
       isApproved: true,
       manager: true,
@@ -78,6 +82,7 @@ export default async function AdminCustomersPage({
     { value: "approved", label: "Подтверждённые" },
     { value: "pending", label: "Ожидают подтверждения" },
     { value: "blocked", label: "Заблокированные" },
+    { value: "requests", label: "Заявки на опт" },
   ];
 
   const PRICE_LABELS: Record<string, string> = {
@@ -147,6 +152,13 @@ export default async function AdminCustomersPage({
                 </td>
                 <td className="p-3 text-slate-600">
                   {PRICE_LABELS[c.priceType] ?? c.priceType}
+                  {c.roleRequestStatus === "pending" && c.roleRequest ? (
+                    <div className="mt-1">
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700">
+                        Заявка: {PRICE_LABELS[c.roleRequest] ?? c.roleRequest}
+                      </span>
+                    </div>
+                  ) : null}
                 </td>
                 <td className="p-3 text-center">
                   <div className="flex flex-col items-center gap-1">
