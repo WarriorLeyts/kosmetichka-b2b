@@ -1,6 +1,7 @@
 import { exec } from "child_process";
 import path from "path";
 
+// (1C files: lib/dataDir.ts — DATA_DIR, inherited by the scripts through the environment.)
 // In production Next runs from .next/standalone (process.cwd()), where only
 // traced files are copied — the import-*.js scripts are NOT there. So run the
 // scripts from the project root, but keep cwd = process.cwd(), because the XML

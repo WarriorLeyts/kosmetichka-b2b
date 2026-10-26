@@ -1,7 +1,8 @@
 import path from "path";
+import { DATA_ROOT } from "@/lib/dataDir";
 
 /** chat attachments live in data/ (linked from outside the build, survives redeploys) */
-export const CHAT_DIR = path.join(process.cwd(), "data", "chat");
+export const CHAT_DIR = path.join(DATA_ROOT, "chat");
 
 type T = { kind: "img" | "video" | "file"; mime: string };
 

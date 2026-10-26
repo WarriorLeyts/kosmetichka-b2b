@@ -9,10 +9,13 @@ import { PrismaClient } from "@prisma/client";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import nodePath from "path";
+// 1C files: DATA_DIR in production (outside the build), otherwise <project>/data/1c
+const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(nodePath.dirname(fileURLToPath(import.meta.url)), "..", "data", "1c");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
-const IMPORT_DIR = path.join(ROOT, "data", "1c", "import_files");
+const IMPORT_DIR = path.join(DATA_1C, "import_files");
 const prisma = new PrismaClient();
 
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp"]);
@@ -68,7 +71,7 @@ async function main() {
     const guid = addDashes(rawGuid);
 
     // Relative path from data/1c/ — what the /1c/ route expects
-    const relPath = path.relative(path.join(ROOT, "data", "1c"), full).replace(/\\/g, "/");
+    const relPath = path.relative(DATA_1C, full).replace(/\\/g, "/");
 
     if (!guidToImages.has(guid)) guidToImages.set(guid, []);
     guidToImages.get(guid).push(relPath);

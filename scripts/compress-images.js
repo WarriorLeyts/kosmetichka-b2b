@@ -7,6 +7,9 @@ import sharp from "sharp";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import nodePath from "path";
+// 1C files: DATA_DIR in production (outside the build), otherwise <project>/data/1c
+const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(nodePath.dirname(fileURLToPath(import.meta.url)), "..", "data", "1c");
 
 // Уменьшенные копии (data/1c/.thumbs) отдаёт nginx напрямую — после замены фото их удаляем.
 function dropThumbs(filePath) {
@@ -21,7 +24,7 @@ function dropThumbs(filePath) {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
-const IMG_DIR = path.join(ROOT, "data", "1c");
+const IMG_DIR = DATA_1C;
 
 const EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 

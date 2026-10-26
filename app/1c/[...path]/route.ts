@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import fs from "fs";
 import path from "path";
 import { pickWidth, thumbResponse } from "@/lib/thumb";
+import { DATA_ROOT } from "@/lib/dataDir";
 
 function mimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -17,7 +18,7 @@ request: NextRequest,
 ) {
 const { path: filePath } = await params;
 
-const baseDir = path.join(process.cwd(), "data", "1c");
+const baseDir = path.join(DATA_ROOT, "1c");
 const resolvedPath = path.normalize(
 path.join(baseDir, ...filePath)
 );

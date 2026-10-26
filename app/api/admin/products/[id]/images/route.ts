@@ -4,6 +4,7 @@ import { verifyToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import fs from "fs";
 import path from "path";
+import { DATA_ROOT } from "@/lib/dataDir";
 
 export async function POST(
   request: NextRequest,
@@ -35,7 +36,7 @@ export async function POST(
   }
 
   // Save to data/1c/uploads/products/
-  const uploadDir = path.join(process.cwd(), "data", "1c", "uploads", "products");
+  const uploadDir = path.join(DATA_ROOT, "1c", "uploads", "products");
   fs.mkdirSync(uploadDir, { recursive: true });
 
   const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
