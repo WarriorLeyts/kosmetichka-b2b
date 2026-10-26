@@ -237,7 +237,7 @@ export type LoyaltyCustomer = {
   priceType?: string | null;
 };
 
-/** Bonuses may be spent only by retail customers with a linked card (like at the shop's cash desks). */
+/** Bonuses may be spent (and are accrued) only for retail customers with a linked card. */
 export function canSpendBonuses(c: LoyaltyCustomer | null | undefined): boolean {
   return Boolean(c?.loyaltyCard?.trim()) && c?.priceType === "retail";
 }
@@ -281,7 +281,9 @@ export type LoyaltyOptions = {
 type ClientRef = { card: string } | { phoneNumber: string } | null;
 
 function clientRef(c: LoyaltyCustomer): ClientRef {
-  const card = c.loyaltyCard?.trim();
+  // bonuses (spending AND accrual) only for retail customers; wholesale / big wholesale
+  // orders go without the card, so MAXMA neither reserves nor accrues anything for them
+  const card = c.priceType === "retail" ? c.loyaltyCard?.trim() : "";
   if (card) return { card };
   // No card: the phone identifies the client for the promo code only (as before), no bonuses
   const phone = c.phone ? maxmaPhone(c.phone) : null;

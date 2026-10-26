@@ -118,13 +118,13 @@ describe("calcLoyalty (MAXMA mocked)", () => {
     expect(r.bonusLines).toEqual([30, 0]);
   });
 
-  it("non-retail with a card: spending forced to 0, accrual auto", async () => {
-    fetchMock.mockImplementationOnce(() => reply({ calculationResult: { rows: [], bonuses: { applied: 0, collected: 7, maxToApply: 40 } } }));
+  it("non-retail with a card: no card sent — no spending, no accrual", async () => {
+    fetchMock.mockImplementationOnce(() => reply({ calculationResult: { rows: [] } }));
     const r = await calcLoyalty({ customer: { ...retail, priceType: "wholesale" }, lines, applyBonuses: 40 });
-    expect(sent(0).calculationQuery).toMatchObject({ applyBonuses: 0, collectBonuses: "auto" });
-    expect(r.bonuses).toMatchObject({ applied: 0, collected: 7, maxToApply: 0 });
+    expect(sent(0).calculationQuery).toMatchObject({ applyBonuses: 0, collectBonuses: 0 });
+    expect(sent(0).calculationQuery.client?.card).toBeUndefined();
+    expect(r.bonuses).toBeNull();
   });
-
   it("card MAXMA doesn't know → anonymous calculation, bonuses null", async () => {
     fetchMock
       .mockImplementationOnce(() => reply({ errorCode: 3, description: "Card not found" }, 400))
