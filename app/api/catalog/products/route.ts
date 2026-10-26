@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { withFlatPrices } from "@/lib/utils";
 import { verifyToken } from "@/lib/auth";
+import { createHash } from "crypto";
 
 const SORTS = ["popularity", "price_asc", "price_desc", "name"] as const;
 type Sort = (typeof SORTS)[number];
@@ -20,6 +21,8 @@ function maskGuestPrices(product: any) {
  */
 type PriceIndex = { at: number; wholesale: Map<string, number>; sale: Set<string> };
 let priceMemo: PriceIndex | null = null;
+/** Price-sorted product ids per filter set (see the price sort below), max 100 entries, 1 min. */
+const sortedMemo = new Map<string, { at: number; ids: number[] }>();
 let priceMemoLoading: Promise<PriceIndex> | null = null;
 async function priceIndex(): Promise<PriceIndex> {
   if (priceMemo && Date.now() - priceMemo.at < 120_000) return priceMemo;
@@ -223,28 +226,38 @@ export async function GET(request: Request) {
   // Safety cap: even though we only fetch id+guid, guard against runaway
   // catalogs (100k+ SKUs) that could consume significant memory.
   const MAX_SORT_CANDIDATES = 50_000; // the whole catalog (~12k) — a lower cap cut products off and showed «10 000 товаров»
-  const matched = await prisma.product.findMany({
-    where,
-    select: { id: true, guid: true },
-    take: MAX_SORT_CANDIDATES,
-  });
 
-  if (matched.length === 0) {
+  // The sorted id list for these filters is cached for a minute: scrolling pages 2, 3, … and
+  // other customers with the same filters reuse it instead of loading ~12k rows each time
+  // (under load the price sort used to take seconds).
+  const sortKey = createHash("sha1").update(JSON.stringify([where, sort, prices.at])).digest("hex");
+  let sortedIds = sortedMemo.get(sortKey);
+  if (!sortedIds || Date.now() - sortedIds.at > 60_000) {
+    const matched = await prisma.product.findMany({
+      where,
+      select: { id: true, guid: true },
+      take: MAX_SORT_CANDIDATES,
+    });
+    const priceByGuid = prices.wholesale;
+    // products without a price (none or 0 ₽) always go to the end — in both directions
+    matched.sort((a, b) => {
+      const pa = priceByGuid.get(a.guid) ?? 0;
+      const pb = priceByGuid.get(b.guid) ?? 0;
+      if (!(pa > 0) || !(pb > 0)) return (pb > 0 ? 1 : 0) - (pa > 0 ? 1 : 0);
+      return sort === "price_asc" ? pa - pb : pb - pa;
+    });
+    sortedIds = { at: Date.now(), ids: matched.map((p) => p.id) };
+    sortedMemo.delete(sortKey);
+    sortedMemo.set(sortKey, sortedIds);
+    while (sortedMemo.size > 100) sortedMemo.delete(sortedMemo.keys().next().value as string);
+  }
+
+  if (sortedIds.ids.length === 0) {
     return NextResponse.json({ nameAnyApplied: nameAny.length > 0, products: [], total: 0, page, hasMore: false });
   }
 
-  const priceByGuid = prices.wholesale;
-
-  // products without a price (none or 0 ₽) always go to the end — in both directions
-  matched.sort((a, b) => {
-    const pa = priceByGuid.get(a.guid) ?? 0;
-    const pb = priceByGuid.get(b.guid) ?? 0;
-    if (!(pa > 0) || !(pb > 0)) return (pb > 0 ? 1 : 0) - (pa > 0 ? 1 : 0);
-    return sort === "price_asc" ? pa - pb : pb - pa;
-  });
-
-  const total = matched.length;
-  const pageIds = matched.slice((page - 1) * limit, page * limit).map((p) => p.id);
+  const total = sortedIds.ids.length;
+  const pageIds = sortedIds.ids.slice((page - 1) * limit, page * limit);
 
   const products = await prisma.product.findMany({
     where: { id: { in: pageIds } },
