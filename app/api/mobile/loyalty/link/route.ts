@@ -15,7 +15,7 @@ import { RateLimiter } from "@/lib/rateLimit";
 
 type Pending = { card: string; hash: string; expiresAt: number; attempts: number };
 const pending = new Map<number, Pending>();
-const findLimiter = new RateLimiter({ windowMs: 15 * 60_000, max: 5 }); // SMS cost + enumeration
+const findLimiter = new RateLimiter({ windowMs: 15 * 60_000, max: 10 }); // SMS cost + enumeration
 const codeLimiter = new RateLimiter({ windowMs: 15 * 60_000, max: 10 });
 
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
