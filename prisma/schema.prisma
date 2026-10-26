@@ -167,6 +167,10 @@ model Order {
   total   Int     @default(0)
   comment String? @db.Text
 
+  // Promo code (validated and calculated by MAXMA); discount in whole roubles, total already reduced by it
+  promoCode String?
+  discount  Int     @default(0)
+
   items OrderItem[]
 
   oneCExportedAt    DateTime?
@@ -200,6 +204,8 @@ model OrderItem {
   quantity    Int
   price       Int
   total       Int
+  // Promo-code discount for this line, whole roubles (line sum to pay = total - discount)
+  discount    Int     @default(0)
 
   variantName     String?
   variantImageUrl String?

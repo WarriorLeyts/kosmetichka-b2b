@@ -113,6 +113,7 @@ export async function POST(request: NextRequest) {
         const updatedIds = new Set<number>();
 
         let newTotal = 0;
+        let newDiscount = 0; // promo-code discount kept on the lines
 
         for (const row of rows) {
           const rowName   = String(row.PRODUCT_NAME || "").trim();
@@ -132,20 +133,28 @@ export async function POST(request: NextRequest) {
           updatedIds.add(orderItem.id);
 
           if (price > 0 && quantity > 0) {
+            const lineDiscount = Math.min(orderItem.discount, price * quantity);
             await prisma.orderItem.update({
               where: { id: orderItem.id },
-              data: { price, quantity, total: price * quantity },
+              data: {
+                price,
+                quantity,
+                total: price * quantity,
+                ...(lineDiscount !== orderItem.discount ? { discount: lineDiscount } : {}),
+              },
             });
-            newTotal += price * quantity;
+            newTotal += price * quantity - lineDiscount;
+            newDiscount += lineDiscount;
           } else {
-            newTotal += orderItem.price * orderItem.quantity;
+            newTotal += orderItem.price * orderItem.quantity - orderItem.discount;
+            newDiscount += orderItem.discount;
           }
         }
 
         if (newTotal > 0) {
           await prisma.order.update({
             where: { id: orderId },
-            data: { total: newTotal },
+            data: { total: newTotal, ...(order.promoCode ? { discount: newDiscount } : {}) },
           });
           console.log(`[Bitrix webhook] Заказ №${orderId} — товары обновлены, итог: ${newTotal} ₽`);
         }

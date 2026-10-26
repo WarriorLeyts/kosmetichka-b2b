@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyCustomerToken } from "@/lib/customerAuth";
+import { onOrderStatus } from "@/lib/maxmaOrders";
 
 async function bitrixCall(webhookUrl: string, method: string, body: object): Promise<any> {
   const res = await fetch(`${webhookUrl}${method}.json`, {
@@ -102,6 +103,9 @@ export async function POST(request: Request, { params }: Props) {
     console.error("[cancel] update error:", err);
     return NextResponse.json({ error: "Не удалось отменить заказ" }, { status: 500 });
   }
+
+  // MAXMA: cancel the promo-code order (best effort, not awaited)
+  onOrderStatus(order.id, "cancelled");
 
   // Перенести сделку в Битрикс в стадию "Отменен"
   cancelDealInBitrix(order.id).catch((err) =>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { cmlComment, cmlItemDiscounts, cmlItemSum } from "@/lib/commerceml";
 
 function checkApiKey(request: NextRequest) {
   const key = request.headers.get("x-1c-key");
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
       <БазоваяЕдиница Код="796" НаименованиеПолное="Штука">шт</БазоваяЕдиница>
       <ЦенаЗаЕдиницу>${item.price}</ЦенаЗаЕдиницу>
       <Количество>${item.quantity}</Количество>
-      <Сумма>${item.total}</Сумма>
+      <Сумма>${cmlItemSum(item)}</Сумма>${cmlItemDiscounts(item, order.promoCode, "      ")}
     </Товар>`
         )
         .join("\n");
@@ -91,7 +92,7 @@ export async function GET(request: NextRequest) {
     <Валюта>руб</Валюта>
     <Курс>1</Курс>
     <Сумма>${order.total}</Сумма>
-    <Комментарий>${escapeXml(order.comment || "")}</Комментарий>
+    <Комментарий>${escapeXml(cmlComment(order))}</Комментарий>
     <Контрагенты>
       <Контрагент>
         <Ид>${escapeXml(customer.oneCId || `customer-${customer.id}`)}</Ид>
@@ -111,7 +112,7 @@ ${itemsXml}
       </ЗначениеРеквизита>
       <ЗначениеРеквизита>
         <Наименование>Комментарий</Наименование>
-        <Значение>${escapeXml(order.comment || "")}</Значение>
+        <Значение>${escapeXml(cmlComment(order))}</Значение>
       </ЗначениеРеквизита>
       <ЗначениеРеквизита>
         <Наименование>Ответственный</Наименование>

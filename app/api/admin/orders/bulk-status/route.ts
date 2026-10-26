@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ORDER_STATUS_TRANSITIONS } from "@/lib/orderStatus";
+import { onOrderStatus } from "@/lib/maxmaOrders";
 
 export async function POST(request: NextRequest) {
   const user = await requireAdmin();
@@ -50,6 +51,8 @@ export async function POST(request: NextRequest) {
         })),
       }),
     ]);
+    // MAXMA: confirm / cancel promo-code orders (best effort, not awaited)
+    onOrderStatus(updated, toStatus);
   }
 
   return NextResponse.json({ updated, skipped });

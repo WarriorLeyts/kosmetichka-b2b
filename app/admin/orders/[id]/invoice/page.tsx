@@ -156,6 +156,18 @@ export default async function InvoicePage({
         {/* Totals */}
         <div className="flex justify-end">
           <div className="w-64">
+            {order.promoCode && order.discount > 0 && (
+              <>
+                <div className="flex justify-between py-1.5 text-sm text-slate-500">
+                  <span>Сумма без скидки:</span>
+                  <span>{(order.total + order.discount).toLocaleString("ru-RU")} ₽</span>
+                </div>
+                <div className="flex justify-between py-1.5 text-sm text-slate-500">
+                  <span>Промокод {order.promoCode}:</span>
+                  <span>−{order.discount.toLocaleString("ru-RU")} ₽</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between border-t-2 border-slate-800 pt-3">
               <span className="text-lg font-black text-slate-800">ИТОГО:</span>
               <span className="text-lg font-black text-slate-800">

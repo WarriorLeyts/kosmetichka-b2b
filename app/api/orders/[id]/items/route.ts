@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
+import { orderSums } from "@/lib/orderPricing";
 
 // Customers can modify their own pending orders: change quantities or remove items.
 export async function PUT(
@@ -78,7 +79,12 @@ export async function PUT(
       const newTotal = Math.round(existing.price * upd.quantity);
       await tx.orderItem.update({
         where: { id: upd.id },
-        data: { quantity: upd.quantity, total: newTotal },
+        data: {
+          quantity: upd.quantity,
+          total: newTotal,
+          // promo discount of the line can't exceed the new line total
+          ...(existing.discount > newTotal ? { discount: newTotal } : {}),
+        },
       });
     }
 
@@ -91,8 +97,12 @@ export async function PUT(
 
     // Recalculate order total
     const remaining = await tx.orderItem.findMany({ where: { orderId } });
-    const newTotal = remaining.reduce((sum, i) => sum + i.total, 0);
-    await tx.order.update({ where: { id: orderId }, data: { total: newTotal } });
+    // total = Σ(line total − line promo discount); without a promo code that's Σ line totals
+    const sums = orderSums(remaining);
+    await tx.order.update({
+      where: { id: orderId },
+      data: { total: sums.total, ...(order.promoCode ? { discount: sums.discount } : {}) },
+    });
   });
 
   // Return updated order
@@ -109,6 +119,7 @@ export async function PUT(
           quantity: true,
           price: true,
           total: true,
+          discount: true,
           variantImageUrl: true,
           variantName: true,
         },

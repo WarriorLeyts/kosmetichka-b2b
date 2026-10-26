@@ -114,3 +114,142 @@ export function publicCard(c: LoyaltyCard) {
   const { phone: _phone, ...rest } = c; // eslint-disable-line @typescript-eslint/no-unused-vars
   return rest;
 }
+
+// ── Promo codes (v2 calculate-purchase / set-order) ─────────────────────────
+
+/** What a promo calculation needs from a priced cart line. */
+export type PromoLine = { sku: string; productName: string; price: number; quantity: number; total: number };
+
+export type PromoResult = {
+  applied: boolean;
+  name?: string;
+  /** MAXMA's reason when the code was not applied */
+  error?: string;
+  /** Promo discount, whole roubles (rounded down) */
+  discount: number;
+  /** Per-line discount, whole roubles, same order as the input; sums exactly to `discount` */
+  lines: number[];
+};
+
+/** v2 calculationQuery for the cart: only the promo code counts — no bonuses, no offers. */
+export function promoCalculationQuery(lines: PromoLine[], code: string, phone?: string | null) {
+  const client = phone ? maxmaPhone(phone) : null;
+  return {
+    ...(client ? { client: { phoneNumber: client } } : {}),
+    shop: { code: "online", name: "Интернет-магазин" },
+    rows: lines.map((l, i) => ({
+      id: String(i),
+      product: { sku: l.sku, title: l.productName, blackPrice: l.price },
+      qty: l.quantity,
+      noOffer: true, // only the promo code: no automatic offers
+    })),
+    promocode: code,
+    applyBonuses: 0,
+    collectBonuses: 0,
+  };
+}
+
+const num = (v: unknown) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+
+/**
+ * Splits MAXMA's promo discount into whole roubles: floor per line, then the remainder
+ * (up to floor of the summary promo discount) goes 1 ₽ at a time to the lines with the
+ * largest fractional parts. A line discount never exceeds its line total.
+ */
+export function splitPromoDiscount(rowAmounts: number[], summaryAmount: number | null, lineTotals: number[]) {
+  const floor = (x: number) => Math.floor(x + 1e-6); // 99.9999999 from float math is 100
+  const raw = rowAmounts.map((a, i) => Math.min(num(a), lineTotals[i]));
+  const parts = raw.map(floor);
+  const rawSum = raw.reduce((s, a) => s + a, 0);
+  const cap = lineTotals.reduce((s, t) => s + t, 0);
+  const target = Math.min(floor(summaryAmount != null ? num(summaryAmount) : rawSum), cap);
+  let rest = target - parts.reduce((s, a) => s + a, 0);
+  if (rest > 0) {
+    const order = raw
+      .map((a, i) => ({ i, frac: a - floor(a), share: a }))
+      .sort((x, y) => y.frac - x.frac || y.share - x.share);
+    // Round-robin until the remainder is placed (lines with share first, then any line with room)
+    for (const pass of [0, 1]) {
+      for (const { i, share } of order) {
+        if (rest <= 0) break;
+        if (pass === 0 && share <= 0) continue;
+        const room = lineTotals[i] - parts[i];
+        const add = Math.min(room, pass === 0 ? 1 : rest);
+        if (add > 0) {
+          parts[i] += add;
+          rest -= add;
+        }
+      }
+    }
+  }
+  const discount = parts.reduce((s, a) => s + a, 0);
+  return { discount, lines: parts };
+}
+
+/**
+ * Validates and calculates a promo code for the cart via MAXMA v2/calculate-purchase.
+ * Only the promocode part of MAXMA's discounts is used. Throws MaxmaError (503 not
+ * configured / 502 unavailable).
+ */
+export async function calcPromo(lines: PromoLine[], code: string, customerPhone?: string | null): Promise<PromoResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let data: any;
+  try {
+    data = await call("v2/calculate-purchase", { calculationQuery: promoCalculationQuery(lines, code, customerPhone) });
+  } catch (e) {
+    // A phone MAXMA doesn't know must not block the code: calculate anonymously
+    if (e instanceof MaxmaError && e.notFound && customerPhone) {
+      data = await call("v2/calculate-purchase", { calculationQuery: promoCalculationQuery(lines, code, null) });
+    } else {
+      throw e;
+    }
+  }
+  const r = data?.calculationResult;
+  if (!r) throw new MaxmaError("unavailable", 502);
+  const p = r.promocode ?? {};
+  const none = lines.map(() => 0);
+  if (!p.applied) {
+    return {
+      applied: false,
+      name: p.name || undefined,
+      error: String(p.error?.description || "Промокод не применён"),
+      discount: 0,
+      lines: none,
+    };
+  }
+  const byId = new Map<string, number>();
+  for (const row of Array.isArray(r.rows) ? r.rows : []) {
+    byId.set(String(row?.id), num(row?.discounts?.promocode));
+  }
+  const summary = r.summary?.discounts?.promocode;
+  const split = splitPromoDiscount(
+    lines.map((_, i) => byId.get(String(i)) ?? 0),
+    summary != null ? num(summary) : null,
+    lines.map((l) => l.total)
+  );
+  return { applied: true, name: p.name || undefined, ...split };
+}
+
+/** Registers the site order in MAXMA (best effort: callers log errors). */
+export async function setOrder(orderId: number, lines: PromoLine[], code: string, customerPhone?: string | null) {
+  const send = (phone: string | null | undefined) =>
+    call("v2/set-order", { orderId: `site-${orderId}`, calculationQuery: promoCalculationQuery(lines, code, phone) });
+  try {
+    await send(customerPhone);
+  } catch (e) {
+    // Same as calcPromo: a client MAXMA doesn't know → register the order anonymously
+    if (e instanceof MaxmaError && e.notFound && customerPhone) await send(null);
+    else throw e;
+  }
+}
+
+export async function confirmOrder(orderId: number) {
+  await call("confirm-order", { orderId: `site-${orderId}` });
+}
+
+export async function cancelOrder(orderId: number) {
+  await call("cancel-order", { orderId: `site-${orderId}` });
+}

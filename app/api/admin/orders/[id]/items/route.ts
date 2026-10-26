@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
+import { orderSums } from "@/lib/orderPricing";
 
 function getSecret() {
   return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
@@ -116,12 +117,15 @@ export async function PUT(request: NextRequest, { params }: Props) {
     .map((u) => {
       const qty = Math.max(1, Math.round(u.quantity));
       const price = Math.max(0, Math.round(u.price));
+      const lineDiscount = order.items.find((i) => i.id === u.id)?.discount ?? 0;
       return prisma.orderItem.update({
         where: { id: u.id },
         data: {
           quantity: qty,
           price,
           total: qty * price,
+          // promo discount of the line can't exceed the new line total
+          ...(lineDiscount > qty * price ? { discount: qty * price } : {}),
           ...(u.variantName !== undefined ? { variantName: u.variantName ?? null } : {}),
           ...(u.variantImageUrl !== undefined ? { variantImageUrl: u.variantImageUrl ?? null } : {}),
         },
@@ -151,11 +155,13 @@ export async function PUT(request: NextRequest, { params }: Props) {
   }
 
   const remaining = await prisma.orderItem.findMany({ where: { orderId } });
-  const newTotal = remaining.reduce((s, i) => s + i.total, 0);
+  // total = Σ(line total − line promo discount); without a promo code that's Σ line totals
+  const sums = orderSums(remaining);
   await prisma.order.update({
     where: { id: orderId },
     data: {
-      total: newTotal,
+      total: sums.total,
+      ...(order.promoCode ? { discount: sums.discount } : {}),
       customerConfirmed: false,
       changesSnapshot: snapshot,
     },

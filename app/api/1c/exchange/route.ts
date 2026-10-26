@@ -4,6 +4,8 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { dropThumbs } from "@/lib/thumb";
+import { cmlComment, cmlItemDiscounts, cmlItemSum } from "@/lib/commerceml";
+import { onOrderStatus } from "@/lib/maxmaOrders";
 
 // Auth: any login + SYNC_API_KEY as password (set in .env)
 const COOKIE_NAME = "1C_SESS";
@@ -186,7 +188,7 @@ export async function GET(request: NextRequest) {
       <БазоваяЕдиница Код="796" НаименованиеПолное="Штука">шт</БазоваяЕдиница>
       <ЦенаЗаЕдиницу>${item.price}</ЦенаЗаЕдиницу>
       <Количество>${item.quantity}</Количество>
-      <Сумма>${item.total}</Сумма>
+      <Сумма>${cmlItemSum(item)}</Сумма>${cmlItemDiscounts(item, order.promoCode, "      ")}
     </Товар>`
           )
           .join("\n");
@@ -201,7 +203,7 @@ export async function GET(request: NextRequest) {
     <Валюта>руб</Валюта>
     <Курс>1</Курс>
     <Сумма>${order.total}</Сумма>
-    <Комментарий>${escapeXml(order.comment || "")}</Комментарий>
+    <Комментарий>${escapeXml(cmlComment(order))}</Комментарий>
     <Контрагенты>
       <Контрагент>
         <Ид>${escapeXml(c.oneCId || `customer-${c.id}`)}</Ид>
@@ -282,11 +284,18 @@ export async function POST(request: NextRequest) {
 
     if (ids.length > 0) {
       const { prisma } = await import("@/lib/prisma");
+      // Promo-code orders this ack moves to "exported" (for the MAXMA confirm below)
+      const toConfirm = await prisma.order.findMany({
+        where: { id: { in: ids }, status: { not: "exported" }, promoCode: { not: null } },
+        select: { id: true },
+      });
       await prisma.order.updateMany({
         where: { id: { in: ids } },
         data: { oneCExportedAt: new Date(), status: "exported" },
       });
       console.log(`[exchange] acknowledged orders: ${ids.join(", ")}`);
+      // MAXMA: confirm promo-code orders (best effort, not awaited)
+      if (toConfirm.length) onOrderStatus(toConfirm.map((o) => o.id), "exported");
     }
 
     return txt("success");

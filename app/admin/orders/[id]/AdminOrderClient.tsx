@@ -62,6 +62,8 @@ type Order = {
   id: number;
   status: string;
   total: number;
+  promoCode?: string | null;
+  discount?: number;
   comment: string | null;
   customerConfirmed: boolean;
   pickerId: number | null;
@@ -952,6 +954,11 @@ export default function AdminOrderClient({
           </a>
           <div className="text-right">
             <div className="text-2xl font-black">{order.total.toLocaleString("ru-RU")} ₽</div>
+            {order.promoCode && (
+              <div className="text-xs font-semibold text-emerald-600">
+                Промокод {order.promoCode} — скидка {(order.discount ?? 0).toLocaleString("ru-RU")} ₽
+              </div>
+            )}
             <div className="text-xs text-slate-400">{order.items.length} позиций</div>
           </div>
         </div>
@@ -1283,6 +1290,12 @@ export default function AdminOrderClient({
                 </div>
               );
             })}
+            {order.promoCode && (
+              <div className="rounded-xl border bg-emerald-50 p-3 flex justify-between items-center text-sm">
+                <span className="font-semibold text-emerald-700">Промокод {order.promoCode}</span>
+                <span className="font-bold text-emerald-700">−{(order.discount ?? 0).toLocaleString("ru-RU")} ₽</span>
+              </div>
+            )}
             <div className="rounded-xl border bg-slate-50 p-3 flex justify-between items-center">
               <span className="text-sm font-semibold text-slate-600">Итого:</span>
               <span className="text-lg font-black">{order.total.toLocaleString("ru-RU")} ₽</span>
@@ -1387,6 +1400,17 @@ export default function AdminOrderClient({
                 })}
               </tbody>
               <tfoot className="border-t bg-slate-50">
+                {order.promoCode && (
+                  <tr>
+                    <td colSpan={3} className="p-3 font-semibold text-right text-emerald-700">
+                      Промокод {order.promoCode} — скидка:
+                    </td>
+                    <td className="p-3 text-right font-bold text-emerald-700">
+                      −{(order.discount ?? 0).toLocaleString("ru-RU")} ₽
+                    </td>
+                    <td />
+                  </tr>
+                )}
                 <tr>
                   <td colSpan={3} className="p-3 font-bold text-right text-slate-600">Итого:</td>
                   <td className="p-3 text-right font-black text-lg">{order.total.toLocaleString("ru-RU")} ₽</td>

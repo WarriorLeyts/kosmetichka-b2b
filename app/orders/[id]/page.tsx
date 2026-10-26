@@ -33,6 +33,8 @@ export default async function OrderDetailPage({
     id: order.id,
     status: order.status,
     total: order.total,
+    promoCode: order.promoCode ?? null,
+    discount: order.discount,
     comment: order.comment,
     createdAt: order.createdAt.toISOString(),
     items: order.items.map((item) => ({

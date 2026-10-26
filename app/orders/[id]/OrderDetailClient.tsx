@@ -22,6 +22,8 @@ type Order = {
   id: number;
   status: string;
   total: number;
+  promoCode: string | null;
+  discount: number;
   comment: string | null;
   createdAt: string;
   items: OrderItem[];
@@ -145,7 +147,15 @@ export default function OrderDetailClient({ order }: { order: Order }) {
               </div>
             ))}
           </div>
-          <div className="flex justify-between border-t px-5 py-4">
+          {order.promoCode && order.discount > 0 && (
+            <div className="flex justify-between border-t px-5 pt-4 text-sm">
+              <span className="text-slate-500">Промокод {order.promoCode}</span>
+              <span className="font-bold text-emerald-600">
+                −{order.discount.toLocaleString("ru-RU")} ₽
+              </span>
+            </div>
+          )}
+          <div className={`flex justify-between px-5 py-4 ${order.promoCode && order.discount > 0 ? "" : "border-t"}`}>
             <span className="font-bold text-slate-700">Итого</span>
             <span className="text-lg font-black text-indigo-600">
               {order.total.toLocaleString("ru-RU")} ₽

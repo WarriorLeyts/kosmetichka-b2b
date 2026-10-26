@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { sendMail } from "@/lib/mail";
-import { effectivePriceType } from "@/lib/pricing";
 import { orderCreationLimiter } from "@/lib/rateLimit";
+import { priceOrderItems, type PricedLine } from "@/lib/orderPricing";
+import { calcPromo, MaxmaError, setOrder, type PromoResult } from "@/lib/maxma";
+import { PROMO_NOT_FOR_ITEMS } from "@/lib/promo";
 
 /** Escape user-supplied strings before embedding in HTML emails */
 function escHtml(str: string): string {
@@ -42,7 +44,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { items, comment } = await request.json();
+  const { items, comment, promocode } = await request.json();
 
   if (!items || items.length === 0) {
     return NextResponse.json({ error: "Корзина пустая" }, { status: 400 });
@@ -60,83 +62,45 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Ошибка авторизации" }, { status: 401 });
   }
 
-  const productIds: number[] = items.map((item: any) => Number(item.id));
-
-  const products = await prisma.product.findMany({
-    where: { id: { in: productIds } },
-    include: { prices: true },
-  });
-
-  const productById = new Map(products.map((product) => [product.id, product]));
-
-  // Build flat product representations for effectivePriceType calculation
-  const cartForPricing = items.map((item: any) => {
-    const product = productById.get(Number(item.id));
-    const priceMap: Record<string, number> = {};
-    for (const pp of product?.prices ?? []) {
-      priceMap[pp.priceType] = Number(pp.price);
-    }
-    return {
-      wholesalePrice: priceMap["wholesale"] ?? 0,
-      bigWholesalePrice: priceMap["big_wholesale"] ?? 0,
-      discountPrice: priceMap["discount"] ?? 0,
-      retailPrice: priceMap["retail"] ?? 0,
-      quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
-    };
-  });
-
-  // Compute effective price type based on actual cart total (handles auto-upgrade)
-  const appliedPriceType = effectivePriceType(cartForPricing, customer);
-
   let order;
+  let lines: PricedLine[];
+  let promo: PromoResult | null = null;
 
   try {
-    const orderItems = items.map((item: any) => {
-      const product = productById.get(Number(item.id));
+    lines = await priceOrderItems(customer, items);
+  } catch (error) {
+    console.error(error);
+    const message = error instanceof Error ? error.message : "Не удалось создать заказ";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 
-      if (!product) {
-        throw new Error(`Товар ${item.id} не найден`);
-      }
-
-      const matchedPrice = product.prices.find(
-        (p) => p.priceType === appliedPriceType
+  // Promo code: MAXMA validates and calculates it again on the server-side prices
+  const promoCode = typeof promocode === "string" ? promocode.trim().slice(0, 64) : "";
+  if (promoCode) {
+    try {
+      promo = await calcPromo(lines, promoCode, customer.phone);
+    } catch (e) {
+      const status = e instanceof MaxmaError && e.status === 503 ? 503 : 502;
+      return NextResponse.json(
+        { error: "Промокод: сервис лояльности недоступен, попробуйте позже или оформите заказ без промокода" },
+        { status }
       );
-      const fallbackPrice = product.prices.find(
-        (p) => p.priceType === "retail"
-      );
+    }
+    if (!promo.applied || promo.discount <= 0) {
+      const reason = promo.applied ? PROMO_NOT_FOR_ITEMS : promo.error || "не применён";
+      return NextResponse.json({ error: `Промокод: ${reason}` }, { status: 400 });
+    }
+  }
 
-      const rawPrice = matchedPrice?.price ?? fallbackPrice?.price;
-      if (!rawPrice || rawPrice <= 0) {
-        throw new Error(`Цена для товара «${product.name}» не найдена. Обратитесь к менеджеру.`);
-      }
-      const price = Math.round(rawPrice);
-      const quantity = Math.floor(Number(item.quantity));
-
-      // Explicit non-positive guard (Number(-1) || 0 returns -1, so must check explicitly)
-      if (!Number.isFinite(quantity) || quantity <= 0) {
-        throw new Error(`Некорректное количество для «${product.name}»`);
-      }
-
-      // MOQ check
-      const minQty = (product as any).minOrderQty ?? 1;
-      if (quantity < minQty) {
-        throw new Error(`Минимальное количество для «${product.name}» — ${minQty} шт.`);
-      }
-
-      return {
-        productId: product.id,
-        productName: product.name,
-        barcode: product.barcode || null,
-        quantity,
-        price,
-        total: price * quantity,
-        variantName: item.variantName ?? null,
-        variantImageUrl: item.variantImageUrl ?? null,
-      };
-    });
+  try {
+    const orderItems = lines.map(({ sku: _sku, ...line }, i) => ({ // eslint-disable-line @typescript-eslint/no-unused-vars
+      ...line,
+      ...(promo ? { discount: promo.lines[i] } : {}),
+    }));
 
     let total = 0;
     for (const it of orderItems) total += it.total;
+    if (promo) total -= promo.discount;
 
     order = await prisma.order.create({
       data: {
@@ -144,6 +108,7 @@ export async function POST(request: Request) {
         status: "pending",
         total,
         comment: comment || null,
+        ...(promo ? { promoCode, discount: promo.discount } : {}),
         items: {
           create: orderItems,
         },
@@ -153,6 +118,14 @@ export async function POST(request: Request) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Не удалось создать заказ";
     return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  // Регистрируем заказ с промокодом в MAXMA (best effort — заказ уже создан)
+  if (promo) {
+    const orderId = order.id;
+    setOrder(orderId, lines, promoCode, customer.phone).catch((e) =>
+      console.error(`[maxma] set-order site-${orderId} failed:`, e instanceof Error ? e.message : e)
+    );
   }
 
   // Уведомление покупателю о принятом заказе
@@ -191,6 +164,8 @@ export async function POST(request: Request) {
             <tbody>${itemsHtml}</tbody>
           </table>
           <div style="border-top:2px solid #1e293b;padding-top:12px;text-align:right;">
+            ${promo ? `<div style="font-size:14px;color:#475569;margin-bottom:4px;">Сумма без скидки: ${(order.total + order.discount).toLocaleString("ru-RU")} ₽</div>
+            <div style="font-size:14px;color:#16a34a;margin-bottom:6px;">Скидка по промокоду ${escHtml(promoCode)}: −${order.discount.toLocaleString("ru-RU")} ₽</div>` : ""}
             <strong style="font-size:16px;color:#1e293b;">Итого: ${order.total.toLocaleString("ru-RU")} ₽</strong>
           </div>
           <div style="margin-top:24px;">
@@ -220,7 +195,8 @@ export async function POST(request: Request) {
           <h2 style="margin:0 0 16px;font-size:20px;color:#1e293b;">🛍️ Новый заказ #${order.id}</h2>
           <p style="margin:0 0 8px;color:#475569;"><b>Клиент:</b> ${clientName}</p>
           ${clientPhone ? `<p style="margin:0 0 8px;color:#475569;"><b>Телефон:</b> ${clientPhone}</p>` : ""}
-          <p style="margin:0 0 24px;color:#475569;"><b>Сумма:</b> ${order.total} ₽</p>
+          <p style="margin:0 0 ${promo ? 8 : 24}px;color:#475569;"><b>Сумма:</b> ${order.total} ₽</p>
+          ${promo ? `<p style="margin:0 0 24px;color:#475569;"><b>Промокод:</b> ${escHtml(promoCode)} — скидка ${order.discount} ₽</p>` : ""}
           <a href="${baseUrl}/admin/orders/${order.id}"
              style="display:inline-block;padding:12px 28px;background:#6366f1;color:#fff;font-weight:700;text-decoration:none;border-radius:12px;">
             Открыть заказ
