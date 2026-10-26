@@ -5,6 +5,7 @@ import { verifyCustomerToken } from "@/lib/customerAuth";
 import { sendMail } from "@/lib/mail";
 import { orderCreationLimiter } from "@/lib/rateLimit";
 import { priceOrderItems, type PricedLine } from "@/lib/orderPricing";
+import { minOrderFor } from "@/lib/pricing";
 import {
   BONUS_SPEND_FORBIDDEN,
   calcLoyalty,
@@ -94,6 +95,19 @@ export async function POST(request: Request) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Не удалось создать заказ";
     return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  // Опт — заказ от 5 000 ₽, крупный опт — от 50 000 ₽ (в ценах клиента)
+  const minOrder = minOrderFor(customer);
+  const linesSum = lines.reduce((s, l) => s + l.total, 0);
+  if (minOrder > 0 && linesSum < minOrder) {
+    return NextResponse.json(
+      {
+        error: `Минимальная сумма заказа — ${minOrder.toLocaleString("ru-RU")} ₽. Добавьте товаров ещё на ${(minOrder - linesSum).toLocaleString("ru-RU")} ₽.`,
+        code: "min_order",
+      },
+      { status: 400 }
+    );
   }
 
   // Promo code / bonuses: MAXMA calculates them again on the server-side prices (one

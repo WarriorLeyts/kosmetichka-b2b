@@ -237,9 +237,17 @@ export type LoyaltyCustomer = {
   priceType?: string | null;
 };
 
-/** Bonuses may be spent (and are accrued) only for retail customers with a linked card. */
+/**
+ * Retail buyers — bonus card («Розница») and discount card («Скидка») — get MAXMA bonuses;
+ * wholesale and big wholesale never do.
+ */
+export function bonusPriceType(priceType: string | null | undefined): boolean {
+  return priceType === "retail" || priceType === "discount";
+}
+
+/** Bonuses may be spent (and are accrued) only for retail buyers with a linked card. */
 export function canSpendBonuses(c: LoyaltyCustomer | null | undefined): boolean {
-  return Boolean(c?.loyaltyCard?.trim()) && c?.priceType === "retail";
+  return Boolean(c?.loyaltyCard?.trim()) && bonusPriceType(c?.priceType);
 }
 
 export const BONUS_SPEND_FORBIDDEN = "Списание бонусов доступно только розничным покупателям с картой";
@@ -281,9 +289,9 @@ export type LoyaltyOptions = {
 type ClientRef = { card: string } | { phoneNumber: string } | null;
 
 function clientRef(c: LoyaltyCustomer): ClientRef {
-  // bonuses (spending AND accrual) only for retail customers; wholesale / big wholesale
-  // orders go without the card, so MAXMA neither reserves nor accrues anything for them
-  const card = c.priceType === "retail" ? c.loyaltyCard?.trim() : "";
+  // bonuses (spending AND accrual) only for retail buyers (bonus or discount card); wholesale /
+  // big wholesale orders go without the card, so MAXMA neither reserves nor accrues anything for them
+  const card = bonusPriceType(c.priceType) ? c.loyaltyCard?.trim() : "";
   if (card) return { card };
   // No card: the phone identifies the client for the promo code only (as before), no bonuses
   const phone = c.phone ? maxmaPhone(c.phone) : null;
