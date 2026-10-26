@@ -222,7 +222,7 @@ export async function GET(request: Request) {
   //            already price-filtered candidate set ─────────────────────────
   // Safety cap: even though we only fetch id+guid, guard against runaway
   // catalogs (100k+ SKUs) that could consume significant memory.
-  const MAX_SORT_CANDIDATES = 10_000;
+  const MAX_SORT_CANDIDATES = 50_000; // the whole catalog (~12k) — a lower cap cut products off and showed «10 000 товаров»
   const matched = await prisma.product.findMany({
     where,
     select: { id: true, guid: true },
@@ -235,9 +235,11 @@ export async function GET(request: Request) {
 
   const priceByGuid = prices.wholesale;
 
+  // products without a price (none or 0 ₽) always go to the end — in both directions
   matched.sort((a, b) => {
-    const pa = priceByGuid.get(a.guid) ?? Infinity;
-    const pb = priceByGuid.get(b.guid) ?? Infinity;
+    const pa = priceByGuid.get(a.guid) ?? 0;
+    const pb = priceByGuid.get(b.guid) ?? 0;
+    if (!(pa > 0) || !(pb > 0)) return (pb > 0 ? 1 : 0) - (pa > 0 ? 1 : 0);
     return sort === "price_asc" ? pa - pb : pb - pa;
   });
 
