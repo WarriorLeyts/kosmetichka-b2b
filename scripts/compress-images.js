@@ -8,6 +8,17 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
+// Уменьшенные копии (data/1c/.thumbs) отдаёт nginx напрямую — после замены фото их удаляем.
+function dropThumbs(filePath) {
+  const base = IMG_DIR;
+  const rel = path.relative(base, filePath);
+  if (!rel || rel.startsWith("..")) return;
+  for (const w of [160, 320, 480, 800, 1200]) {
+    try { fs.unlinkSync(path.join(base, ".thumbs", `w${w}`, rel + ".webp")); } catch { /* нет копии */ }
+  }
+}
+
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
 const IMG_DIR = path.join(ROOT, "data", "1c");
@@ -68,6 +79,7 @@ async function compressImage(filePath) {
   // Записываем только если стало меньше
   if (after < before) {
     fs.writeFileSync(filePath, output);
+      dropThumbs(filePath);
   }
 
   return { before, after: Math.min(before, after), saved: Math.max(0, before - after) };

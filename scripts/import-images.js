@@ -5,6 +5,17 @@ import path from "path";
 import { fileURLToPath } from "url";
 import sharp from "sharp";
 
+// Уменьшенные копии (data/1c/.thumbs) отдаёт nginx напрямую — после замены фото их удаляем.
+function dropThumbs(filePath) {
+  const base = path.join(process.cwd(), "data", "1c");
+  const rel = path.relative(base, filePath);
+  if (!rel || rel.startsWith("..")) return;
+  for (const w of [160, 320, 480, 800, 1200]) {
+    try { fs.unlinkSync(path.join(base, ".thumbs", `w${w}`, rel + ".webp")); } catch { /* нет копии */ }
+  }
+}
+
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // data/1c is resolved from cwd, like in the other import-*.js scripts
 // (in production the 1C files live in .next/standalone/data/1c).
@@ -45,6 +56,7 @@ async function compressInPlace(filePath) {
     }
     if (output.length < input.length) {
       fs.writeFileSync(filePath, output);
+      dropThumbs(filePath);
     }
   } catch {
     // не критично

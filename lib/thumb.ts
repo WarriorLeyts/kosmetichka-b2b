@@ -41,6 +41,23 @@ async function build(src: string, dest: string, width: number): Promise<Buffer |
 }
 
 /** Возвращает Response с уменьшенной копией или null (тогда отдаётся оригинал). */
+/**
+ * Фото заменили (1С прислала новый файл с тем же именем, или его пережали):
+ * старые уменьшенные копии удаляем. Их отдаёт nginx напрямую, не сравнивая даты,
+ * поэтому без этого показывалось бы старое фото.
+ */
+export function dropThumbs(baseDir: string, filePath: string) {
+  const rel = path.relative(baseDir, filePath);
+  if (!rel || rel.startsWith("..")) return;
+  for (const w of THUMB_WIDTHS) {
+    try {
+      fs.unlinkSync(path.join(baseDir, ".thumbs", `w${w}`, rel + ".webp"));
+    } catch {
+      /* копии не было */
+    }
+  }
+}
+
 export async function thumbResponse(baseDir: string, resolvedPath: string, width: number): Promise<Response | null> {
   const ext = path.extname(resolvedPath).toLowerCase();
   if (![".jpg", ".jpeg", ".png", ".webp"].includes(ext)) return null;

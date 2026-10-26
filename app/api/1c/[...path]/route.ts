@@ -30,6 +30,12 @@ export async function GET(
     return new Response("Forbidden", { status: 403 });
   }
 
+  // Only photos: data/1c also holds the 1C exchange files (customers.xml, orders-*.xml,
+  // import.xml) with customers' personal data — they must never be downloadable.
+  if (![".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(path.extname(resolvedPath).toLowerCase())) {
+    return new Response("File not found", { status: 404 });
+  }
+
   let stat: fs.Stats;
   try {
     stat = fs.statSync(resolvedPath);
