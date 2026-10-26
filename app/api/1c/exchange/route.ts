@@ -294,8 +294,8 @@ export async function POST(request: NextRequest) {
         data: { oneCExportedAt: new Date(), status: "exported" },
       });
       console.log(`[exchange] acknowledged orders: ${ids.join(", ")}`);
-      // MAXMA: confirm promo-code / bonus orders (best effort, not awaited)
-      if (toConfirm.length) onOrderStatus(toConfirm.map((o) => o.id), "exported");
+      // MAXMA: confirm promo-code / bonus orders via the queue (tasks saved now, calls in the background)
+      if (toConfirm.length) await onOrderStatus(toConfirm.map((o) => o.id), "exported", { background: true });
     }
 
     return txt("success");

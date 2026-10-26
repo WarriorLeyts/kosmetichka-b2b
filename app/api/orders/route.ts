@@ -11,10 +11,13 @@ import {
   canSpendBonuses,
   maxmaConfigured,
   MaxmaError,
-  setLoyaltyOrder,
+  setLoyaltyOrderQuery,
+  setOrderQuery,
   type LoyaltyResult,
   type PromoResult,
 } from "@/lib/maxma";
+import { adoptReservedBonuses, BONUSES_UNAVAILABLE, BONUSES_UNAVAILABLE_CODE } from "@/lib/maxmaOrders";
+import { enqueueMaxmaTask, runOrderMaxmaTasks } from "@/lib/maxmaQueue";
 import { PROMO_NOT_FOR_ITEMS } from "@/lib/promo";
 
 /** Escape user-supplied strings before embedding in HTML emails */
@@ -132,56 +135,107 @@ export async function POST(request: Request) {
   const bonusesCollected = calc?.bonuses?.collected ?? 0;
   const bonusLines = calc?.bonusLines ?? lines.map(() => 0);
 
-  try {
-    const orderItems = lines.map(({ sku: _sku, ...line }, i) => ({ // eslint-disable-line @typescript-eslint/no-unused-vars
-      ...line,
-      ...(promo ? { discount: promo.lines[i] } : {}),
-      ...(bonusLines[i] > 0 ? { bonusDiscount: bonusLines[i] } : {}),
-    }));
+  const orderItems = lines.map(({ sku: _sku, ...line }, i) => ({ // eslint-disable-line @typescript-eslint/no-unused-vars
+    ...line,
+    ...(promo ? { discount: promo.lines[i] } : {}),
+    ...(bonusLines[i] > 0 ? { bonusDiscount: bonusLines[i] } : {}),
+  }));
+  const linesTotal = orderItems.reduce((s, it) => s + it.total, 0);
+  const promoDiscount = promo ? promo.discount : 0;
+  const orderData = {
+    customerId: Number(payload.id),
+    status: "pending",
+    total: linesTotal - promoDiscount - bonusesApplied,
+    comment: comment || null,
+    ...(promo ? { promoCode, discount: promo.discount } : {}),
+    ...(bonusesApplied > 0 ? { bonusesApplied } : {}),
+    ...(bonusesCollected > 0 ? { bonusesCollected } : {}),
+    items: { create: orderItems },
+  };
+  const maxmaQuery = setOrderQuery(lines, { customer, promocode: promo ? promoCode : null, applyBonuses: bonusesApplied });
 
-    let total = 0;
-    for (const it of orderItems) total += it.total;
-    if (promo) total -= promo.discount;
-    total -= bonusesApplied;
+  if (bonusesApplied > 0) {
+    // Spent bonuses are reserved in MAXMA BEFORE the order is committed: the MAXMA id
+    // «site-<id>» needs the order id, so the order is created inside a transaction, set-order
+    // is called with it and the order is committed only when MAXMA reserved the bonuses.
+    // id: set-order was sent for this order id (bonuses maybe reserved); failed: no / wrong reservation
+    const reservation: { id: number | null; failed: boolean } = { id: null, failed: false };
+    try {
+      order = await prisma.$transaction(
+        async (tx) => {
+          const created = await tx.order.create({
+            data: orderData,
+            include: { items: { orderBy: { id: "asc" }, select: { id: true } } },
+          });
+          reservation.id = created.id;
+          let r;
+          try {
+            r = await setLoyaltyOrderQuery(created.id, maxmaQuery);
+          } catch (e) {
+            reservation.failed = true;
+            throw e;
+          }
+          if (r.applied === bonusesApplied) return created;
 
-    order = await prisma.order.create({
-      data: {
-        customerId: Number(payload.id),
-        status: "pending",
-        total,
-        comment: comment || null,
-        ...(promo ? { promoCode, discount: promo.discount } : {}),
-        ...(bonusesApplied > 0 ? { bonusesApplied } : {}),
-        ...(bonusesCollected > 0 ? { bonusesCollected } : {}),
-        items: {
-          create: orderItems,
+          // MAXMA reserved another amount: the order takes MAXMA's amount (never more than asked)
+          const adopted = adoptReservedBonuses({
+            reserved: r.applied,
+            requested: applyBonuses,
+            bonusRows: r.bonusRows,
+            lineTotals: orderItems.map((it) => it.total),
+            promoLines: promo ? promo.lines : orderItems.map(() => 0),
+          });
+          if (!adopted) {
+            reservation.failed = true;
+            throw new Error(`MAXMA reserved ${r.applied} bonuses, order spends ${bonusesApplied}: can't adopt`);
+          }
+          console.warn(`[maxma] site-${created.id}: MAXMA reserved ${r.applied} instead of ${bonusesApplied}, order adjusted`);
+          for (let i = 0; i < created.items.length; i++) {
+            if ((bonusLines[i] ?? 0) !== adopted.lines[i]) {
+              await tx.orderItem.update({ where: { id: created.items[i].id }, data: { bonusDiscount: adopted.lines[i] } });
+            }
+          }
+          return tx.order.update({
+            where: { id: created.id },
+            data: {
+              bonusesApplied: adopted.applied,
+              bonusesCollected: r.collected,
+              total: linesTotal - promoDiscount - adopted.applied,
+            },
+            include: { items: { orderBy: { id: "asc" }, select: { id: true } } },
+          });
         },
-      },
-    });
-  } catch (error) {
-    console.error(error);
-    const message = error instanceof Error ? error.message : "Не удалось создать заказ";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
-
-  // Регистрируем заказ в MAXMA (промокод, резерв списанных бонусов, начисление) — best effort,
-  // заказ уже создан. Без регистрации бонусы не зарезервированы: громко в лог.
-  if (promo || bonusesApplied > 0 || bonusesCollected > 0) {
-    const orderId = order.id;
-    setLoyaltyOrder(orderId, lines, { customer, promocode: promo ? promoCode : null, applyBonuses: bonusesApplied })
-      .then((r) => {
-        if (bonusesApplied > 0 && r.applied !== bonusesApplied) {
-          console.error(`[maxma] BONUSES MISMATCH site-${orderId}: order spends ${bonusesApplied}, MAXMA reserved ${r.applied}`);
-        }
-      })
-      .catch((e) => {
-        const msg = e instanceof Error ? e.message : e;
-        if (bonusesApplied > 0) {
-          console.error(`[maxma] BONUSES NOT RESERVED: set-order site-${orderId} failed, order spends ${bonusesApplied} bonuses (card ${customer.loyaltyCard}):`, msg);
-        } else {
-          console.error(`[maxma] set-order site-${orderId} failed:`, msg);
-        }
-      });
+        { maxWait: 5_000, timeout: 15_000 }
+      );
+    } catch (error) {
+      // set-order may have reserved the bonuses (even on a timeout): release them via the queue
+      // (task saved now, the call runs in the background — MAXMA may be the one not answering)
+      const sentId = reservation.id;
+      if (sentId != null) {
+        await enqueueMaxmaTask(sentId, "cancel", null, { run: false });
+        void runOrderMaxmaTasks(sentId);
+        console.error(
+          `[maxma] order with bonuses NOT created (site-${sentId}, card ${customer.loyaltyCard}, bonuses ${bonusesApplied}), cancel-order queued:`,
+          error instanceof MaxmaError ? error.detail || error.message : error
+        );
+      }
+      if (reservation.failed) {
+        return NextResponse.json({ error: BONUSES_UNAVAILABLE, code: BONUSES_UNAVAILABLE_CODE }, { status: 409 });
+      }
+      console.error(error);
+      const message = error instanceof Error ? error.message : "Не удалось создать заказ";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  } else {
+    try {
+      order = await prisma.order.create({ data: orderData });
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "Не удалось создать заказ";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+    // Promo code / accrual only: registered in MAXMA through the queue (one attempt now, retried later)
+    if (promo || bonusesCollected > 0) await enqueueMaxmaTask(order.id, "set", maxmaQuery);
   }
 
   // Уведомление покупателю о принятом заказе

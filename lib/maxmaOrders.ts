@@ -1,13 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import {
   calcLoyalty,
-  cancelOrder,
-  confirmOrder,
   maxmaConfigured,
-  setLoyaltyOrder,
+  setOrderQuery,
+  splitBonusDiscount,
+  type LoyaltyCustomer,
   type LoyaltyResult,
   type PromoLine,
 } from "@/lib/maxma";
+import { enqueueMaxmaTask, runOrderMaxmaTasks } from "@/lib/maxmaQueue";
 import { PROMO_NOT_FOR_ITEMS } from "@/lib/promo";
 
 /**
@@ -23,6 +24,30 @@ export function isMaxmaOrder(o: { promoCode?: string | null; bonusesApplied?: nu
   return Boolean(o.promoCode) || (o.bonusesApplied ?? 0) > 0 || (o.bonusesCollected ?? 0) > 0;
 }
 
+/** POST /api/orders: 409 when spent bonuses couldn't be reserved in MAXMA (the order is not created). */
+export const BONUSES_UNAVAILABLE_CODE = "bonuses_unavailable";
+export const BONUSES_UNAVAILABLE =
+  "Не удалось списать бонусы — сервис лояльности не ответил. Попробуйте ещё раз или оформите заказ без бонусов.";
+
+/**
+ * set-order reserved another amount than the order spends: per-line bonus discounts for MAXMA's
+ * amount (split by its rows like at calculation). null when it can't be adopted: more than the
+ * customer asked for, or it doesn't fit the lines (the order is then not created).
+ */
+export function adoptReservedBonuses(o: {
+  reserved: number;
+  requested: number;
+  bonusRows: number[];
+  lineTotals: number[];
+  promoLines: number[];
+}): { applied: number; lines: number[] } | null {
+  const reserved = Math.floor(o.reserved);
+  if (!Number.isFinite(reserved) || reserved < 0 || reserved > o.requested) return null;
+  if (reserved === 0) return { applied: 0, lines: o.lineTotals.map(() => 0) };
+  const split = splitBonusDiscount(o.bonusRows, reserved, o.lineTotals, o.promoLines);
+  return split.discount === reserved ? { applied: reserved, lines: split.lines } : null;
+}
+
 /** Order status in which MAXMA confirms the order: accrues bonuses, writes off spent ones (customer sees «Выполнен»). */
 export const MAXMA_CONFIRM_STATUS = "exported";
 /** Order status in which MAXMA cancels the order (reserved bonuses return, no accrual). */
@@ -31,9 +56,16 @@ export const MAXMA_CANCEL_STATUS = "cancelled";
 /**
  * Keeps the MAXMA order (registered with v2/set-order as «site-<id>») in step with the
  * site order: exported → confirm-order, cancelled → cancel-order. Only orders registered
- * in MAXMA (MAXMA_ORDER_WHERE). Best effort: never throws, errors are logged — call it without await.
+ * in MAXMA (MAXMA_ORDER_WHERE). The calls go through the MAXMA queue (lib/maxmaQueue.ts):
+ * tasks are inserted (awaited), then tried once — awaited by default, in the background with
+ * `{ background: true }` (bulk changes, 1C exchange). Failures are retried by the queue worker.
+ * Never throws.
  */
-export async function onOrderStatus(orderIds: number | number[], newStatus: string): Promise<void> {
+export async function onOrderStatus(
+  orderIds: number | number[],
+  newStatus: string,
+  opts: { background?: boolean } = {}
+): Promise<void> {
   try {
     if (newStatus !== MAXMA_CONFIRM_STATUS && newStatus !== MAXMA_CANCEL_STATUS) return;
     const ids = (Array.isArray(orderIds) ? orderIds : [orderIds]).filter((id) => Number.isInteger(id) && id > 0);
@@ -43,18 +75,25 @@ export async function onOrderStatus(orderIds: number | number[], newStatus: stri
       where: { id: { in: ids }, ...MAXMA_ORDER_WHERE },
       select: { id: true },
     });
-    for (const { id } of orders) {
-      try {
-        if (newStatus === MAXMA_CANCEL_STATUS) await cancelOrder(id);
-        else await confirmOrder(id);
-        console.log(`[maxma] order site-${id}: ${newStatus === MAXMA_CANCEL_STATUS ? "cancel" : "confirm"}-order ok`);
-      } catch (e) {
-        console.error(`[maxma] order site-${id}: ${newStatus} sync failed:`, e instanceof Error ? e.message : e);
-      }
-    }
+    const action = newStatus === MAXMA_CANCEL_STATUS ? "cancel" : "confirm";
+    for (const { id } of orders) await enqueueMaxmaTask(id, action, null, { run: false });
+    const run = (async () => {
+      for (const { id } of orders) await runOrderMaxmaTasks(id);
+    })();
+    if (!opts.background) await run;
   } catch (e) {
     console.error("[maxma] onOrderStatus:", e);
   }
+}
+
+/** Queues v2/set-order «site-<id>» with the current lines / promo code / bonuses (see lib/maxmaQueue.ts). */
+export async function queueSetOrder(
+  orderId: number,
+  lines: PromoLine[],
+  q: { customer: LoyaltyCustomer; promocode?: string | null; applyBonuses: number },
+  opts: { run?: boolean } = {}
+): Promise<void> {
+  await enqueueMaxmaTask(orderId, "set", setOrderQuery(lines, q), opts);
 }
 
 export type PromoRecalcResult = {
@@ -186,7 +225,7 @@ export async function recalcOrderLoyalty(orderId: number): Promise<LoyaltyRecalc
           spendAllowed: previous > 0 && Boolean(customer.loyaltyCard?.trim()),
         });
       } catch (e) {
-        return await keepCapped(orderId, code, items, prevCollected, previous, e instanceof Error ? e.message : String(e));
+        return await keepCapped(orderId, code, items, prevCollected, previous, e instanceof Error ? e.message : String(e), { lines, customer });
       }
     }
 
@@ -234,24 +273,12 @@ export async function recalcOrderLoyalty(orderId: number): Promise<LoyaltyRecalc
     if (code && !promoApplied) console.log(`[maxma] order site-${orderId}: promo ${code} removed (${reason})`);
     if (applied < previous) console.warn(`[maxma] order site-${orderId}: bonuses reduced ${previous} → ${applied}`);
 
+    // MAXMA order follows the new state through the queue (retried until it succeeds)
     if (promoApplied || applied > 0 || collected > 0) {
-      try {
-        const r = await setLoyaltyOrder(orderId, lines, { customer, promocode: promoApplied ? code : null, applyBonuses: applied });
-        if (applied > 0 && r.applied !== applied) {
-          console.error(`[maxma] BONUSES MISMATCH site-${orderId} (recalc): order spends ${applied}, MAXMA reserved ${r.applied}`);
-        }
-        console.log(`[maxma] order site-${orderId}: recalculated, promo ${promoApplied ? discount : 0}, bonuses −${applied} +${collected}`);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : e;
-        if (applied > 0) console.error(`[maxma] BONUSES NOT RESERVED: set-order site-${orderId} (recalc) failed, bonuses ${applied}:`, msg);
-        else console.error(`[maxma] set-order site-${orderId} (recalc) failed:`, msg);
-      }
-    } else if (maxmaConfigured()) {
-      try {
-        await cancelOrder(orderId);
-      } catch (e) {
-        console.error(`[maxma] cancel-order site-${orderId} (nothing left) failed:`, e instanceof Error ? e.message : e);
-      }
+      await queueSetOrder(orderId, lines, { customer, promocode: promoApplied ? code : null, applyBonuses: applied });
+      console.log(`[maxma] order site-${orderId}: recalculated, promo ${promoApplied ? discount : 0}, bonuses −${applied} +${collected}`);
+    } else {
+      await enqueueMaxmaTask(orderId, "cancel");
     }
     return { promo, bonuses };
   } catch (e) {
@@ -273,7 +300,9 @@ async function keepCapped(
   items: RecalcItem[],
   collected: number,
   previous: number,
-  why: string
+  why: string,
+  /** MAXMA configured but unavailable: queue set-order with the kept values, so its reservation follows when it is back */
+  sync?: { lines: PromoLine[]; customer: LoyaltyCustomer }
 ): Promise<LoyaltyRecalcResult> {
   console.warn(`[maxma] order site-${orderId}: loyalty not recalculated (${why}), keeping capped discounts`);
   const promoLines = items.map((i) => Math.min(Math.max(0, i.discount), Math.max(0, i.total)));
@@ -291,6 +320,9 @@ async function keepCapped(
       .map(({ i, d, b }) => prisma.orderItem.update({ where: { id: i.id }, data: { discount: d, bonusDiscount: b } })),
     prisma.order.update({ where: { id: orderId }, data: { discount, bonusesApplied: applied, total } }),
   ]);
+  if (sync && sync.lines.length > 0 && (code || applied > 0 || collected > 0)) {
+    await queueSetOrder(orderId, sync.lines, { customer: sync.customer, promocode: code || null, applyBonuses: applied }, { run: false });
+  }
   return {
     promo: code ? { status: "unchanged-error", code, discount, reason: "сервис лояльности недоступен" } : null,
     bonuses: previous > 0 || collected > 0 ? { status: "unchanged-error", applied, previous, collected } : null,

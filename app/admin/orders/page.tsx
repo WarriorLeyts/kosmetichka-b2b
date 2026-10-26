@@ -5,6 +5,7 @@ import PaginationBar from "@/components/PaginationBar";
 import { AdminOrdersList } from "@/components/admin/AdminOrdersList";
 import { parseCheckStatuses } from "@/lib/checkStatus";
 import { ORDER_STATUS_LABELS as STATUS_LABELS } from "@/lib/orderStatus";
+import { maxmaStuckOrderIds } from "@/lib/maxmaQueue";
 
 const PAGE_SIZE = 50;
 
@@ -29,6 +30,7 @@ export default async function AdminOrdersPage({
     customer?: string;
     status?: string;
     page?: string;
+    maxma?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -47,6 +49,9 @@ export default async function AdminOrdersPage({
   const customerSearch = params.customer || "";
   const selectedStatus = params.status || "";
   const page = Math.max(1, parseInt(params.page || "1", 10));
+  // ?maxma=stuck — orders whose promo code / bonuses are not synced with MAXMA (any date)
+  const maxmaStuckOnly = params.maxma === "stuck";
+  const stuckIds = await maxmaStuckOrderIds();
 
   // Helper: get business-day date range for a given business date
   function businessDayRange(dateStr: string) {
@@ -60,12 +65,13 @@ export default async function AdminOrdersPage({
   }
 
   let dateFilter = {};
-  if (selectedDate) {
+  if (selectedDate && !maxmaStuckOnly) {
     dateFilter = { createdAt: businessDayRange(selectedDate) };
   }
 
   const where: Prisma.OrderWhereInput = {
     ...dateFilter,
+    ...(maxmaStuckOnly ? { id: { in: stuckIds } } : {}),
     status: selectedStatus || undefined,
     customer: customerSearch
       ? {
@@ -109,6 +115,7 @@ export default async function AdminOrdersPage({
     else if (params.date !== undefined) sp.set("date", selectedDate);
     if (customerSearch) sp.set("customer", customerSearch);
     if (selectedStatus) sp.set("status", selectedStatus);
+    if (maxmaStuckOnly) sp.set("maxma", "stuck");
     if (p > 1) sp.set("page", String(p));
     const qs = sp.toString();
     return `/admin/orders${qs ? `?${qs}` : ""}`;
@@ -131,6 +138,17 @@ export default async function AdminOrdersPage({
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Заказы</h1>
         <div className="flex items-center gap-3">
+          {stuckIds.length > 0 && (
+            <Link
+              href={maxmaStuckOnly ? "/admin/orders" : "/admin/orders?maxma=stuck"}
+              className={`rounded-full border px-3 py-1 text-sm font-semibold transition-all ${
+                maxmaStuckOnly ? "border-red-600 bg-red-600 text-white" : "border-red-300 bg-red-100 text-red-700 hover:opacity-80"
+              }`}
+              title="Промокод / бонусы не синхронизированы с MAXMA больше часа"
+            >
+              ⚠️ MAXMA: {stuckIds.length} {stuckIds.length === 1 ? "заказ" : stuckIds.length < 5 ? "заказа" : "заказов"} не синхронизировано
+            </Link>
+          )}
           <span className="text-sm text-slate-400">
             {totalCount} {totalCount === 1 ? "заказ" : totalCount < 5 ? "заказа" : "заказов"}
           </span>

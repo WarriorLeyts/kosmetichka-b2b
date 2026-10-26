@@ -104,8 +104,8 @@ export async function POST(request: Request, { params }: Props) {
     return NextResponse.json({ error: "Не удалось отменить заказ" }, { status: 500 });
   }
 
-  // MAXMA: cancel the promo-code order (best effort, not awaited)
-  onOrderStatus(order.id, "cancelled");
+  // MAXMA: cancel via the queue (one attempt now; retried by the worker; never fails the request)
+  await onOrderStatus(order.id, "cancelled");
 
   // Перенести сделку в Битрикс в стадию "Отменен"
   cancelDealInBitrix(order.id).catch((err) =>

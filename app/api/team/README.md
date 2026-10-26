@@ -154,6 +154,8 @@ Query:
       changed: { productName: string; oldQty: number; newQty: number; price: number; variantName: string | null }[];
     };
     oneCExportedAt: string | null; bitrixDealId: number | null;
+    maxmaStuck: boolean;                  // промокод/бонусы не синхронизированы с MAXMA больше часа
+    maxmaError?: string;                  // только при maxmaStuck: «<действие>, попыток N, ошибка: …»
     createdAt: string; updatedAt: string;
     customerId: number;
     customer: {
@@ -429,6 +431,14 @@ previous: number; collected: number }` и, если списание умень�
 Заказ без промокода и бонусов — ответ как раньше, без этих полей.
 В списке и карточке заказа: `bonusesApplied` (₽ скидки бонусами, total уже уменьшен), `bonusesCollected`
 (ожидаемое начисление), у позиций `bonusDiscount`.
+
+**POST /api/admin/maxma/retry** — A, M. Body `{ orderId?: number }`. Вызовы MAXMA после сохранения
+заказа (set-order, confirm-order при «Выгружен в 1С», cancel-order при отмене) идут через очередь
+с автоповторами (1, 2, 5, 10, 30 мин, потом раз в час, 48 ч). Если в карточке `maxmaStuck: true` —
+показать `maxmaError` красным и кнопку «Повторить» → этот запрос: повторяет задачи заказа
+(без orderId — все) сразу. 200 `{ ok: boolean; ran; done; failed; skipped;
+stuck: { action: "set" | "confirm" | "cancel"; attempts; lastError: string | null; status; createdAt } | null }`.
+`ok: false` — MAXMA снова не ответила (повторим автоматически). 503 — MAXMA не настроена.
 
 **POST /api/admin/orders/bulk-status** — Body `{ orderIds: number[]; toStatus: string }`.
 Заказы с недопустимым переходом пропускаются. Без писем и без удаления проверок.

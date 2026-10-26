@@ -51,8 +51,8 @@ export async function POST(request: NextRequest) {
         })),
       }),
     ]);
-    // MAXMA: confirm / cancel promo-code orders (best effort, not awaited)
-    onOrderStatus(updated, toStatus);
+    // MAXMA: confirm / cancel via the queue (tasks saved now, calls in the background)
+    await onOrderStatus(updated, toStatus, { background: true });
   }
 
   return NextResponse.json({ updated, skipped });

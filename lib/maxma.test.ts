@@ -5,6 +5,8 @@ import {
   canSpendBonuses,
   loyaltyCalculationQuery,
   setLoyaltyOrder,
+  setLoyaltyOrderQuery,
+  setOrderQuery,
   splitBonusDiscount,
   splitPromoDiscount,
 } from "./maxma";
@@ -144,6 +146,34 @@ describe("calcLoyalty (MAXMA mocked)", () => {
       orderId: "site-5",
       calculationQuery: { client: { card: "2000123" }, promocode: "SALE", applyBonuses: 30, collectBonuses: "auto" },
     });
-    expect(r).toEqual({ applied: 30, collected: 9, anonymous: false });
+    expect(r).toEqual({ applied: 30, collected: 9, anonymous: false, bonusRows: [0, 0] });
+  });
+
+  it("set-order: returns MAXMA's bonus split per row; unknown card → anonymous only without bonuses", async () => {
+    fetchMock.mockImplementationOnce(() =>
+      reply({ calculationResult: { rows: [{ id: "1", discounts: { bonuses: 5 } }, { id: "0", discounts: { bonuses: 20 } }], bonuses: { applied: 25 } } })
+    );
+    const q = setOrderQuery(lines, { customer: retail, applyBonuses: 30 });
+    expect(await setLoyaltyOrderQuery(6, q)).toEqual({ applied: 25, collected: 0, anonymous: false, bonusRows: [20, 5] });
+
+    fetchMock.mockImplementationOnce(() => reply({ errorCode: 3, description: "Card not found" }, 400));
+    await expect(setLoyaltyOrderQuery(6, q)).rejects.toMatchObject({ notFound: true });
+
+    fetchMock
+      .mockImplementationOnce(() => reply({ errorCode: 3, description: "Card not found" }, 400))
+      .mockImplementationOnce(() => reply({ calculationResult: { bonuses: {} } }));
+    const r = await setLoyaltyOrderQuery(6, setOrderQuery(lines, { customer: retail, promocode: "SALE", applyBonuses: 0 }));
+    const anon = JSON.parse(String(fetchMock.mock.calls.at(-1)![1]!.body));
+    expect(anon.calculationQuery).not.toHaveProperty("client");
+    expect(anon.calculationQuery).toMatchObject({ applyBonuses: 0, collectBonuses: 0, promocode: "SALE" });
+    expect(r.anonymous).toBe(true);
+  });
+
+  it("errors carry a detail for the queue / admin", async () => {
+    fetchMock.mockImplementationOnce(() => reply({ errorCode: 1, description: "Internal" }, 500));
+    await expect(setLoyaltyOrder(5, lines, { customer: retail, applyBonuses: 0 })).rejects.toMatchObject({
+      message: "unavailable",
+      detail: expect.stringMatching(/^v2\/set-order: HTTP 500/),
+    });
   });
 });

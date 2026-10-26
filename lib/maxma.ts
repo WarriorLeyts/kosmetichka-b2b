@@ -6,7 +6,13 @@
  */
 
 export class MaxmaError extends Error {
-  constructor(message: string, public readonly status: number, public readonly notFound = false) {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly notFound = false,
+    /** What happened, for logs / admin («v2/set-order: HTTP 400 {...}»); never shown to customers */
+    public readonly detail?: string
+  ) {
     super(message);
   }
 }
@@ -29,8 +35,9 @@ async function call<T>(method: string, body: unknown): Promise<T> {
       signal: AbortSignal.timeout(8000),
       cache: "no-store",
     });
-  } catch {
-    throw new MaxmaError("unavailable", 502);
+  } catch (e) {
+    const why = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError") ? "нет ответа за 8 с" : "сеть недоступна";
+    throw new MaxmaError("unavailable", 502, false, `${method}: ${why}`);
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: any = await res.json().catch(() => null);
@@ -38,7 +45,7 @@ async function call<T>(method: string, body: unknown): Promise<T> {
     const text = JSON.stringify(data ?? "");
     const notFound = res.status === 404 || /not.?found|не найден|ClientNotFound|CardNotFound/i.test(text);
     if (!notFound) console.error(`[maxma] ${method}`, res.status, text.slice(0, 300));
-    throw new MaxmaError(notFound ? "not_found" : "unavailable", notFound ? 404 : 502, notFound);
+    throw new MaxmaError(notFound ? "not_found" : "unavailable", notFound ? 404 : 502, notFound, `${method}: HTTP ${res.status} ${text.slice(0, 200)}`);
   }
   return data as T;
 }
@@ -425,6 +432,58 @@ export async function calcLoyalty(o: LoyaltyOptions): Promise<LoyaltyResult> {
   };
 }
 
+/** v2/set-order calculationQuery for the site order (card / phone, promo code, bonuses to reserve, accrual «auto»). */
+export type SetOrderQuery = ReturnType<typeof loyaltyCalculationQuery>;
+
+export function setOrderQuery(
+  lines: PromoLine[],
+  q: { customer: LoyaltyCustomer; promocode?: string | null; applyBonuses: number }
+): SetOrderQuery {
+  return loyaltyCalculationQuery(lines, { client: clientRef(q.customer), promocode: q.promocode, applyBonuses: q.applyBonuses, collect: true });
+}
+
+export type SetOrderResult = {
+  /** Bonuses MAXMA reserved (calculationResult.bonuses.applied) */
+  applied: number;
+  collected: number;
+  anonymous: boolean;
+  /** Bonus discount per query row (rows[i].discounts.bonuses), for re-splitting when MAXMA reserves another amount */
+  bonusRows: number[];
+};
+
+/**
+ * v2/set-order «site-<id>» with a ready calculationQuery (see setOrderQuery). A card / phone
+ * MAXMA doesn't know → sent again anonymously (promo code only), unless bonuses are spent:
+ * those can't be reserved anonymously, the not-found error is thrown.
+ */
+export async function setLoyaltyOrderQuery(orderId: number, query: SetOrderQuery): Promise<SetOrderResult> {
+  const send = async (calculationQuery: SetOrderQuery) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = await call("v2/set-order", { orderId: `site-${orderId}`, calculationQuery });
+    const r = data?.calculationResult ?? {};
+    const b = r.bonuses ?? {};
+    const byId = new Map<string, number>();
+    for (const row of Array.isArray(r.rows) ? r.rows : []) byId.set(String(row?.id), num(row?.discounts?.bonuses));
+    return {
+      applied: Math.floor(num(b.applied)),
+      collected: Math.floor(num(b.collected)),
+      bonusRows: (query.rows ?? []).map((row) => byId.get(row.id) ?? 0),
+    };
+  };
+  const hasClient = Boolean(query.client);
+  try {
+    return { ...(await send(query)), anonymous: !hasClient };
+  } catch (e) {
+    if (e instanceof MaxmaError && e.notFound && hasClient) {
+      if (bonusAmount(query.applyBonuses) > 0) throw e; // spent bonuses can't be reserved anonymously
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { client: _client, ...anonymous } = query;
+      return { ...(await send({ ...anonymous, applyBonuses: 0, collectBonuses: 0 })), anonymous: true };
+    }
+    throw e;
+  }
+}
+
 /**
  * Registers / updates the site order «site-<id>» in MAXMA with the card, promo code, the
  * spent bonuses (MAXMA reserves them) and accrual «auto». A card MAXMA doesn't know →
@@ -434,24 +493,6 @@ export async function setLoyaltyOrder(
   orderId: number,
   lines: PromoLine[],
   q: { customer: LoyaltyCustomer; promocode?: string | null; applyBonuses: number }
-): Promise<{ applied: number; collected: number; anonymous: boolean }> {
-  const send = async (client: ClientRef, apply: number) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data: any = await call("v2/set-order", {
-      orderId: `site-${orderId}`,
-      calculationQuery: loyaltyCalculationQuery(lines, { client, promocode: q.promocode, applyBonuses: apply, collect: true }),
-    });
-    const b = data?.calculationResult?.bonuses ?? {};
-    return { applied: Math.floor(num(b.applied)), collected: Math.floor(num(b.collected)) };
-  };
-  const client = clientRef(q.customer);
-  try {
-    return { ...(await send(client, q.applyBonuses)), anonymous: !client };
-  } catch (e) {
-    if (e instanceof MaxmaError && e.notFound && client) {
-      if (q.applyBonuses > 0) throw e; // spent bonuses can't be reserved anonymously
-      return { ...(await send(null, 0)), anonymous: true };
-    }
-    throw e;
-  }
+): Promise<SetOrderResult> {
+  return setLoyaltyOrderQuery(orderId, setOrderQuery(lines, q));
 }

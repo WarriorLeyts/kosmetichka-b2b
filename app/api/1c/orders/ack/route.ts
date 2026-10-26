@@ -40,8 +40,8 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // MAXMA: confirm promo-code / bonus orders (best effort, not awaited)
-  if (toConfirm.length) onOrderStatus(toConfirm.map((o) => o.id), "exported");
+  // MAXMA: confirm via the queue (tasks saved now, calls in the background)
+  if (toConfirm.length) await onOrderStatus(toConfirm.map((o) => o.id), "exported", { background: true });
 
   return NextResponse.json({ ok: true, marked: result.count });
 }

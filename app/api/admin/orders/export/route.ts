@@ -176,8 +176,8 @@ export async function POST() {
         })
       ),
     ]);
-    // MAXMA: confirm promo-code orders (best effort, not awaited)
-    onOrderStatus(orderIds, "exported");
+    // MAXMA: confirm promo-code / bonus orders via the queue (tasks saved now, calls in the background)
+    await onOrderStatus(orderIds, "exported", { background: true });
   }
 
   return new NextResponse(xmlFile, {

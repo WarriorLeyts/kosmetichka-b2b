@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
-  order: { findUnique: vi.fn(), update: vi.fn((a: unknown) => ({ op: "order.update", a })) },
+  order: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn((a: unknown) => ({ op: "order.update", a })) },
   orderItem: { update: vi.fn((a: unknown) => ({ op: "orderItem.update", a })) },
   product: { findMany: vi.fn() },
   $transaction: vi.fn(async (ops: unknown[]) => ops),
@@ -10,14 +10,19 @@ vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
 const maxma = vi.hoisted(() => ({
   calcLoyalty: vi.fn(),
-  setLoyaltyOrder: vi.fn(async () => ({ applied: 0, collected: 0, anonymous: false })),
-  cancelOrder: vi.fn(),
-  confirmOrder: vi.fn(),
   maxmaConfigured: vi.fn(() => true),
+  // the queued set-order payload: lines + options, enough to check what is sent
+  setOrderQuery: vi.fn((lines: unknown, q: object) => ({ lines, ...q })),
 }));
-vi.mock("@/lib/maxma", () => maxma);
+vi.mock("@/lib/maxma", async (orig) => ({ ...(await orig<typeof import("./maxma")>()), ...maxma }));
 
-import { isMaxmaOrder, loyaltyResponse, loyaltyWarning, promoWarning, recalcOrderLoyalty } from "./maxmaOrders";
+const queue = vi.hoisted(() => ({
+  enqueueMaxmaTask: vi.fn(async () => {}),
+  runOrderMaxmaTasks: vi.fn(async () => ({ ran: 0, ok: 0, failed: 0, skipped: 0 })),
+}));
+vi.mock("@/lib/maxmaQueue", () => queue);
+
+import { adoptReservedBonuses, isMaxmaOrder, onOrderStatus, loyaltyResponse, loyaltyWarning, promoWarning, recalcOrderLoyalty } from "./maxmaOrders";
 
 const items = [
   { id: 1, productId: 10, productName: "Крем", price: 100, quantity: 2, total: 200, discount: 50, bonusDiscount: 0 },
@@ -33,7 +38,6 @@ const promoOrder = { id: 7, promoCode: "SALE", bonusesApplied: 0, bonusesCollect
 beforeEach(() => {
   vi.clearAllMocks();
   maxma.maxmaConfigured.mockReturnValue(true);
-  maxma.setLoyaltyOrder.mockResolvedValue({ applied: 0, collected: 0, anonymous: false });
   db.order.findUnique.mockResolvedValue(promoOrder);
   db.product.findMany.mockResolvedValue([{ id: 10, guid: "g-10" }, { id: 11, guid: null }]);
 });
@@ -51,7 +55,7 @@ describe("recalcOrderLoyalty — promo code", () => {
     const r = await recalcOrderLoyalty(7);
     expect(r).toEqual({ promo: { status: "applied", code: "SALE", discount: 46 }, bonuses: null });
     expect(maxma.calcLoyalty).toHaveBeenCalledWith({ customer, lines, promocode: "SALE", applyBonuses: 0, spendAllowed: false });
-    expect(maxma.setLoyaltyOrder).toHaveBeenCalledWith(7, lines, { customer, promocode: "SALE", applyBonuses: 0 });
+    expect(queue.enqueueMaxmaTask).toHaveBeenCalledWith(7, "set", { lines, customer, promocode: "SALE", applyBonuses: 0 }, {});
     expect(db.orderItem.update).toHaveBeenCalledWith({ where: { id: 1 }, data: { discount: 40, bonusDiscount: 0 } });
     expect(db.orderItem.update).toHaveBeenCalledWith({ where: { id: 2 }, data: { discount: 6, bonusDiscount: 0 } });
     expect(db.order.update).toHaveBeenCalledWith({
@@ -75,8 +79,8 @@ describe("recalcOrderLoyalty — promo code", () => {
       where: { id: 7 },
       data: { discount: 0, bonusesApplied: 0, bonusesCollected: 0, total: 230, promoCode: null },
     });
-    expect(maxma.cancelOrder).toHaveBeenCalledWith(7);
-    expect(maxma.setLoyaltyOrder).not.toHaveBeenCalled();
+    expect(queue.enqueueMaxmaTask).toHaveBeenCalledTimes(1);
+    expect(queue.enqueueMaxmaTask).toHaveBeenCalledWith(7, "cancel");
     expect(promoWarning(r?.promo)).toBe("Промокод SALE больше не подходит: Минимальная сумма 500 ₽. Скидка снята.");
   });
 
@@ -98,7 +102,14 @@ describe("recalcOrderLoyalty — promo code", () => {
     expect(r?.promo?.discount).toBe(100);
     expect(db.orderItem.update).toHaveBeenCalledWith({ where: { id: 1 }, data: { discount: 100, bonusDiscount: 0 } });
     expect(db.order.update).toHaveBeenCalledWith({ where: { id: 7 }, data: { discount: 100, bonusesApplied: 0, total: 30 } });
-    expect(maxma.cancelOrder).not.toHaveBeenCalled();
+    // MAXMA follows later through the queue (no immediate attempt: it just failed), never cancelled
+    expect(queue.enqueueMaxmaTask).toHaveBeenCalledTimes(1);
+    expect(queue.enqueueMaxmaTask).toHaveBeenCalledWith(
+      7,
+      "set",
+      { lines: [{ ...lines[0], quantity: 1, total: 100 }, lines[1]], customer, promocode: "SALE", applyBonuses: 0 },
+      { run: false }
+    );
     expect(promoWarning(r?.promo)).toBeUndefined();
   });
 
@@ -106,15 +117,16 @@ describe("recalcOrderLoyalty — promo code", () => {
     maxma.maxmaConfigured.mockReturnValue(false);
     expect((await recalcOrderLoyalty(7))?.promo?.status).toBe("unchanged-error");
     expect(maxma.calcLoyalty).not.toHaveBeenCalled();
+    expect(queue.enqueueMaxmaTask).not.toHaveBeenCalled();
 
     db.order.findUnique.mockRejectedValue(new Error("db down"));
     expect((await recalcOrderLoyalty(7))?.promo?.status).toBe("unchanged-error");
   });
 
-  it("does not fail when set-order fails", async () => {
+  it("does not fail when the queue fails", async () => {
     maxma.calcLoyalty.mockResolvedValue({ promo: { applied: true, discount: 46, lines: [40, 6] }, bonuses: null, bonusLines: [0, 0] });
-    maxma.setLoyaltyOrder.mockRejectedValue(new Error("unavailable"));
-    expect((await recalcOrderLoyalty(7))?.promo?.status).toBe("applied");
+    queue.enqueueMaxmaTask.mockRejectedValueOnce(new Error("db down"));
+    expect((await recalcOrderLoyalty(7))?.promo?.status).toBe("unchanged-error");
   });
 });
 
@@ -139,7 +151,6 @@ describe("recalcOrderLoyalty — bonuses", () => {
       bonuses: { balance: 300, maxToApply: 60, applied: 60, collected: 4 },
       bonusLines: [52, 8],
     });
-    maxma.setLoyaltyOrder.mockResolvedValue({ applied: 60, collected: 4, anonymous: false });
     const r = await recalcOrderLoyalty(8);
     expect(maxma.calcLoyalty).toHaveBeenCalledWith({
       customer: cardCustomer,
@@ -153,7 +164,7 @@ describe("recalcOrderLoyalty — bonuses", () => {
       where: { id: 8 },
       data: { discount: 0, bonusesApplied: 60, bonusesCollected: 4, total: 170 },
     });
-    expect(maxma.setLoyaltyOrder).toHaveBeenCalledWith(8, lines, { customer: cardCustomer, promocode: null, applyBonuses: 60 });
+    expect(queue.enqueueMaxmaTask).toHaveBeenCalledWith(8, "set", { lines, customer: cardCustomer, promocode: null, applyBonuses: 60 }, {});
     expect(loyaltyWarning(r)).toBe("Списание бонусов уменьшено до 60, потому что изменился состав заказа.");
     expect(loyaltyResponse(r)).toMatchObject({ promo: null, loyalty: r!.bonuses, loyaltyWarning: loyaltyWarning(r) });
   });
@@ -167,7 +178,8 @@ describe("recalcOrderLoyalty — bonuses", () => {
     const r = await recalcOrderLoyalty(8);
     expect(r?.bonuses).toEqual({ status: "unchanged-error", applied: 63, previous: 100, collected: 5 });
     expect(db.order.update).toHaveBeenCalledWith({ where: { id: 8 }, data: { discount: 0, bonusesApplied: 63, total: 17 } });
-    expect(maxma.setLoyaltyOrder).not.toHaveBeenCalled();
+    // MAXMA still reserves 100: queued set-order with the kept 63 fixes it when MAXMA is back
+    expect(queue.enqueueMaxmaTask).toHaveBeenCalledWith(8, "set", expect.objectContaining({ applyBonuses: 63 }), { run: false });
   });
 
   it("accrual-only order: re-registers with the new accrual, no warning", async () => {
@@ -176,7 +188,7 @@ describe("recalcOrderLoyalty — bonuses", () => {
     const r = await recalcOrderLoyalty(8);
     expect(r?.bonuses).toEqual({ status: "applied", applied: 0, previous: 0, collected: 7 });
     expect(maxma.calcLoyalty).toHaveBeenCalledWith(expect.objectContaining({ applyBonuses: 0, spendAllowed: false }));
-    expect(maxma.setLoyaltyOrder).toHaveBeenCalled();
+    expect(queue.enqueueMaxmaTask).toHaveBeenCalledWith(8, "set", expect.objectContaining({ applyBonuses: 0 }), {});
     expect(loyaltyWarning(r)).toBeUndefined();
   });
 });
@@ -187,5 +199,43 @@ describe("isMaxmaOrder", () => {
     expect(isMaxmaOrder({ promoCode: "X", bonusesApplied: 0, bonusesCollected: 0 })).toBe(true);
     expect(isMaxmaOrder({ promoCode: null, bonusesApplied: 5, bonusesCollected: 0 })).toBe(true);
     expect(isMaxmaOrder({ promoCode: null, bonusesApplied: 0, bonusesCollected: 3 })).toBe(true);
+  });
+});
+
+describe("onOrderStatus (through the queue)", () => {
+  beforeEach(() => {
+    db.order.findMany.mockResolvedValue([{ id: 3 }, { id: 4 }]);
+  });
+
+  it("queues confirm for exported orders, then runs them", async () => {
+    await onOrderStatus([3, 4, 5], "exported");
+    expect(queue.enqueueMaxmaTask).toHaveBeenCalledWith(3, "confirm", null, { run: false });
+    expect(queue.enqueueMaxmaTask).toHaveBeenCalledWith(4, "confirm", null, { run: false });
+    expect(queue.runOrderMaxmaTasks).toHaveBeenCalledWith(3);
+    expect(queue.runOrderMaxmaTasks).toHaveBeenCalledWith(4);
+  });
+
+  it("queues cancel for cancelled orders; ignores other statuses; never throws", async () => {
+    await onOrderStatus(3, "cancelled", { background: true });
+    expect(queue.enqueueMaxmaTask).toHaveBeenCalledWith(3, "cancel", null, { run: false });
+    vi.clearAllMocks();
+    await onOrderStatus(3, "assembly");
+    expect(queue.enqueueMaxmaTask).not.toHaveBeenCalled();
+    db.order.findMany.mockRejectedValue(new Error("db down"));
+    await expect(onOrderStatus(3, "exported")).resolves.toBeUndefined();
+  });
+});
+
+describe("adoptReservedBonuses (set-order reserved another amount)", () => {
+  const base = { requested: 100, lineTotals: [200, 30], promoLines: [0, 0] };
+  it("re-splits MAXMA's amount by its rows", () => {
+    expect(adoptReservedBonuses({ ...base, reserved: 60, bonusRows: [52.5, 7.5] })).toEqual({ applied: 60, lines: [53, 7] });
+  });
+  it("0 reserved → no bonus discount", () => {
+    expect(adoptReservedBonuses({ ...base, reserved: 0, bonusRows: [] })).toEqual({ applied: 0, lines: [0, 0] });
+  });
+  it("refuses more than the customer asked for, or what doesn't fit the lines", () => {
+    expect(adoptReservedBonuses({ ...base, reserved: 120, bonusRows: [100, 20] })).toBeNull();
+    expect(adoptReservedBonuses({ ...base, requested: 300, lineTotals: [50, 30], reserved: 90, bonusRows: [60, 30] })).toBeNull();
   });
 });

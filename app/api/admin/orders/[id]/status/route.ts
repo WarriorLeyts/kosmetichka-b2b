@@ -59,8 +59,8 @@ export async function POST(
     }),
   ]);
 
-  // MAXMA: confirm / cancel the promo-code order (best effort, not awaited)
-  onOrderStatus(Number(id), toStatus);
+  // MAXMA: confirm / cancel via the queue (one attempt now; retried by the worker; never fails the request)
+  await onOrderStatus(Number(id), toStatus);
 
   // Уведомление покупателю о смене статуса
   const notifyStatuses = ["payment", "cancelled", "assembly", "exported", "consultation"];
