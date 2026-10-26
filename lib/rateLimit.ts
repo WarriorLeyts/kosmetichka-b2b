@@ -70,6 +70,12 @@ export const messageLimiter = new RateLimiter({
   max: 30,
 });
 
+/** Promo-code checks: max 20 per customer per 10 minutes */
+export const promoCheckLimiter = new RateLimiter({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 20,
+});
+
 // ── Client IP ────────────────────────────────────────────────────────────────
 
 /**

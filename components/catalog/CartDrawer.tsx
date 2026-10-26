@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useCartStore } from "@/store/cartStore";
 import { useAuthStore } from "@/store/authStore";
 import { Button } from "../ui/button";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { SafeImage } from "./SafeImage";
 import {
   effectivePriceType,
@@ -43,6 +43,71 @@ export function CartDrawer() {
   const [error, setError] = useState("");
   const [orderResult, setOrderResult] = useState<{ orderId: number } | null>(null);
 
+  // Promo code (MAXMA): checked by /api/promo/check, re-checked when the cart changes
+  const [promoInput, setPromoInput] = useState("");
+  const [promo, setPromo] = useState<{ code: string; discount: number } | null>(null);
+  const [promoError, setPromoError] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const promoReq = useRef(0);
+  const cartSignature = cart.map((i) => `${i.cartKey || i.id}:${i.quantity}`).join(",");
+  const promoTotal = promo ? Math.max(0, total - promo.discount) : total;
+
+  async function checkPromo(code: string, recheck = false) {
+    const req = ++promoReq.current;
+    setPromoLoading(true);
+    if (!recheck) setPromoError("");
+    let ok = false;
+    let message = "Не удалось проверить промокод";
+    let discount = 0;
+    try {
+      const res = await fetch("/api/promo/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          items: useCartStore.getState().cart.map((item) => ({
+            id: item.id,
+            quantity: item.quantity,
+            variantName: item.variantName ?? null,
+          })),
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      ok = res.ok && data?.ok;
+      if (ok) discount = Number(data.discount) || 0;
+      else if (data?.error) message = data.error;
+    } catch {
+      // network error — message stays generic
+    }
+    if (req !== promoReq.current) return; // a newer check is running
+    setPromoLoading(false);
+    if (ok) {
+      setPromo({ code, discount });
+      setPromoError("");
+    } else {
+      setPromo(null);
+      setPromoError(recheck ? `Промокод ${code} больше не применяется: ${message}` : message);
+    }
+  }
+
+  function removePromo() {
+    promoReq.current++;
+    setPromo(null);
+    setPromoInput("");
+    setPromoError("");
+    setPromoLoading(false);
+  }
+
+  // Cart changed → re-check the applied promo code (debounced)
+  const appliedCode = promo?.code ?? null;
+  useEffect(() => {
+    if (!appliedCode) return;
+    const empty = cart.length === 0;
+    const t = setTimeout(() => (empty ? removePromo() : checkPromo(appliedCode, true)), empty ? 0 : 600);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartSignature]);
+
   // Animation state: keep drawer mounted during closing animation
   const [visible, setVisible] = useState(isCartOpen);
   const [closing, setClosing] = useState(false);
@@ -77,6 +142,7 @@ export function CartDrawer() {
           variantImageUrl: item.variantImageUrl ?? null,
         })),
         comment,
+        ...(promo ? { promocode: promo.code } : {}),
       }),
     });
 
@@ -85,11 +151,14 @@ export function CartDrawer() {
 
     if (!res.ok) {
       setError(data.error || "Ошибка оформления заказа");
+      // The server rejected the promo code — drop it so the order can go without it
+      if (promo && res.status === 400 && String(data.error ?? "").startsWith("Промокод:")) removePromo();
       return;
     }
 
     clearCart();
     setComment("");
+    removePromo();
     setOrderResult({ orderId: data.orderId });
   }
 
@@ -314,8 +383,60 @@ export function CartDrawer() {
                       )}
                       :
                     </span>
-                    <strong>{total.toLocaleString("ru-RU")} ₽</strong>
+                    <strong>{promoTotal.toLocaleString("ru-RU")} ₽</strong>
                   </div>
+
+                  {/* Promo code — only for logged-in customers (guests can't check out) */}
+                  {customer && (
+                    <div className="cart-promo">
+                      {promo ? (
+                        <div className="cart-promo-applied">
+                          <span>
+                            Скидка по промокоду <b>{promo.code}</b>: −{promo.discount.toLocaleString("ru-RU")} ₽
+                            <span className="cart-promo-subtotal">
+                              {" "}(без скидки {total.toLocaleString("ru-RU")} ₽)
+                            </span>
+                          </span>
+                          <button type="button" className="cart-promo-remove" onClick={removePromo}>
+                            Убрать
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <label className="cart-comment-label" htmlFor="cart-promo-input">Промокод</label>
+                          <form
+                            className="cart-promo-row"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              const code = promoInput.trim();
+                              if (code && !promoLoading) checkPromo(code);
+                            }}
+                          >
+                            <input
+                              id="cart-promo-input"
+                              className="cart-promo-input"
+                              value={promoInput}
+                              onChange={(e) => {
+                                setPromoInput(e.target.value);
+                                if (promoError) setPromoError("");
+                              }}
+                              placeholder="Введите промокод"
+                              autoComplete="off"
+                              maxLength={64}
+                            />
+                            <button
+                              type="submit"
+                              className="cart-promo-apply"
+                              disabled={promoLoading || !promoInput.trim()}
+                            >
+                              {promoLoading ? "…" : "Применить"}
+                            </button>
+                          </form>
+                        </>
+                      )}
+                      {promoError && <p className="cart-promo-error">{promoError}</p>}
+                    </div>
+                  )}
 
                   {customer ? (
                     <button

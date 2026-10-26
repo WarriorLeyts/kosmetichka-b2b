@@ -62,6 +62,8 @@ type Order = {
   id: number;
   status: string;
   total: number;
+  promoCode?: string | null;
+  discount?: number;
   comment: string | null;
   customerConfirmed: boolean;
   pickerId: number | null;
@@ -229,6 +231,8 @@ export default function AdminOrderClient({
   const [editItems, setEditItems] = useState<EditItem[]>([]);
   const [editError, setEditError] = useState("");
   const [saving, setSaving] = useState(false);
+  // Promo code after the last item save: removed (red) or not recalculated — MAXMA unavailable (yellow)
+  const [promoNotice, setPromoNotice] = useState<{ kind: "removed" | "error"; text: string } | null>(null);
   const [discountPct, setDiscountPct] = useState("");
 
   // ── Catalog modal ──
@@ -752,6 +756,17 @@ export default function AdminOrderClient({
       setOrder(data.order);
       setEditMode(false);
       setEditItems([]);
+      if (data.promoWarning) {
+        setPromoNotice({ kind: "removed", text: data.promoWarning });
+        toast.warning(data.promoWarning);
+      } else if (data.promo?.status === "unchanged-error") {
+        setPromoNotice({
+          kind: "error",
+          text: `Промокод ${data.promo.code} не пересчитан: ${data.promo.reason || "сервис лояльности недоступен"}. Скидка позиций сохранена.`,
+        });
+      } else {
+        setPromoNotice(null);
+      }
     } else {
       const data = await res.json();
       setEditError(data.error || "Ошибка сохранения");
@@ -952,6 +967,11 @@ export default function AdminOrderClient({
           </a>
           <div className="text-right">
             <div className="text-2xl font-black">{order.total.toLocaleString("ru-RU")} ₽</div>
+            {order.promoCode && (
+              <div className="text-xs font-semibold text-emerald-600">
+                Промокод {order.promoCode} — скидка {(order.discount ?? 0).toLocaleString("ru-RU")} ₽
+              </div>
+            )}
             <div className="text-xs text-slate-400">{order.items.length} позиций</div>
           </div>
         </div>
@@ -1091,6 +1111,20 @@ export default function AdminOrderClient({
       {/* ── ITEMS TAB ── */}
       {activeTab === "items" && (
         <div>
+          {promoNotice && (
+            <div
+              className={`mb-4 flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm font-semibold ${
+                promoNotice.kind === "removed"
+                  ? "border-red-300 bg-red-50 text-red-700"
+                  : "border-amber-300 bg-amber-50 text-amber-800"
+              }`}
+            >
+              <span>⚠️ {promoNotice.text}</span>
+              <button onClick={() => setPromoNotice(null)} className="opacity-60 hover:opacity-100" aria-label="Скрыть">
+                ✕
+              </button>
+            </div>
+          )}
           {/* Edit mode bar */}
           {!editMode ? (
             <div className="no-print mb-4 flex flex-wrap gap-2">
@@ -1283,6 +1317,12 @@ export default function AdminOrderClient({
                 </div>
               );
             })}
+            {order.promoCode && (
+              <div className="rounded-xl border bg-emerald-50 p-3 flex justify-between items-center text-sm">
+                <span className="font-semibold text-emerald-700">Промокод {order.promoCode}</span>
+                <span className="font-bold text-emerald-700">−{(order.discount ?? 0).toLocaleString("ru-RU")} ₽</span>
+              </div>
+            )}
             <div className="rounded-xl border bg-slate-50 p-3 flex justify-between items-center">
               <span className="text-sm font-semibold text-slate-600">Итого:</span>
               <span className="text-lg font-black">{order.total.toLocaleString("ru-RU")} ₽</span>
@@ -1387,6 +1427,17 @@ export default function AdminOrderClient({
                 })}
               </tbody>
               <tfoot className="border-t bg-slate-50">
+                {order.promoCode && (
+                  <tr>
+                    <td colSpan={3} className="p-3 font-semibold text-right text-emerald-700">
+                      Промокод {order.promoCode} — скидка:
+                    </td>
+                    <td className="p-3 text-right font-bold text-emerald-700">
+                      −{(order.discount ?? 0).toLocaleString("ru-RU")} ₽
+                    </td>
+                    <td />
+                  </tr>
+                )}
                 <tr>
                   <td colSpan={3} className="p-3 font-bold text-right text-slate-600">Итого:</td>
                   <td className="p-3 text-right font-black text-lg">{order.total.toLocaleString("ru-RU")} ₽</td>

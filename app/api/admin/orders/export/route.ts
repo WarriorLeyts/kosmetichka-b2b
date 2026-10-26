@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
+import { cmlComment, cmlItemDiscounts, cmlItemSum } from "@/lib/commerceml";
 import { ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
+import { onOrderStatus } from "@/lib/maxmaOrders";
 
 function xml(value: any) {
   return String(value ?? "")
@@ -60,7 +62,7 @@ async function buildXml() {
         <БазоваяЕдиница Код="796" НаименованиеПолное="Штука">шт</БазоваяЕдиница>
         <ЦенаЗаЕдиницу>${item.price}</ЦенаЗаЕдиницу>
         <Количество>${item.quantity}</Количество>
-        <Сумма>${item.total}</Сумма>
+        <Сумма>${cmlItemSum(item)}</Сумма>${cmlItemDiscounts(item, order.promoCode, "        ")}
       </Товар>`;
         })
         .join("");
@@ -98,7 +100,7 @@ async function buildXml() {
 
       <ЗначениеРеквизита>
         <Наименование>Комментарий</Наименование>
-        <Значение>${xml(order.comment)}</Значение>
+        <Значение>${xml(order.promoCode ? cmlComment(order) : order.comment)}</Значение>
       </ЗначениеРеквизита>
 
       <ЗначениеРеквизита>
@@ -174,6 +176,8 @@ export async function POST() {
         })
       ),
     ]);
+    // MAXMA: confirm promo-code orders (best effort, not awaited)
+    onOrderStatus(orderIds, "exported");
   }
 
   return new NextResponse(xmlFile, {

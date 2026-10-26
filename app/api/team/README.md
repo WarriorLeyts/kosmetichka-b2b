@@ -416,6 +416,12 @@ quantity округляется и ≥1, price округляется и ≥0, `
 items: (OrderItemRow & { check: (CheckRow & { picker: {name}|null }) | null; photos: {id,orderItemId,url,createdAt}[] })[];
 messages: (MessageRow & { user: {name,role}|null })[] /* ОБА чата */; statusLogs: StatusLogRow[] }`.
 Проще после успеха перезапросить `GET /api/team/orders/:id`.
+Заказ с промокодом: скидка пересчитывается в MAXMA по новому составу, в ответ добавляются
+`promo: { status: "applied" | "removed" | "unchanged-error"; code: string; discount: number; reason?: string }`
+и, если промокод больше не подходит (скидка снята, `promoCode` обнулён), `promoWarning: string` —
+«Промокод CODE больше не подходит: <причина>. Скидка снята.» — показать пользователю.
+`unchanged-error` — MAXMA недоступна: скидки позиций сохранены (не больше суммы строки).
+Заказ без промокода — ответ как раньше, без этих полей.
 
 **POST /api/admin/orders/bulk-status** — Body `{ orderIds: number[]; toStatus: string }`.
 Заказы с недопустимым переходом пропускаются. Без писем и без удаления проверок.

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
+import { orderSums } from "@/lib/orderPricing";
+import { promoWarning, recalcOrderPromo } from "@/lib/maxmaOrders";
 
 function getSecret() {
   return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
@@ -151,15 +153,18 @@ export async function PUT(request: NextRequest, { params }: Props) {
   }
 
   const remaining = await prisma.orderItem.findMany({ where: { orderId } });
-  const newTotal = remaining.reduce((s, i) => s + i.total, 0);
+  // Without a promo code: total = Σ line totals. With one, recalcOrderPromo below sets
+  // the line discounts, Order.discount and Order.total.
+  const sums = orderSums(remaining);
   await prisma.order.update({
     where: { id: orderId },
     data: {
-      total: newTotal,
+      ...(order.promoCode ? {} : { total: sums.total }),
       customerConfirmed: false,
       changesSnapshot: snapshot,
     },
   });
+  const promo = order.promoCode ? await recalcOrderPromo(orderId) : null;
 
   const updated = await prisma.order.findUnique({
     where: { id: orderId },
@@ -182,5 +187,7 @@ export async function PUT(request: NextRequest, { params }: Props) {
     },
   });
 
-  return NextResponse.json({ order: updated });
+  if (!promo) return NextResponse.json({ order: updated });
+  const warning = promoWarning(promo);
+  return NextResponse.json({ order: updated, promo, ...(warning ? { promoWarning: warning } : {}) });
 }

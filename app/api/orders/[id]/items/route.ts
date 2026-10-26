@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
+import { orderSums } from "@/lib/orderPricing";
+import { promoWarning, recalcOrderPromo } from "@/lib/maxmaOrders";
 
 // Customers can modify their own pending orders: change quantities or remove items.
 export async function PUT(
@@ -78,7 +80,10 @@ export async function PUT(
       const newTotal = Math.round(existing.price * upd.quantity);
       await tx.orderItem.update({
         where: { id: upd.id },
-        data: { quantity: upd.quantity, total: newTotal },
+        data: {
+          quantity: upd.quantity,
+          total: newTotal,
+        },
       });
     }
 
@@ -89,11 +94,19 @@ export async function PUT(
       });
     }
 
-    // Recalculate order total
-    const remaining = await tx.orderItem.findMany({ where: { orderId } });
-    const newTotal = remaining.reduce((sum, i) => sum + i.total, 0);
-    await tx.order.update({ where: { id: orderId }, data: { total: newTotal } });
+    // Recalculate order total (with a promo code recalcOrderPromo below does it)
+    if (!order.promoCode) {
+      const remaining = await tx.orderItem.findMany({ where: { orderId } });
+      const sums = orderSums(remaining);
+      await tx.order.update({
+        where: { id: orderId },
+        data: { total: sums.total },
+      });
+    }
   });
+
+  // Promo code: MAXMA recalculates the discount for the new items (or it's removed)
+  const promo = order.promoCode ? await recalcOrderPromo(orderId) : null;
 
   // Return updated order
   const updatedOrder = await prisma.order.findUnique({
@@ -109,6 +122,7 @@ export async function PUT(
           quantity: true,
           price: true,
           total: true,
+          discount: true,
           variantImageUrl: true,
           variantName: true,
         },
@@ -116,5 +130,7 @@ export async function PUT(
     },
   });
 
-  return NextResponse.json({ order: updatedOrder });
+  if (!promo) return NextResponse.json({ order: updatedOrder });
+  const warning = promoWarning(promo);
+  return NextResponse.json({ order: updatedOrder, promo, ...(warning ? { promoWarning: warning } : {}) });
 }

@@ -180,6 +180,18 @@ export default async function CustomerInvoicePage({
               const subtotal = order.total - vatAmount;
               return (
                 <>
+                  {order.promoCode && order.discount > 0 && (
+                    <>
+                      <div className="flex justify-between py-1.5 text-sm text-slate-500">
+                        <span>Сумма без скидки:</span>
+                        <span>{(order.total + order.discount).toLocaleString("ru-RU")} ₽</span>
+                      </div>
+                      <div className="flex justify-between py-1.5 text-sm text-slate-500">
+                        <span>Скидка (промокод {order.promoCode}):</span>
+                        <span>−{order.discount.toLocaleString("ru-RU")} ₽</span>
+                      </div>
+                    </>
+                  )}
                   {hasVat && (
                     <>
                       <div className="flex justify-between py-1.5 text-sm text-slate-500">

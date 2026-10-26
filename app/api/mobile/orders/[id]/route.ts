@@ -20,6 +20,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     id: order.id,
     status: order.status,
     total: order.total,
+    promoCode: order.promoCode ?? null,
+    discount: order.discount,
     comment: order.comment,
     createdAt: order.createdAt.toISOString(),
     items: order.items.map((item) => ({
@@ -31,6 +33,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       quantity: item.quantity,
       price: item.price,
       total: item.total,
+      discount: item.discount,
     })),
   });
 }

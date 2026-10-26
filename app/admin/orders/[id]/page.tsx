@@ -109,6 +109,7 @@ export default async function AdminOrderPage({
       quantity: item.quantity,
       price: item.price,
       total: item.total,
+      discount: item.discount,
       check: item.check
         ? {
             status: item.check.status,

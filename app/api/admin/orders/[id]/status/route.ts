@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendMail } from "@/lib/mail";
+import { onOrderStatus } from "@/lib/maxmaOrders";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
 
 export async function POST(
@@ -57,6 +58,9 @@ export async function POST(
       },
     }),
   ]);
+
+  // MAXMA: confirm / cancel the promo-code order (best effort, not awaited)
+  onOrderStatus(Number(id), toStatus);
 
   // Уведомление покупателю о смене статуса
   const notifyStatuses = ["payment", "cancelled", "assembly", "exported", "consultation"];
