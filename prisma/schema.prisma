@@ -127,6 +127,8 @@ model Customer {
   priceType String @default("wholesale")
 
   isActive   Boolean @default(true)
+  /// MAXMA loyalty card number linked in the app (confirmed by an SMS code from MAXMA)
+  loyaltyCard String?
   isApproved Boolean @default(false)
 
   role String @default("customer")
