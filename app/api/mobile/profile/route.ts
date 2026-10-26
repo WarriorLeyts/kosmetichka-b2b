@@ -14,6 +14,9 @@ const SELECT = {
   city: true,
   address: true,
   priceType: true,
+  wholesaleAccess: true,
+  roleRequest: true,
+  roleRequestStatus: true,
   manager: true,
 } as const;
 

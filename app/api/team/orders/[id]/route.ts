@@ -135,7 +135,8 @@ export async function GET(
         city: order.customer.city ?? null,
         inn: order.customer.inn ?? null,
         manager: order.customer.manager ?? null,
-        priceType: order.customer.priceType,
+        // price type of this order (the customer may have switched since)
+        priceType: order.priceType ?? order.customer.priceType,
       },
       pickerId: order.pickerId ?? null,
       picker: order.picker ?? null,

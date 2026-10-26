@@ -50,7 +50,7 @@ async function buildXml() {
         order.customer.oneCId || `customer-${order.customer.id}`;
 
       const customerManager = order.customer.manager || "";
-      const customerPriceType = order.customer.priceType || "";
+      const customerPriceType = order.priceType || order.customer.priceType || "";
 
       const itemsXml = order.items
         .map((item) => {

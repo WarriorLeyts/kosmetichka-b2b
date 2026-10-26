@@ -8,6 +8,8 @@ import PasswordInput from "@/components/PasswordInput";
 import { AuthInit } from "@/components/AuthInit";
 import { AppBar } from "@/components/app/AppBar";
 import { HijabIcon } from "@/components/app/HijabIcon";
+import { PriceTypeSwitcher } from "@/components/profile/PriceTypeSwitcher";
+import { roleInfo } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -122,6 +124,9 @@ export default async function ProfilePage({
       city: true,
       address: true,
       priceType: true,
+      wholesaleAccess: true,
+      roleRequest: true,
+      roleRequestStatus: true,
       manager: true,
     },
   });
@@ -186,6 +191,8 @@ export default async function ProfilePage({
             ⚠️ {ERROR_MESSAGES[errorKey]}
           </div>
         )}
+
+        <PriceTypeSwitcher initial={roleInfo(customer)} />
 
         {/* Read-only info */}
         {customer.inn && (

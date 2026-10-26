@@ -25,6 +25,9 @@ export async function GET() {
       email: true,
       phone: true,
       priceType: true,
+      wholesaleAccess: true,
+      roleRequest: true,
+      roleRequestStatus: true,
     },
   });
 

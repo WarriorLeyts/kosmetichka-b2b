@@ -145,6 +145,7 @@ export async function POST(request: Request) {
   const orderData = {
     customerId: Number(payload.id),
     status: "pending",
+    priceType: customer.priceType,
     total: linesTotal - promoDiscount - bonusesApplied,
     comment: comment || null,
     ...(promo ? { promoCode, discount: promo.discount } : {}),
