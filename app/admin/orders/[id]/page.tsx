@@ -110,6 +110,7 @@ export default async function AdminOrderPage({
       price: item.price,
       total: item.total,
       discount: item.discount,
+      bonusDiscount: item.bonusDiscount,
       check: item.check
         ? {
             status: item.check.status,

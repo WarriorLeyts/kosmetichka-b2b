@@ -64,6 +64,8 @@ type Order = {
   total: number;
   promoCode?: string | null;
   discount?: number;
+  bonusesApplied?: number;
+  bonusesCollected?: number;
   comment: string | null;
   customerConfirmed: boolean;
   pickerId: number | null;
@@ -756,13 +758,19 @@ export default function AdminOrderClient({
       setOrder(data.order);
       setEditMode(false);
       setEditItems([]);
-      if (data.promoWarning) {
-        setPromoNotice({ kind: "removed", text: data.promoWarning });
-        toast.warning(data.promoWarning);
+      const warning = [data.promoWarning, data.loyaltyWarning].filter(Boolean).join(" ");
+      if (warning) {
+        setPromoNotice({ kind: "removed", text: warning });
+        toast.warning(warning);
       } else if (data.promo?.status === "unchanged-error") {
         setPromoNotice({
           kind: "error",
           text: `Промокод ${data.promo.code} не пересчитан: ${data.promo.reason || "сервис лояльности недоступен"}. Скидка позиций сохранена.`,
+        });
+      } else if (data.loyalty?.status === "unchanged-error") {
+        setPromoNotice({
+          kind: "error",
+          text: "Бонусы не пересчитаны: сервис лояльности недоступен. Списание бонусов по позициям сохранено.",
         });
       } else {
         setPromoNotice(null);
@@ -970,6 +978,16 @@ export default function AdminOrderClient({
             {order.promoCode && (
               <div className="text-xs font-semibold text-emerald-600">
                 Промокод {order.promoCode} — скидка {(order.discount ?? 0).toLocaleString("ru-RU")} ₽
+              </div>
+            )}
+            {(order.bonusesApplied ?? 0) > 0 && (
+              <div className="text-xs font-semibold text-emerald-600">
+                Списано бонусов −{(order.bonusesApplied ?? 0).toLocaleString("ru-RU")} ₽
+              </div>
+            )}
+            {(order.bonusesCollected ?? 0) > 0 && (
+              <div className="text-xs font-semibold text-indigo-500">
+                Начислится бонусов: {(order.bonusesCollected ?? 0).toLocaleString("ru-RU")}
               </div>
             )}
             <div className="text-xs text-slate-400">{order.items.length} позиций</div>
@@ -1323,6 +1341,12 @@ export default function AdminOrderClient({
                 <span className="font-bold text-emerald-700">−{(order.discount ?? 0).toLocaleString("ru-RU")} ₽</span>
               </div>
             )}
+            {(order.bonusesApplied ?? 0) > 0 && (
+              <div className="rounded-xl border bg-emerald-50 p-3 flex justify-between items-center text-sm">
+                <span className="font-semibold text-emerald-700">Списано бонусов</span>
+                <span className="font-bold text-emerald-700">−{(order.bonusesApplied ?? 0).toLocaleString("ru-RU")} ₽</span>
+              </div>
+            )}
             <div className="rounded-xl border bg-slate-50 p-3 flex justify-between items-center">
               <span className="text-sm font-semibold text-slate-600">Итого:</span>
               <span className="text-lg font-black">{order.total.toLocaleString("ru-RU")} ₽</span>
@@ -1434,6 +1458,17 @@ export default function AdminOrderClient({
                     </td>
                     <td className="p-3 text-right font-bold text-emerald-700">
                       −{(order.discount ?? 0).toLocaleString("ru-RU")} ₽
+                    </td>
+                    <td />
+                  </tr>
+                )}
+                {(order.bonusesApplied ?? 0) > 0 && (
+                  <tr>
+                    <td colSpan={3} className="p-3 font-semibold text-right text-emerald-700">
+                      Списано бонусов:
+                    </td>
+                    <td className="p-3 text-right font-bold text-emerald-700">
+                      −{(order.bonusesApplied ?? 0).toLocaleString("ru-RU")} ₽
                     </td>
                     <td />
                   </tr>

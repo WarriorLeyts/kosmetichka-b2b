@@ -209,21 +209,114 @@ export async function calcPromo(lines: PromoLine[], code: string, customerPhone?
   }
   const r = data?.calculationResult;
   if (!r) throw new MaxmaError("unavailable", 502);
+  return parsePromo(r, lines);
+}
+
+export async function confirmOrder(orderId: number) {
+  await call("confirm-order", { orderId: `site-${orderId}` });
+}
+
+export async function cancelOrder(orderId: number) {
+  await call("cancel-order", { orderId: `site-${orderId}` });
+}
+
+// ── Bonuses + promo code in one calculation (v2/calculate-purchase) ─────────
+
+/** Customer fields the loyalty calculation needs. */
+export type LoyaltyCustomer = {
+  phone?: string | null;
+  /** Linked MAXMA card (Customer.loyaltyCard) */
+  loyaltyCard?: string | null;
+  priceType?: string | null;
+};
+
+/** Bonuses may be spent only by retail customers with a linked card (like at the shop's cash desks). */
+export function canSpendBonuses(c: LoyaltyCustomer | null | undefined): boolean {
+  return Boolean(c?.loyaltyCard?.trim()) && c?.priceType === "retail";
+}
+
+export const BONUS_SPEND_FORBIDDEN = "Списание бонусов доступно только розничным покупателям с картой";
+
+export type LoyaltyBonuses = {
+  /** Client's available bonuses (null when MAXMA didn't tell) */
+  balance: number | null;
+  /** How many bonuses MAXMA allows to spend on this cart */
+  maxToApply: number;
+  /** Bonuses spent = ₽ discount, whole roubles; equals Σ bonusLines */
+  applied: number;
+  /** Bonuses MAXMA will accrue for this purchase */
+  collected: number;
+  /** MAXMA's note about spending (e.g. not enough bonuses) */
+  error?: string;
+};
+
+export type LoyaltyResult = {
+  /** null when no promo code was given */
+  promo: PromoResult | null;
+  /** null when the customer has no linked card (or MAXMA doesn't know it) */
+  bonuses: LoyaltyBonuses | null;
+  /** Per-line bonus discount, whole roubles, same order as the input */
+  bonusLines: number[];
+};
+
+export type LoyaltyOptions = {
+  customer: LoyaltyCustomer;
+  lines: PromoLine[];
+  promocode?: string | null;
+  /** Bonuses the customer wants to spend (capped by MAXMA's maxToApply) */
+  applyBonuses?: number;
+  /** Spending allowed (default: canSpendBonuses(customer)); otherwise applyBonuses is forced to 0 */
+  spendAllowed?: boolean;
+  /** Also fetch the client's balance (get-balance) when MAXMA's result doesn't include it */
+  withBalance?: boolean;
+};
+
+type ClientRef = { card: string } | { phoneNumber: string } | null;
+
+function clientRef(c: LoyaltyCustomer): ClientRef {
+  const card = c.loyaltyCard?.trim();
+  if (card) return { card };
+  // No card: the phone identifies the client for the promo code only (as before), no bonuses
+  const phone = c.phone ? maxmaPhone(c.phone) : null;
+  return phone ? { phoneNumber: phone } : null;
+}
+
+/** Whole number ≥ 0 of bonuses to spend (bad input → 0). */
+export function bonusAmount(v: unknown): number {
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** v2 calculationQuery: promo code and/or bonuses; rows without automatic offers. */
+export function loyaltyCalculationQuery(
+  lines: PromoLine[],
+  q: { client: ClientRef; promocode?: string | null; applyBonuses: number; collect: boolean }
+) {
+  const withCard = Boolean(q.client && "card" in q.client);
+  return {
+    ...(q.client ? { client: q.client } : {}),
+    shop: { code: "online", name: "Интернет-магазин" },
+    rows: lines.map((l, i) => ({
+      id: String(i),
+      product: { sku: l.sku, title: l.productName, blackPrice: l.price },
+      qty: l.quantity,
+      noOffer: true, // only promo code / bonuses: no automatic offers
+    })),
+    ...(q.promocode ? { promocode: q.promocode } : {}),
+    applyBonuses: withCard ? bonusAmount(q.applyBonuses) : 0,
+    collectBonuses: withCard && q.collect ? "auto" : 0,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parsePromo(r: any, lines: PromoLine[]): PromoResult {
   const p = r.promocode ?? {};
   const none = lines.map(() => 0);
   if (!p.applied) {
-    return {
-      applied: false,
-      name: p.name || undefined,
-      error: String(p.error?.description || "Промокод не применён"),
-      discount: 0,
-      lines: none,
-    };
+    return { applied: false, name: p.name || undefined, error: String(p.error?.description || "Промокод не применён"), discount: 0, lines: none };
   }
   const byId = new Map<string, number>();
-  for (const row of Array.isArray(r.rows) ? r.rows : []) {
-    byId.set(String(row?.id), num(row?.discounts?.promocode));
-  }
+  for (const row of Array.isArray(r.rows) ? r.rows : []) byId.set(String(row?.id), num(row?.discounts?.promocode));
   const summary = r.summary?.discounts?.promocode;
   const split = splitPromoDiscount(
     lines.map((_, i) => byId.get(String(i)) ?? 0),
@@ -233,23 +326,132 @@ export async function calcPromo(lines: PromoLine[], code: string, customerPhone?
   return { applied: true, name: p.name || undefined, ...split };
 }
 
-/** Registers the site order in MAXMA (best effort: callers log errors). */
-export async function setOrder(orderId: number, lines: PromoLine[], code: string, customerPhone?: string | null) {
-  const send = (phone: string | null | undefined) =>
-    call("v2/set-order", { orderId: `site-${orderId}`, calculationQuery: promoCalculationQuery(lines, code, phone) });
+/**
+ * Per-line bonus discount in whole roubles (same floor + remainder rule as the promo code),
+ * never more than what is left of a line after its promo discount, never more than `applied`.
+ */
+export function splitBonusDiscount(rowAmounts: number[], applied: number, lineTotals: number[], promoLines: number[]) {
+  const room = lineTotals.map((t, i) => Math.max(0, t - (promoLines[i] ?? 0)));
+  return splitPromoDiscount(rowAmounts, Math.max(0, Math.floor(applied)), room);
+}
+
+/**
+ * One v2/calculate-purchase for the cart, like the shop's cash desks: promo code (if any),
+ * bonuses to spend (only with spending allowed, capped by MAXMA's maxToApply) and accrual
+ * («auto») for a linked card. MAXMA decides how promo + bonuses combine. A linked card MAXMA
+ * doesn't know → calculated anonymously (bonuses null). Throws MaxmaError (503 / 502).
+ */
+export async function calcLoyalty(o: LoyaltyOptions): Promise<LoyaltyResult> {
+  const { lines } = o;
+  const promocode = o.promocode?.trim() || null;
+  const spendAllowed = o.spendAllowed ?? canSpendBonuses(o.customer);
+  let requested = spendAllowed ? bonusAmount(o.applyBonuses) : 0;
+  let client = clientRef(o.customer);
+  const card = client && "card" in client ? client.card : null;
+
+  // Balance in parallel (only needed for the cart UI)
+  const balanceP: Promise<number | null> =
+    card && o.withBalance
+      ? findCard({ card }).then((c) => (c ? c.bonuses : null)).catch(() => null)
+      : Promise.resolve(null);
+
+  const run = (apply: number) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    call<any>("v2/calculate-purchase", {
+      calculationQuery: loyaltyCalculationQuery(lines, { client, promocode, applyBonuses: apply, collect: true }),
+    });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let data: any;
   try {
-    await send(customerPhone);
+    data = await run(requested);
   } catch (e) {
-    // Same as calcPromo: a client MAXMA doesn't know → register the order anonymously
-    if (e instanceof MaxmaError && e.notFound && customerPhone) await send(null);
-    else throw e;
+    // A card / phone MAXMA doesn't know must not block the purchase: calculate anonymously
+    if (e instanceof MaxmaError && e.notFound && client) {
+      client = null;
+      requested = 0;
+      data = await run(0);
+    } else {
+      throw e;
+    }
   }
+  let r = data?.calculationResult;
+  if (!r) throw new MaxmaError("unavailable", 502);
+
+  const withCard = Boolean(client && "card" in client);
+  // Asked for more than MAXMA allows (it may refuse instead of capping): ask again with its maximum
+  if (withCard && requested > 0) {
+    const max = Math.max(0, Math.floor(num(r.bonuses?.maxToApply)));
+    const applied = Math.floor(num(r.bonuses?.applied));
+    if (requested > max && applied < max) {
+      requested = max;
+      const again = (await run(requested))?.calculationResult;
+      if (!again) throw new MaxmaError("unavailable", 502);
+      r = again;
+    }
+  }
+
+  const promo = promocode ? parsePromo(r, lines) : null;
+  const none = lines.map(() => 0);
+  if (!withCard) {
+    await balanceP;
+    return { promo, bonuses: null, bonusLines: none };
+  }
+
+  const b = r.bonuses ?? {};
+  const promoLines = promo?.applied ? promo.lines : none;
+  let bonusLines = none;
+  let applied = 0;
+  if (requested > 0) {
+    const want = Math.min(requested, Math.floor(num(b.applied)));
+    const byId = new Map<string, number>();
+    for (const row of Array.isArray(r.rows) ? r.rows : []) byId.set(String(row?.id), num(row?.discounts?.bonuses));
+    const split = splitBonusDiscount(lines.map((_, i) => byId.get(String(i)) ?? 0), want, lines.map((l) => l.total), promoLines);
+    bonusLines = split.lines;
+    applied = split.discount;
+  }
+  const fromCalc = r.clientBonuses?.available ?? data?.clientBonuses?.available;
+  const balance = fromCalc != null && Number.isFinite(Number(fromCalc)) ? Number(fromCalc) : await balanceP;
+  return {
+    promo,
+    bonuses: {
+      balance,
+      maxToApply: spendAllowed ? Math.max(0, Math.floor(num(b.maxToApply))) : 0,
+      applied,
+      collected: Math.max(0, Math.floor(num(b.collected))),
+      ...(b.error?.description && requested > 0 ? { error: String(b.error.description) } : {}),
+    },
+    bonusLines,
+  };
 }
 
-export async function confirmOrder(orderId: number) {
-  await call("confirm-order", { orderId: `site-${orderId}` });
-}
-
-export async function cancelOrder(orderId: number) {
-  await call("cancel-order", { orderId: `site-${orderId}` });
+/**
+ * Registers / updates the site order «site-<id>» in MAXMA with the card, promo code, the
+ * spent bonuses (MAXMA reserves them) and accrual «auto». A card MAXMA doesn't know →
+ * anonymous order (only the promo code). Returns MAXMA's applied / collected for checks.
+ */
+export async function setLoyaltyOrder(
+  orderId: number,
+  lines: PromoLine[],
+  q: { customer: LoyaltyCustomer; promocode?: string | null; applyBonuses: number }
+): Promise<{ applied: number; collected: number; anonymous: boolean }> {
+  const send = async (client: ClientRef, apply: number) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = await call("v2/set-order", {
+      orderId: `site-${orderId}`,
+      calculationQuery: loyaltyCalculationQuery(lines, { client, promocode: q.promocode, applyBonuses: apply, collect: true }),
+    });
+    const b = data?.calculationResult?.bonuses ?? {};
+    return { applied: Math.floor(num(b.applied)), collected: Math.floor(num(b.collected)) };
+  };
+  const client = clientRef(q.customer);
+  try {
+    return { ...(await send(client, q.applyBonuses)), anonymous: !client };
+  } catch (e) {
+    if (e instanceof MaxmaError && e.notFound && client) {
+      if (q.applyBonuses > 0) throw e; // spent bonuses can't be reserved anonymously
+      return { ...(await send(null, 0)), anonymous: true };
+    }
+    throw e;
+  }
 }

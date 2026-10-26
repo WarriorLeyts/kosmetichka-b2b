@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { onOrderStatus } from "@/lib/maxmaOrders";
+import { MAXMA_ORDER_WHERE, onOrderStatus } from "@/lib/maxmaOrders";
 
 function checkApiKey(request: NextRequest) {
   const key = request.headers.get("x-1c-key");
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
 
   // Orders this ack actually moves to "exported" (for the MAXMA confirm below)
   const toConfirm = await prisma.order.findMany({
-    where: { id: { in: ids }, oneCExportedAt: null, promoCode: { not: null } },
+    where: { id: { in: ids }, oneCExportedAt: null, ...MAXMA_ORDER_WHERE },
     select: { id: true },
   });
 
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // MAXMA: confirm promo-code orders (best effort, not awaited)
+  // MAXMA: confirm promo-code / bonus orders (best effort, not awaited)
   if (toConfirm.length) onOrderStatus(toConfirm.map((o) => o.id), "exported");
 
   return NextResponse.json({ ok: true, marked: result.count });

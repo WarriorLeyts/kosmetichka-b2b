@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { cmlComment, cmlItemDiscounts, cmlItemSum } from "@/lib/commerceml";
+import { cmlComment, cmlHasLoyalty, cmlItemDiscounts, cmlItemSum } from "@/lib/commerceml";
 import { ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
 import { onOrderStatus } from "@/lib/maxmaOrders";
 
@@ -100,7 +100,7 @@ async function buildXml() {
 
       <ЗначениеРеквизита>
         <Наименование>Комментарий</Наименование>
-        <Значение>${xml(order.promoCode ? cmlComment(order) : order.comment)}</Значение>
+        <Значение>${xml(cmlHasLoyalty(order) ? cmlComment(order) : order.comment)}</Значение>
       </ЗначениеРеквизита>
 
       <ЗначениеРеквизита>

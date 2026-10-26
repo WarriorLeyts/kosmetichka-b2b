@@ -197,7 +197,9 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
         }));
         setEditMode(false);
         setEditItems([]);
-        setPromoWarning(typeof data.promoWarning === "string" ? data.promoWarning : "");
+        setPromoWarning(
+          [data.promoWarning, data.loyaltyWarning].filter((w) => typeof w === "string" && w).join(" ")
+        );
       } else {
         setSaveError(data.error || "Ошибка сохранения");
       }

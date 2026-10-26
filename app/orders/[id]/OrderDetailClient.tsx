@@ -16,6 +16,7 @@ type OrderItem = {
   quantity: number;
   price: number;
   total: number;
+  bonusDiscount?: number;
 };
 
 type Order = {
@@ -24,6 +25,8 @@ type Order = {
   total: number;
   promoCode: string | null;
   discount: number;
+  bonusesApplied?: number;
+  bonusesCollected?: number;
   comment: string | null;
   createdAt: string;
   items: OrderItem[];
@@ -155,12 +158,26 @@ export default function OrderDetailClient({ order }: { order: Order }) {
               </span>
             </div>
           )}
-          <div className={`flex justify-between px-5 py-4 ${order.promoCode && order.discount > 0 ? "" : "border-t"}`}>
+          {(order.bonusesApplied ?? 0) > 0 && (
+            <div className={`flex justify-between px-5 pt-4 text-sm ${order.promoCode && order.discount > 0 ? "" : "border-t"}`}>
+              <span className="text-slate-500">Списано бонусов</span>
+              <span className="font-bold text-emerald-600">
+                −{(order.bonusesApplied ?? 0).toLocaleString("ru-RU")} ₽
+              </span>
+            </div>
+          )}
+          <div className={`flex justify-between px-5 py-4 ${(order.promoCode && order.discount > 0) || (order.bonusesApplied ?? 0) > 0 ? "" : "border-t"}`}>
             <span className="font-bold text-slate-700">Итого</span>
             <span className="text-lg font-black text-indigo-600">
               {order.total.toLocaleString("ru-RU")} ₽
             </span>
           </div>
+          {(order.bonusesCollected ?? 0) > 0 && order.status !== "cancelled" && (
+            <div className="flex justify-between px-5 pb-4 -mt-2 text-sm">
+              <span className="text-slate-500">Начислится бонусов</span>
+              <span className="font-bold text-indigo-600">{(order.bonusesCollected ?? 0).toLocaleString("ru-RU")}</span>
+            </div>
+          )}
         </div>
 
         {/* Comment */}

@@ -20,6 +20,16 @@ import {
   BIG_WHOLESALE_THRESHOLD,
 } from "@/lib/pricing";
 
+type CalcBonuses = { canSpend: boolean; balance: number | null; maxToApply: number; applied: number; collected: number };
+type CalcResponse = {
+  error?: string;
+  subtotal: number;
+  promo: { code: string; name: string | null; discount: number } | null;
+  promoError?: string;
+  bonuses: CalcBonuses | null;
+  total: number;
+};
+
 export function CartDrawer() {
   const cart = useCartStore((state) => state.cart);
   const isCartOpen = useCartStore((state) => state.isCartOpen);
@@ -41,72 +51,125 @@ export function CartDrawer() {
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [orderResult, setOrderResult] = useState<{ orderId: number } | null>(null);
+  const [orderResult, setOrderResult] = useState<{ orderId: number; bonusesApplied: number; bonusesCollected: number } | null>(null);
 
-  // Promo code (MAXMA): checked by /api/promo/check, re-checked when the cart changes
+  // Promo code + MAXMA bonuses: calculated by /api/checkout/calc (one MAXMA calculation),
+  // re-calculated (debounced) when the cart, the promo code or the bonus toggle changes
   const [promoInput, setPromoInput] = useState("");
   const [promo, setPromo] = useState<{ code: string; discount: number } | null>(null);
   const [promoError, setPromoError] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
-  const promoReq = useRef(0);
+  const [bonuses, setBonuses] = useState<CalcBonuses | null>(null);
+  const [spendBonuses, setSpendBonuses] = useState(false);
+  // false after the server said the customer has no linked card: no calc without a promo code
+  const [hasCard, setHasCard] = useState(true);
+  const calcReq = useRef(0);
   const cartSignature = cart.map((i) => `${i.cartKey || i.id}:${i.quantity}`).join(",");
-  const promoTotal = promo ? Math.max(0, total - promo.discount) : total;
+  const bonusesApplied = spendBonuses && bonuses?.canSpend ? bonuses.applied : 0;
+  const promoTotal = Math.max(0, total - (promo?.discount ?? 0) - bonusesApplied);
 
-  async function checkPromo(code: string, recheck = false) {
-    const req = ++promoReq.current;
-    setPromoLoading(true);
-    if (!recheck) setPromoError("");
-    let ok = false;
-    let message = "Не удалось проверить промокод";
-    let discount = 0;
+  async function postCalc(code: string | null, applyBonuses: number) {
+    const res = await fetch("/api/checkout/calc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: useCartStore.getState().cart.map((item) => ({
+          id: item.id,
+          quantity: item.quantity,
+          variantName: item.variantName ?? null,
+        })),
+        ...(code ? { promocode: code } : {}),
+        applyBonuses,
+      }),
+    });
+    const data: CalcResponse | null = await res.json().catch(() => null);
+    return { ok: res.ok && !!data && !data.error, data };
+  }
+
+  /**
+   * code — the promo code to apply (null = none); recheck — the code was applied before;
+   * spend — spend bonuses (MAXMA's maximum).
+   */
+  async function runCalc(code: string | null, opts: { recheck?: boolean; spend?: boolean } = {}) {
+    const req = ++calcReq.current;
+    const spend = opts.spend ?? spendBonuses;
+    if (code) setPromoLoading(true);
+    if (code && !opts.recheck) setPromoError("");
+    let r: Awaited<ReturnType<typeof postCalc>> | null = null;
     try {
-      const res = await fetch("/api/promo/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code,
-          items: useCartStore.getState().cart.map((item) => ({
-            id: item.id,
-            quantity: item.quantity,
-            variantName: item.variantName ?? null,
-          })),
-        }),
-      });
-      const data = await res.json().catch(() => null);
-      ok = res.ok && data?.ok;
-      if (ok) discount = Number(data.discount) || 0;
-      else if (data?.error) message = data.error;
+      r = await postCalc(code, spend ? bonuses?.maxToApply ?? 0 : 0);
+      // Spending on and MAXMA now allows a different maximum: ask once more with it
+      const b = r.data?.bonuses;
+      if (r.ok && spend && b?.canSpend && b.maxToApply > 0 && b.applied < b.maxToApply && req === calcReq.current) {
+        r = await postCalc(code, b.maxToApply);
+      }
     } catch {
-      // network error — message stays generic
+      r = null; // network error
     }
-    if (req !== promoReq.current) return; // a newer check is running
+    if (req !== calcReq.current) return; // a newer calculation is running
     setPromoLoading(false);
-    if (ok) {
-      setPromo({ code, discount });
-      setPromoError("");
-    } else {
-      setPromo(null);
-      setPromoError(recheck ? `Промокод ${code} больше не применяется: ${message}` : message);
+    const data = r?.data ?? null;
+    if (!r?.ok || !data) {
+      const message = data?.error || "Не удалось рассчитать скидку";
+      if (code) {
+        setPromo(null);
+        setPromoError(opts.recheck ? `Промокод ${code} больше не применяется: ${message}` : message);
+      }
+      return;
+    }
+    setBonuses(data.bonuses ?? null);
+    setHasCard(Boolean(data.bonuses));
+    if (!data.bonuses?.canSpend) setSpendBonuses(false);
+    if (code) {
+      if (data.promo) {
+        setPromo({ code: data.promo.code, discount: data.promo.discount });
+        setPromoError("");
+      } else {
+        const message = data.promoError || "Промокод не применён";
+        setPromo(null);
+        setPromoError(opts.recheck ? `Промокод ${code} больше не применяется: ${message}` : message);
+      }
     }
   }
 
+  function checkPromo(code: string) {
+    runCalc(code);
+  }
+
   function removePromo() {
-    promoReq.current++;
+    calcReq.current++;
     setPromo(null);
     setPromoInput("");
     setPromoError("");
     setPromoLoading(false);
+    if (hasCard && cart.length > 0) runCalc(null);
   }
 
-  // Cart changed → re-check the applied promo code (debounced)
+  function toggleBonuses(on: boolean) {
+    setSpendBonuses(on);
+    runCalc(promo?.code ?? null, { recheck: true, spend: on });
+  }
+
+  // Cart changed (or the drawer opened) → recalculate promo code and bonuses (debounced)
   const appliedCode = promo?.code ?? null;
+  const loggedIn = Boolean(customer);
   useEffect(() => {
-    if (!appliedCode) return;
-    const empty = cart.length === 0;
-    const t = setTimeout(() => (empty ? removePromo() : checkPromo(appliedCode, true)), empty ? 0 : 600);
+    if (!loggedIn || !isCartOpen) return;
+    if (cart.length === 0) {
+      calcReq.current++;
+      const t = setTimeout(() => {
+        setPromo(null);
+        setPromoError("");
+        setBonuses(null);
+        setSpendBonuses(false);
+      }, 0);
+      return () => clearTimeout(t);
+    }
+    if (!appliedCode && !hasCard) return;
+    const t = setTimeout(() => runCalc(appliedCode, { recheck: true }), 600);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartSignature]);
+  }, [cartSignature, loggedIn, isCartOpen]);
 
   // Animation state: keep drawer mounted during closing animation
   const [visible, setVisible] = useState(isCartOpen);
@@ -143,6 +206,7 @@ export function CartDrawer() {
         })),
         comment,
         ...(promo ? { promocode: promo.code } : {}),
+        ...(bonusesApplied > 0 ? { applyBonuses: bonusesApplied } : {}),
       }),
     });
 
@@ -151,15 +215,27 @@ export function CartDrawer() {
 
     if (!res.ok) {
       setError(data.error || "Ошибка оформления заказа");
-      // The server rejected the promo code — drop it so the order can go without it
-      if (promo && res.status === 400 && String(data.error ?? "").startsWith("Промокод:")) removePromo();
+      // The server rejected the promo code / bonuses — drop them so the order can go without
+      const err = String(data.error ?? "");
+      if (promo && res.status === 400 && err.startsWith("Промокод:")) removePromo();
+      if (bonusesApplied > 0 && (err.startsWith("Бонусы:") || err.startsWith("Списание бонусов"))) toggleBonuses(false);
       return;
     }
 
     clearCart();
     setComment("");
-    removePromo();
-    setOrderResult({ orderId: data.orderId });
+    calcReq.current++;
+    setPromo(null);
+    setPromoInput("");
+    setPromoError("");
+    setPromoLoading(false);
+    setBonuses(null);
+    setSpendBonuses(false);
+    setOrderResult({
+      orderId: data.orderId,
+      bonusesApplied: Number(data.bonusesApplied) || 0,
+      bonusesCollected: Number(data.bonusesCollected) || 0,
+    });
   }
 
   function closeAndReset() {
@@ -189,6 +265,14 @@ export function CartDrawer() {
               <Clock size={15} />
               Ожидает подтверждения менеджером
             </div>
+            {(orderResult.bonusesApplied > 0 || orderResult.bonusesCollected > 0) && (
+              <p className="order-confirm-bonuses">
+                {orderResult.bonusesApplied > 0 && <>Списано бонусов: {orderResult.bonusesApplied.toLocaleString("ru-RU")}. </>}
+                {orderResult.bonusesCollected > 0 && (
+                  <>Будет начислено {orderResult.bonusesCollected.toLocaleString("ru-RU")} бонусов после выполнения заказа.</>
+                )}
+              </p>
+            )}
             <p>
               Мы проверим наличие и цены и свяжемся с вами. В 1С:УНФ заказ
               попадёт только после подтверждения менеджером — это обычная
@@ -435,6 +519,40 @@ export function CartDrawer() {
                         </>
                       )}
                       {promoError && <p className="cart-promo-error">{promoError}</p>}
+                    </div>
+                  )}
+
+                  {/* MAXMA bonuses: spending — retail customers with a linked card; accrual — any linked card */}
+                  {customer && bonuses && (
+                    <div className="cart-bonuses">
+                      {bonuses.canSpend && (
+                        <label className={`cart-bonuses-toggle ${bonuses.maxToApply <= 0 ? "cart-bonuses-toggle--off" : ""}`}>
+                          <input
+                            type="checkbox"
+                            checked={spendBonuses}
+                            disabled={bonuses.maxToApply <= 0 && !spendBonuses}
+                            onChange={(e) => toggleBonuses(e.target.checked)}
+                          />
+                          <span>
+                            <b>Списать бонусы</b>
+                            <span className="cart-bonuses-hint">
+                              {bonuses.balance != null ? <>Доступно {bonuses.balance.toLocaleString("ru-RU")} бонусов, </> : null}
+                              {bonuses.maxToApply > 0
+                                ? <>можно списать до {bonuses.maxToApply.toLocaleString("ru-RU")}</>
+                                : <>на этот заказ списать нельзя</>}
+                            </span>
+                          </span>
+                        </label>
+                      )}
+                      {bonusesApplied > 0 && (
+                        <div className="cart-bonuses-line">
+                          <span>Списано бонусов</span>
+                          <b>−{bonusesApplied.toLocaleString("ru-RU")} ₽</b>
+                        </div>
+                      )}
+                      {bonuses.collected > 0 && (
+                        <div className="cart-bonuses-accrual">Будет начислено {bonuses.collected.toLocaleString("ru-RU")} бонусов</div>
+                      )}
                     </div>
                   )}
 

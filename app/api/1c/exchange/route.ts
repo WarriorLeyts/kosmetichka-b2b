@@ -5,7 +5,7 @@ import path from "path";
 import crypto from "crypto";
 import { dropThumbs } from "@/lib/thumb";
 import { cmlComment, cmlItemDiscounts, cmlItemSum } from "@/lib/commerceml";
-import { onOrderStatus } from "@/lib/maxmaOrders";
+import { MAXMA_ORDER_WHERE, onOrderStatus } from "@/lib/maxmaOrders";
 
 // Auth: any login + SYNC_API_KEY as password (set in .env)
 const COOKIE_NAME = "1C_SESS";
@@ -286,7 +286,7 @@ export async function POST(request: NextRequest) {
       const { prisma } = await import("@/lib/prisma");
       // Promo-code orders this ack moves to "exported" (for the MAXMA confirm below)
       const toConfirm = await prisma.order.findMany({
-        where: { id: { in: ids }, status: { not: "exported" }, promoCode: { not: null } },
+        where: { id: { in: ids }, status: { not: "exported" }, ...MAXMA_ORDER_WHERE },
         select: { id: true },
       });
       await prisma.order.updateMany({
@@ -294,7 +294,7 @@ export async function POST(request: NextRequest) {
         data: { oneCExportedAt: new Date(), status: "exported" },
       });
       console.log(`[exchange] acknowledged orders: ${ids.join(", ")}`);
-      // MAXMA: confirm promo-code orders (best effort, not awaited)
+      // MAXMA: confirm promo-code / bonus orders (best effort, not awaited)
       if (toConfirm.length) onOrderStatus(toConfirm.map((o) => o.id), "exported");
     }
 

@@ -22,6 +22,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     total: order.total,
     promoCode: order.promoCode ?? null,
     discount: order.discount,
+    bonusesApplied: order.bonusesApplied,
+    bonusesCollected: order.bonusesCollected,
     comment: order.comment,
     createdAt: order.createdAt.toISOString(),
     items: order.items.map((item) => ({
@@ -34,6 +36,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       price: item.price,
       total: item.total,
       discount: item.discount,
+      bonusDiscount: item.bonusDiscount,
     })),
   });
 }

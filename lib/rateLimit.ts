@@ -76,6 +76,12 @@ export const promoCheckLimiter = new RateLimiter({
   max: 20,
 });
 
+/** Checkout calculations (promo code + bonuses, debounced on cart changes): max 60 per customer per 10 minutes */
+export const checkoutCalcLimiter = new RateLimiter({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 60,
+});
+
 // ── Client IP ────────────────────────────────────────────────────────────────
 
 /**

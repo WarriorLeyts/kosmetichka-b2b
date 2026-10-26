@@ -39,6 +39,7 @@ html[data-theme="dark"] .cart-qty button { background: var(--cell) !important; }
 html[data-theme="dark"] .clear-cart-button { background: var(--cell) !important; }
 html[data-theme="dark"] .cart-error { background: var(--cell) !important; }
 html[data-theme="dark"] .cart-promo-applied { background: var(--cell) !important; }
+html[data-theme="dark"] .cart-bonuses-line { background: var(--cell) !important; }
 html[data-theme="dark"] .favorite-button.active { background: var(--cell) !important; }
 html[data-theme="dark"] .favorite-button.active { background: var(--cell) !important; }
 html[data-theme="dark"] .orders-stat-card { background: var(--cell) !important; }

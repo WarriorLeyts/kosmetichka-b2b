@@ -170,6 +170,10 @@ model Order {
   // Promo code (validated and calculated by MAXMA); discount in whole roubles, total already reduced by it
   promoCode String?
   discount  Int     @default(0)
+  // MAXMA bonuses: ₽ discount from spent bonuses (1 bonus = 1 ₽, total already reduced by it)
+  // and the accrual expected on confirm-order (shown to the customer)
+  bonusesApplied   Int @default(0)
+  bonusesCollected Int @default(0)
 
   items OrderItem[]
 
@@ -206,6 +210,8 @@ model OrderItem {
   total       Int
   // Promo-code discount for this line, whole roubles (line sum to pay = total - discount)
   discount    Int     @default(0)
+  // Discount from spent MAXMA bonuses for this line, whole roubles (to pay = total - discount - bonusDiscount)
+  bonusDiscount Int   @default(0)
 
   variantName     String?
   variantImageUrl String?
