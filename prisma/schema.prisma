@@ -378,3 +378,22 @@ model MaxmaTask {
   @@index([status, nextAt])
   @@index([orderId])
 }
+
+/// Errors and crashes reported by the mobile apps (POST /api/app-errors), grouped by `hash`
+model AppError {
+  id        Int      @id @default(autoincrement())
+  hash      String   @unique
+  app       String // "customer" | "team"
+  platform  String // "ios" | "android"
+  version   String?
+  message   String   @db.Text
+  stack     String?  @db.Text
+  screen    String?
+  fatal     Boolean  @default(false)
+  count     Int      @default(1)
+  customers Int[]    @default([])
+  firstAt   DateTime @default(now())
+  lastAt    DateTime @default(now())
+
+  @@index([lastAt(sort: Desc)])
+}
