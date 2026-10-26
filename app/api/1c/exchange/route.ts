@@ -3,6 +3,7 @@ import { runSync } from "@/lib/syncRunner";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { dropThumbs } from "@/lib/thumb";
 
 // Auth: any login + SYNC_API_KEY as password (set in .env)
 const COOKIE_NAME = "1C_SESS";
@@ -262,6 +263,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.arrayBuffer();
     fs.writeFileSync(dest, Buffer.from(body));
+    dropThumbs(DATA_DIR, dest);
     console.log(`[exchange] saved: ${safeName} (${body.byteLength} bytes)`);
 
     return txt("success");
