@@ -37,18 +37,23 @@ export function priceTypeLabel(type: PriceType): string {
   }
 }
 
-/** Цена одного товара по тарифу. */
+/**
+ * Цена одного товара по тарифу. Нет своей цены (0 / пусто) — следующая по цепочке,
+ * так же считает сервер при оформлении (lib/orderPricing.ts):
+ *   крупный опт → опт → розница, опт → розница, скидка / гость → розница.
+ */
 export function priceFor(product: any, type: PriceType): number {
-  if (type === "retail") {
-    return Number(product.retailPrice ?? 0);
-  }
-  if (type === "guest" || type === "discount") {
-    return Number(product.discountPrice ?? product.retailPrice ?? 0);
-  }
-  if (type === "big_wholesale") {
-    return Number(product.bigWholesalePrice ?? product.wholesalePrice ?? 0);
-  }
-  return Number(product.wholesalePrice ?? 0);
+  const pick = (...vals: unknown[]) => {
+    for (const v of vals) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return 0;
+  };
+  if (type === "retail") return pick(product.retailPrice);
+  if (type === "guest" || type === "discount") return pick(product.discountPrice, product.retailPrice);
+  if (type === "big_wholesale") return pick(product.bigWholesalePrice, product.wholesalePrice, product.retailPrice);
+  return pick(product.wholesalePrice, product.retailPrice);
 }
 
 /** Сумма корзины по тарифу (без авто-апгрейда). */

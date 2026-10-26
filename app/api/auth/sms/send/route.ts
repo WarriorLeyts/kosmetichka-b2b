@@ -35,7 +35,8 @@ async function sendSmsAero(phone: string, text: string): Promise<boolean> {
     });
 
     const data = await res.json();
-    console.log("SMS AERO response:", JSON.stringify(data));
+    // the response holds the phone and the SMS text (the code) — log only the outcome
+    if (data?.success !== true) console.error("SMS AERO: not sent:", data?.message ?? "unknown error");
 
     return data.success === true;
   } catch (err) {

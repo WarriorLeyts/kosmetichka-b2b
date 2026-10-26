@@ -94,6 +94,12 @@ describe("priceFor", () => {
     expect(priceFor({ wholesalePrice: 60, bigWholesalePrice: null }, "big_wholesale")).toBe(60);
   });
 
+  it("wholesale without its own price (0 from 1C) → retail, not 0 ₽", () => {
+    expect(priceFor({ retailPrice: 400, wholesalePrice: 0, bigWholesalePrice: null }, "wholesale")).toBe(400);
+    expect(priceFor({ retailPrice: 400, wholesalePrice: 0, bigWholesalePrice: null }, "big_wholesale")).toBe(400);
+    expect(priceFor({ retailPrice: 400, discountPrice: 0 }, "discount")).toBe(400);
+  });
+
   it("returns 0 when all prices are missing", () => {
     expect(priceFor({}, "wholesale")).toBe(0);
   });
