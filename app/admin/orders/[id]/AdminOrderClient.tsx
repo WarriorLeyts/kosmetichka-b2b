@@ -105,6 +105,7 @@ type EditItem = {
   isNew?: boolean;
   variantName?: string | null;
   variantImageUrl?: string | null;
+  imagePath?: string | null; // catalog photo for items added while editing
 };
 
 type CatalogProductVariant = {
@@ -598,6 +599,7 @@ export default function AdminOrderClient({
           removed: false,
           variantName: variant?.name ?? null,
           variantImageUrl: variant?.imageUrl ?? null,
+          imagePath: p.imagePath,
         },
       ];
     });
@@ -1216,121 +1218,25 @@ export default function AdminOrderClient({
               )}
             </div>
           ) : (
-            <div className="no-print mb-4 rounded-xl border bg-amber-50 p-4">
-              <div className="mb-3 flex flex-wrap items-center gap-2 justify-between">
-                <span className="font-bold text-amber-800">Режим редактирования</span>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={cancelEdit}
-                    className="rounded-xl border px-4 py-2 text-sm hover:bg-amber-100"
-                  >
-                    Отмена
-                  </button>
-                  <button
-                    onClick={() => openCatalog("order")}
-                    className="rounded-xl border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 hover:bg-blue-100"
-                  >
-                    + Добавить из каталога
-                  </button>
-                  {/* Percentage discount */}
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      min="1"
-                      max="99"
-                      value={discountPct}
-                      onChange={(e) => setDiscountPct(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && applyDiscount()}
-                      placeholder="%"
-                      className="w-16 rounded-xl border px-2 py-2 text-center text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
-                    />
-                    <button
-                      onClick={applyDiscount}
-                      disabled={!discountPct || parseFloat(discountPct) <= 0}
-                      className="rounded-xl border border-purple-300 bg-purple-50 px-3 py-2 text-sm font-bold text-purple-700 hover:bg-purple-100 disabled:opacity-40 whitespace-nowrap"
-                      title="Применить процентную скидку ко всем ценам"
-                    >
-                      Скидка %
-                    </button>
-                  </div>
-                  <button
-                    onClick={saveEdit}
-                    disabled={saving}
-                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {saving ? "Сохранение..." : "✓ Сохранить"}
-                  </button>
-                </div>
-              </div>
-              {editError && (
-                <div className="mb-3 rounded-xl bg-red-50 px-4 py-2 text-sm text-red-600">{editError}</div>
-              )}
-              <div className="space-y-2">
-                {editItems.map((item, idx) => {
-                  if (item.removed) {
-                    return (
-                      <div key={idx} className="flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 opacity-60">
-                        <span className="flex-1 text-sm line-through text-red-600">{item.productName}</span>
-                        <button
-                          onClick={() => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, removed: false } : i))}
-                          className="text-xs text-red-600 hover:underline"
-                        >
-                          Восстановить
-                        </button>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={idx} className="flex flex-col gap-1.5 rounded-xl border bg-white p-2">
-                      {/* Row 1: name + badges + remove */}
-                      <div className="flex items-start gap-2">
-                        <span className="flex-1 text-sm font-medium leading-snug">{item.productName}</span>
-                        {item.isNew && <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Новый</span>}
-                        <button
-                          onClick={() => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, removed: true } : i))}
-                          className="shrink-0 rounded-lg border px-2 py-1 text-xs text-red-500 hover:bg-red-50"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      {/* Row 2: variant badge + qty + price + variant picker */}
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {item.variantName && (
-                          <span className="text-xs text-blue-600 font-semibold bg-blue-50 rounded-full px-2 py-0.5">
-                            🎨 {item.variantName}
-                          </span>
-                        )}
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, quantity: Math.max(1, Number(e.target.value)) } : i))}
-                          className="w-14 rounded-lg border px-2 py-1 text-center text-sm"
-                        />
-                        <span className="text-xs text-slate-400">шт.</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.price}
-                          onChange={(e) => setEditItems((prev) => prev.map((i, n) => n === idx ? { ...i, price: Math.max(0, Number(e.target.value)) } : i))}
-                          className="w-20 rounded-lg border px-2 py-1 text-center text-sm"
-                        />
-                        <span className="text-xs text-slate-400">₽</span>
-                        <button
-                          onClick={() => openVariantPickerForItem(idx)}
-                          className="rounded-lg border px-2 py-1 text-xs text-purple-600 hover:bg-purple-50 shrink-0"
-                          title="Сменить вариант"
-                        >
-                          🎨
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <OrderItemsEditor
+              items={editItems}
+              setItems={setEditItems}
+              productImages={productImages}
+              before={order.items.reduce((sum, i) => sum + i.total, 0)}
+              saving={saving}
+              error={editError}
+              discountPct={discountPct}
+              setDiscountPct={setDiscountPct}
+              onDiscount={applyDiscount}
+              onAdd={() => openCatalog("order")}
+              onVariant={openVariantPickerForItem}
+              onCancel={cancelEdit}
+              onSave={saveEdit}
+            />
           )}
 
+          {!editMode && (
+          <>
           {/* Items list — mobile cards */}
           <div className="sm:hidden space-y-2">
             {order.items.map((item) => {
@@ -1532,6 +1438,8 @@ export default function AdminOrderClient({
               </tfoot>
             </table>
           </div>
+          </>
+          )}
 
           {order.comment && (
             <div className="mt-3 rounded-xl border bg-white p-3 text-sm text-slate-600">
@@ -2117,6 +2025,233 @@ export default function AdminOrderClient({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Order items editor (admin) ────────────────────────────────────────────────
+
+const rub = (n: number) => `${n.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} ₽`;
+const NUM_INPUT =
+  "[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
+/**
+ * «Редактировать позиции»: one card per item (photo, name, − qty +, price, line sum, remove),
+ * add from the catalog and a % discount on top, «было → станет» and Save / Cancel pinned at the bottom.
+ * Only local state here; saving is the caller's saveEdit (PUT /api/admin/orders/:id/items).
+ */
+function OrderItemsEditor({
+  items, setItems, productImages, before, saving, error, discountPct, setDiscountPct,
+  onDiscount, onAdd, onVariant, onCancel, onSave,
+}: {
+  items: EditItem[];
+  setItems: React.Dispatch<React.SetStateAction<EditItem[]>>;
+  productImages: Record<number, string | null>;
+  before: number;
+  saving: boolean;
+  error: string;
+  discountPct: string;
+  setDiscountPct: (v: string) => void;
+  onDiscount: () => void;
+  onAdd: () => void;
+  onVariant: (idx: number) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const patch = (idx: number, p: Partial<EditItem>) => setItems((prev) => prev.map((i, n) => (n === idx ? { ...i, ...p } : i)));
+  const live = items.filter((i) => !i.removed);
+  const after = Math.round(live.reduce((s, i) => s + i.price * i.quantity, 0) * 100) / 100;
+  const pieces = live.reduce((s, i) => s + i.quantity, 0);
+  const diff = after - before;
+  const pct = parseFloat(discountPct);
+
+  return (
+    <div className="no-print mb-4 rounded-2xl border border-amber-200 bg-white shadow-sm">
+      <div className="rounded-t-2xl border-b border-amber-200 bg-amber-50 px-4 py-3">
+        <div className="font-bold text-amber-900">✏️ Редактирование позиций</div>
+        <div className="text-xs text-amber-800/80">Изменения применятся к заказу только после «Сохранить»</div>
+      </div>
+
+      {/* add + discount */}
+      <div className="flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-center">
+        <button
+          onClick={onAdd}
+          className="flex h-11 items-center justify-center gap-2 rounded-xl border border-blue-300 bg-blue-50 px-4 text-sm font-bold text-blue-700 hover:bg-blue-100 sm:flex-1"
+        >
+          <span className="text-lg leading-none">+</span> Добавить товар из каталога
+        </button>
+        <div className="flex h-11 items-center gap-2 rounded-xl border bg-slate-50 pl-3 pr-1.5">
+          <span className="whitespace-nowrap text-sm text-slate-600">Скидка на все цены</span>
+          <div className="relative">
+            <input
+              type="number"
+              inputMode="decimal"
+              min="1"
+              max="99"
+              value={discountPct}
+              onChange={(e) => setDiscountPct(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && onDiscount()}
+              placeholder="0"
+              aria-label="Скидка в процентах"
+              className={`h-8 w-16 rounded-lg border bg-white pl-2 pr-6 text-right text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-300 ${NUM_INPUT}`}
+            />
+            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm text-slate-400">%</span>
+          </div>
+          <button
+            onClick={onDiscount}
+            disabled={!(pct > 0 && pct < 100)}
+            className="ml-auto h-8 rounded-lg bg-purple-600 px-3 text-sm font-bold text-white hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400"
+          >
+            Применить
+          </button>
+        </div>
+      </div>
+
+      {error ? <div className="mx-4 mt-3 rounded-xl bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div> : null}
+
+      {/* items */}
+      <ul className="divide-y">
+        {items.map((item, idx) => {
+          const raw = item.variantImageUrl ?? item.imagePath ?? productImages[item.productId] ?? null;
+          const img = raw ? (raw.startsWith("http") || raw.startsWith("/") ? raw : getProductImageUrl(raw)) : null;
+          if (item.removed) {
+            return (
+              <li key={idx} className="flex items-center gap-3 bg-red-50/60 px-4 py-2.5">
+                <span className="min-w-0 flex-1 truncate text-sm text-red-700 line-through">{item.productName}</span>
+                <span className="shrink-0 text-xs text-red-500">удалён</span>
+                <button
+                  onClick={() => patch(idx, { removed: false })}
+                  className="shrink-0 rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-bold text-red-600 hover:bg-red-50"
+                >
+                  Вернуть
+                </button>
+              </li>
+            );
+          }
+          return (
+            <li key={idx} className={`px-4 py-3 ${item.isNew ? "border-l-4 border-l-green-400 bg-green-50/40" : ""}`}>
+              <div className="flex gap-3">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-white">
+                  {img ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={img} alt="" className="h-full w-full object-contain p-1" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+                  ) : (
+                    <span className="text-xl text-slate-300">📦</span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold leading-snug text-slate-900">{item.productName}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        {item.isNew ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">Новый</span> : null}
+                        {item.variantName ? (
+                          <button
+                            onClick={() => onVariant(idx)}
+                            className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                            title="Сменить вариант"
+                          >
+                            🎨 {item.variantName} <span className="opacity-60">· сменить</span>
+                          </button>
+                        ) : null}
+                        {item.barcode ? <span className="font-mono text-xs text-slate-400">{item.barcode}</span> : null}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => patch(idx, { removed: true })}
+                      aria-label={`Удалить ${item.productName}`}
+                      title="Удалить позицию"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    {/* quantity */}
+                    <div className="flex h-10 items-center rounded-xl border bg-slate-50">
+                      <button
+                        onClick={() => patch(idx, { quantity: Math.max(1, item.quantity - 1) })}
+                        disabled={item.quantity <= 1}
+                        aria-label="Меньше"
+                        className="h-10 w-8 rounded-l-xl text-lg font-bold text-slate-600 hover:bg-slate-100 disabled:text-slate-300"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(e) => patch(idx, { quantity: Math.max(1, Math.floor(Number(e.target.value) || 1)) })}
+                        aria-label="Количество"
+                        className={`h-10 w-11 border-x bg-white text-center text-sm font-bold focus:outline-none ${NUM_INPUT}`}
+                      />
+                      <button
+                        onClick={() => patch(idx, { quantity: item.quantity + 1 })}
+                        aria-label="Больше"
+                        className="h-10 w-8 rounded-r-xl text-lg font-bold text-slate-600 hover:bg-slate-100"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <span className="text-sm text-slate-400">×</span>
+                    {/* price */}
+                    <div className="relative">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={item.price}
+                        onChange={(e) => patch(idx, { price: Math.max(0, Number(e.target.value) || 0) })}
+                        aria-label="Цена за штуку"
+                        className={`h-10 w-24 rounded-xl border bg-white pl-2 pr-6 text-right text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-300 ${NUM_INPUT}`}
+                      />
+                      <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">₽</span>
+                    </div>
+                    <span className="ml-auto whitespace-nowrap text-base font-black text-slate-900">{rub(Math.round(item.price * item.quantity * 100) / 100)}</span>
+                  </div>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+        {items.length === 0 ? <li className="px-4 py-6 text-center text-sm text-slate-400">В заказе нет позиций — добавьте товар из каталога</li> : null}
+      </ul>
+
+      {/* totals + actions, pinned to the bottom of the screen while editing */}
+      <div className="sticky bottom-0 z-10 rounded-b-2xl border-t bg-white/95 px-4 py-3 shadow-[0_-6px_16px_rgba(15,23,42,0.06)] backdrop-blur">
+        <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <span className="text-xs text-slate-500">
+            {live.length} поз. · {pieces} шт.
+          </span>
+          <span className="text-sm">
+            {diff !== 0 ? <span className="mr-2 text-slate-400 line-through">{rub(before)}</span> : null}
+            <span className="text-lg font-black text-slate-900">{rub(after)}</span>
+            {diff !== 0 ? (
+              <span className={`ml-2 text-xs font-bold ${diff < 0 ? "text-emerald-600" : "text-orange-600"}`}>
+                {diff > 0 ? "+" : "−"}
+                {rub(Math.abs(Math.round(diff * 100) / 100))}
+              </span>
+            ) : null}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+          <button onClick={onCancel} disabled={saving} className="h-11 rounded-xl border px-5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            Отмена
+          </button>
+          <button
+            onClick={onSave}
+            disabled={saving || live.length === 0}
+            className="h-11 rounded-xl bg-blue-600 px-6 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? "Сохранение…" : "Сохранить"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
