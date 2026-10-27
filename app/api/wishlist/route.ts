@@ -1,13 +1,13 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { verifyCustomerToken } from "@/lib/customerAuth";
 
 async function getCustomerId(): Promise<number | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
   if (!token) return null;
-  const payload = await verifyToken(token);
+  const payload = await verifyCustomerToken(token);
   return payload?.id ? Number(payload.id) : null;
 }
 

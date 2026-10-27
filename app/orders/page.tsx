@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { verifyCustomerToken } from "@/lib/customerAuth";
 import { redirect } from "next/navigation";
 import OrdersPageClient from "./OrdersPageClient";
 import Link from "next/link";
@@ -20,7 +20,7 @@ export default async function OrdersPage({
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
   if (!token) redirect("/login");
-  const payload = await verifyToken(token);
+  const payload = await verifyCustomerToken(token);
   if (!payload?.id) redirect("/login");
 
   const customerId = payload.id as number;

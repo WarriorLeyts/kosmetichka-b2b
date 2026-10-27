@@ -4,25 +4,27 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { createToken } from "@/lib/auth";
 import { getClientIp } from "@/lib/rateLimit";
-import { checkLoginAttempt, clearLoginAttempts } from "@/lib/loginAttempts";
+import { checkLoginLimits, clearLoginLimits } from "@/lib/loginAttempts";
 
-const MAX_ATTEMPTS = 10;
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-
-const checkRateLimit = (ip: string) => checkLoginAttempt(ip, MAX_ATTEMPTS, WINDOW_MS);
-const clearAttempts = (ip: string) => clearLoginAttempts(ip);
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
+  const body = await request.json().catch(() => null);
+  // Только строки: объект в email Prisma восприняла бы как фильтр ({ not: "" } и т. п.)
+  const email = typeof body?.email === "string" ? body.email.trim().slice(0, 120) : "";
+  const password = typeof body?.password === "string" ? body.password.slice(0, 200) : "";
 
-  if (!(await checkRateLimit(ip))) {
+  if (!(await checkLoginLimits("login", ip, email, WINDOW_MS))) {
     return NextResponse.json(
       { error: "Слишком много попыток входа. Подождите 15 минут." },
       { status: 429 }
     );
   }
 
-  const { email, password } = await request.json();
+  if (!email || !password) {
+    return NextResponse.json({ error: "Неверный логин или пароль" }, { status: 401 });
+  }
 
   const customer = await prisma.customer.findFirst({
   where: {
@@ -63,7 +65,7 @@ export async function POST(request: Request) {
     );
   }
 
-  await clearAttempts(ip); // успешный вход — сбрасываем счётчик
+  await clearLoginLimits("login", ip, email); // успешный вход — сбрасываем счётчики этого IP и аккаунта
 
 const token = await createToken({
   id: customer.id,

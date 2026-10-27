@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { verifyCustomerToken } from "@/lib/customerAuth";
 import PrintButton from "@/components/admin/PrintButton";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export default async function CustomerInvoicePage({
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
   if (!token) redirect("/login");
-  const payload = await verifyToken(token);
+  const payload = await verifyCustomerToken(token);
   if (!payload?.id) redirect("/login");
 
   const { id } = await params;

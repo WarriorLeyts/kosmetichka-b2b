@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { verifyCustomerToken } from "@/lib/customerAuth";
 import { normalizePhone } from "@/lib/phone";
 import bcrypt from "bcryptjs";
 import PasswordInput from "@/components/PasswordInput";
@@ -27,7 +27,7 @@ async function updateProfile(formData: FormData) {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
   if (!token) redirect("/login");
-  const payload = await verifyToken(token);
+  const payload = await verifyCustomerToken(token);
   if (!payload?.id) redirect("/login");
 
   const id = payload.id as number;
@@ -110,7 +110,7 @@ export default async function ProfilePage({
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
   if (!token) redirect("/login");
-  const payload = await verifyToken(token);
+  const payload = await verifyCustomerToken(token);
   if (!payload?.id) redirect("/login");
 
   const customer = await prisma.customer.findUnique({

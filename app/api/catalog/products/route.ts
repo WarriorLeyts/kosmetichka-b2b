@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { withFlatPrices } from "@/lib/utils";
-import { verifyToken } from "@/lib/auth";
+import { verifyCustomerToken } from "@/lib/customerAuth";
 import { createHash } from "crypto";
 
 const SORTS = ["popularity", "price_asc", "price_desc", "name"] as const;
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
   // Проверяем авторизацию
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
-  const payload = token ? await verifyToken(token) : null;
+  const payload = token ? await verifyCustomerToken(token) : null;
   const isAuthenticated = Boolean(payload?.id);
 
   const page = Number(searchParams.get("page") || 1);

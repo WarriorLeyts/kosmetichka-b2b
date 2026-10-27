@@ -20,19 +20,24 @@ async function bitrixPost(webhookUrl: string, method: string, body: object): Pro
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(8000),
   });
   return res.json();
 }
 
 /** Parse PHP-style bracket notation: data[FIELDS][ID] → { data: { FIELDS: { ID: "..." } } } */
+// Ключи вроде __proto__[x]=1 иначе записывались бы в Object.prototype и ломали весь процесс
+const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 function parseBracketParams(params: URLSearchParams): Record<string, any> {
-  const result: Record<string, any> = {};
+  const result: Record<string, any> = Object.create(null);
   for (const [rawKey, value] of params.entries()) {
     const keys = rawKey.split(/[\[\]]+/).filter(Boolean);
+    if (!keys.length || keys.some((k) => FORBIDDEN_KEYS.has(k))) continue;
     let cursor: Record<string, any> = result;
     for (let i = 0; i < keys.length - 1; i++) {
       if (typeof cursor[keys[i]] !== "object" || cursor[keys[i]] === null) {
-        cursor[keys[i]] = {};
+        cursor[keys[i]] = Object.create(null);
       }
       cursor = cursor[keys[i]];
     }
@@ -55,32 +60,40 @@ export async function POST(request: NextRequest) {
     }
 
     const fields: Record<string, string> = parsed.data?.FIELDS || {};
-    const commentId = String(fields.ID || "");
-    const entityId = Number(fields.ENTITY_ID) || null;
-    const entityTypeId = Number(fields.ENTITY_TYPE_ID) || 0;
-    let commentText = String(fields.COMMENT || "").trim();
+    const commentId = String(fields.ID || "").trim();
+    if (!/^\d+$/.test(commentId)) {
+      return NextResponse.json({ ok: true, skip: "no comment id" });
+    }
 
-    console.log(`[Comment webhook] commentId=${commentId} entityId=${entityId} typeId=${entityTypeId} textLen=${commentText.length}`);
+    // Обработчик открыт всем (Bitrix не подписывает события), поэтому присланным полям не верим:
+    // по номеру комментария забираем его из самого Bitrix — текст и сделку подделать нельзя.
+    const webhookUrl = process.env.BITRIX_WEBHOOK_URL;
+    if (!webhookUrl) {
+      return NextResponse.json({ ok: true, skip: "no BITRIX_WEBHOOK_URL" });
+    }
+    let comment: Record<string, unknown> | null = null;
+    try {
+      const r = await bitrixPost(webhookUrl, "crm.timeline.comment.get", { id: commentId });
+      comment = r?.result ?? null;
+    } catch {
+      console.error("[Comment webhook] crm.timeline.comment.get failed");
+    }
+    if (!comment) {
+      return NextResponse.json({ ok: true, skip: "comment not found in Bitrix" });
+    }
 
-    if (entityTypeId !== 2) {
+    const entityId = Number(comment.ENTITY_ID) || null;
+    const entityType = String(comment.ENTITY_TYPE ?? "").toLowerCase();
+    const isDeal = entityType ? entityType === "deal" : Number(comment.ENTITY_TYPE_ID ?? fields.ENTITY_TYPE_ID) === 2;
+    const commentText = String(comment.COMMENT || "").trim();
+
+    console.log(`[Comment webhook] commentId=${commentId} entityId=${entityId} type=${entityType || "?"} textLen=${commentText.length}`);
+
+    if (!isDeal) {
       return NextResponse.json({ ok: true, skip: "not a deal" });
     }
     if (!entityId) {
       return NextResponse.json({ ok: true, skip: "no entity_id" });
-    }
-
-    // If Bitrix didn't include the text in the event, fetch it
-    if (!commentText && commentId) {
-      const webhookUrl = process.env.BITRIX_WEBHOOK_URL;
-      if (webhookUrl) {
-        try {
-          const r = await bitrixPost(webhookUrl, "crm.timeline.comment.get", { id: commentId });
-          commentText = String(r.result?.COMMENT || "").trim();
-          console.log(`[Comment webhook] fetched comment text len=${commentText.length}`);
-        } catch {
-          console.error("[Comment webhook] crm.timeline.comment.get failed");
-        }
-      }
     }
 
     if (!commentText) {
