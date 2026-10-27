@@ -75,3 +75,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Картинка товара в вопросе
 ALTER TABLE "AcademyQuestion" ADD COLUMN IF NOT EXISTS "productId" INTEGER;
+
+-- Должность и магазин сотрудника (регистрация в тестах)
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "position" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "store" TEXT;

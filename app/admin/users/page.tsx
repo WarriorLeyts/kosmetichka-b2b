@@ -35,6 +35,8 @@ export default async function AdminUsersPage() {
       name: true,
       login: true,
       role: true,
+      position: true,
+      store: true,
       createdAt: true,
     },
     orderBy: { createdAt: "desc" },
@@ -71,7 +73,12 @@ export default async function AdminUsersPage() {
             {users.map((u) => (
               <tr key={u.id} className="border-t hover:bg-slate-50">
                 <td className="p-3 text-xs text-slate-400">{u.id}</td>
-                <td className="p-3 font-semibold">{u.name || "—"}</td>
+                <td className="p-3">
+                  <div className="font-semibold">{u.name || "—"}</div>
+                  {(u.position || u.store) && (
+                    <div className="text-xs text-slate-500">{[u.position, u.store].filter(Boolean).join(" · ")}</div>
+                  )}
+                </td>
                 <td className="p-3 text-slate-500">{u.login || "—"}</td>
                 <td className="p-3 text-center">
                   <span

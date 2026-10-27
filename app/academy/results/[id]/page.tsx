@@ -18,7 +18,7 @@ export default async function AttemptPage({ params }: { params: Promise<{ id: st
 
   const a = await prisma.academyAttempt.findUnique({
     where: { id: attemptId },
-    include: { user: { select: { name: true, login: true } }, test: { select: { title: true, passScore: true } } },
+    include: { user: { select: { name: true, login: true, position: true, store: true } }, test: { select: { title: true, passScore: true } } },
   });
   if (!a) notFound();
 
@@ -36,7 +36,7 @@ export default async function AttemptPage({ params }: { params: Promise<{ id: st
         </Link>
         <h1 className="mt-1 text-2xl font-black text-slate-900">{a.test.title}</h1>
         <p className="mt-1 text-sm font-semibold text-slate-600">
-          {a.user.name} ({a.user.login}) · {when} · {formatDuration(a.finishedAt.getTime() - a.startedAt.getTime())}
+          {a.user.name} ({[a.user.position, a.user.store, a.user.login].filter(Boolean).join(", ")}) · {when} · {formatDuration(a.finishedAt.getTime() - a.startedAt.getTime())}
         </p>
         <p className={`mt-2 text-lg font-black ${a.passed ? "text-emerald-600" : "text-rose-600"}`}>
           {a.score}% · {a.correctCount} из {a.total} · {a.passed ? "сдан" : "не сдан"}
