@@ -11,6 +11,7 @@ import { HijabIcon } from "@/components/app/HijabIcon";
 import { PriceTypeSwitcher } from "@/components/profile/PriceTypeSwitcher";
 import { DeleteAccount } from "@/components/profile/DeleteAccount";
 import { LoyaltyCard } from "@/components/profile/LoyaltyCard";
+import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
 import { PromoToggle } from "@/components/profile/PromoToggle";
 import { ThemePicker } from "@/components/profile/ThemePicker";
 import { roleInfo } from "@/lib/roles";
@@ -197,7 +198,8 @@ export default async function ProfilePage({
           </div>
         )}
 
-        <LoyaltyCard phone={customer.phone} />
+        {/* MAXMA card — retail, in the app only for now */}
+        {SITE_RETAIL_ENABLED ? <LoyaltyCard phone={customer.phone} /> : null}
 
         <PriceTypeSwitcher initial={roleInfo(customer)} />
 

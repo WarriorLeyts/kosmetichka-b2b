@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/app/ThemeToggle";
 import Script from "next/script";
 import { useState, useRef, useCallback } from "react";
 import { Heart, Send, MessageSquare, RefreshCw, Eye, EyeOff, ChevronLeft } from "lucide-react";
+import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
 
 const SMARTCAPTCHA_CLIENT_KEY =
   process.env.NEXT_PUBLIC_SMARTCAPTCHA_CLIENT_KEY ?? "";
@@ -20,7 +21,7 @@ declare global {
   }
 }
 
-const PRICE_TYPE_OPTIONS = [
+const ALL_PRICE_TYPE_OPTIONS = [
   {
     value: "retail",
     label: "Розница",
@@ -50,6 +51,11 @@ const PRICE_TYPE_OPTIONS = [
     autoApprove: false,
   },
 ];
+
+// пока на сайте только опт и крупный опт — розница и скидка в приложении
+const PRICE_TYPE_OPTIONS = SITE_RETAIL_ENABLED
+  ? ALL_PRICE_TYPE_OPTIONS
+  : ALL_PRICE_TYPE_OPTIONS.filter((o) => o.value === "wholesale" || o.value === "big_wholesale");
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -173,7 +179,7 @@ export default function RegisterPage() {
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, companyName, phone, email, password, captchaToken, smsCode, priceType }),
+      body: JSON.stringify({ name, companyName, phone, email, password, captchaToken, smsCode, priceType, source: "site" }),
     });
 
     const text = await res.text();
