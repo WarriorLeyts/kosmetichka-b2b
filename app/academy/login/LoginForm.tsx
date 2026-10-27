@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, GraduationCap } from "lucide-react";
 
@@ -92,6 +93,13 @@ export default function LoginForm() {
           >
             {loading ? "Входим…" : "Войти"}
           </button>
+
+          <p className="text-center text-sm font-semibold text-slate-500">
+            Нет аккаунта?{" "}
+            <Link href="/academy/register" className="font-bold text-pink-500 hover:underline">
+              Зарегистрироваться
+            </Link>
+          </p>
         </div>
       </form>
     </div>

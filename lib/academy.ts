@@ -41,7 +41,11 @@ export const ROLE_NAMES: Record<string, string> = {
   admin: "Администратор",
   manager: "Менеджер",
   picker: "Сборщик",
+  employee: "Сотрудник",
 };
+
+/** Роль самостоятельно зарегистрированных: доступ только к тестам (всё остальное пускает лишь admin/manager/picker). */
+export const EMPLOYEE_ROLE = "employee";
 
 export type StaffSession = { id: number; login: string; role: string };
 

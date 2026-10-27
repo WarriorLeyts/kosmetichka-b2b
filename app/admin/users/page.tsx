@@ -10,12 +10,14 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "Администратор",
   manager: "Менеджер",
   picker: "Сборщик",
+  employee: "Сотрудник (только тесты)",
 };
 
 const ROLE_COLORS: Record<string, string> = {
   admin: "bg-purple-100 text-purple-700",
   manager: "bg-blue-100 text-blue-700",
   picker: "bg-green-100 text-green-700",
+  employee: "bg-pink-100 text-pink-700",
 };
 
 export default async function AdminUsersPage() {

@@ -83,7 +83,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // --- Staff tests (/academy, test.kosmetichka-opt.ru): any staff account ---
-  if (pathname.startsWith("/academy") && pathname !== "/academy/login") {
+  if (pathname.startsWith("/academy") && pathname !== "/academy/login" && pathname !== "/academy/register") {
     const token = request.cookies.get("admin_token")?.value;
     // Внешний адрес берём из заголовков nginx: сам Next за прокси знает только 127.0.0.1
     const toLogin = () => {
