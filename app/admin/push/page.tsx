@@ -1,17 +1,11 @@
-import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { verifyToken } from "@/lib/auth";
-import { notify } from "@/lib/notify";
+import { broadcastStats, PUSH_AUDIENCE, sendBroadcast } from "@/lib/pushBroadcast";
 
 export const dynamic = "force-dynamic";
 
-const AUDIENCE: Record<string, { label: string; types: string[] }> = {
-  all: { label: "Все клиенты", types: ["retail", "discount", "wholesale", "big_wholesale"] },
-  retail: { label: "Розница и скидка", types: ["retail", "discount"] },
-  wholesale: { label: "Опт", types: ["wholesale"] },
-  big_wholesale: { label: "Крупный опт", types: ["big_wholesale"] },
-};
+const AUDIENCE = PUSH_AUDIENCE;
 
 async function adminId(): Promise<number> {
   const token = (await cookies()).get("admin_token")?.value;
@@ -24,38 +18,23 @@ async function adminId(): Promise<number> {
 async function send(formData: FormData) {
   "use server";
   const userId = await adminId();
-  const title = String(formData.get("title") || "").trim().slice(0, 80);
-  const body = String(formData.get("body") || "").trim().slice(0, 400);
-  const audience = String(formData.get("audience") || "all");
-  const article = String(formData.get("article") || "").trim();
-  if (!title || !body || !AUDIENCE[audience]) redirect("/admin/push?error=empty");
-
-  let link: string | null = null;
-  if (article) {
-    const p = await prisma.product.findFirst({ where: { OR: [{ article }, { barcode: article }] }, select: { id: true } });
-    if (!p) redirect("/admin/push?error=article");
-    link = `/product/${p.id}`;
-  }
-
-  const customers = await prisma.customer.findMany({
-    where: { isActive: true, isApproved: true, pushPromo: true, priceType: { in: AUDIENCE[audience].types } },
-    select: { id: true },
-  });
-  const r = await notify(customers.map((c) => c.id), { kind: "promo", title, body, link });
-  await prisma.pushBroadcast.create({
-    data: { title, body, audience, link, recipients: r.customers, devices: r.devices, userId },
-  });
-  redirect(`/admin/push?sent=${r.customers}&devices=${r.devices}`);
+  const r = await sendBroadcast(
+    {
+      title: String(formData.get("title") || ""),
+      body: String(formData.get("body") || ""),
+      audience: String(formData.get("audience") || "all"),
+      article: String(formData.get("article") || ""),
+    },
+    userId
+  );
+  if (!r.ok) redirect(`/admin/push?error=${r.error}`);
+  redirect(`/admin/push?sent=${r.recipients}&devices=${r.devices}`);
 }
 
 export default async function PushPage({ searchParams }: { searchParams: Promise<{ sent?: string; devices?: string; error?: string }> }) {
   await adminId();
   const sp = await searchParams;
-  const [withApp, promo, history] = await Promise.all([
-    prisma.pushToken.groupBy({ by: ["customerId"] }).then((r) => r.length),
-    prisma.customer.count({ where: { isActive: true, pushPromo: true } }),
-    prisma.pushBroadcast.findMany({ orderBy: { id: "desc" }, take: 30 }),
-  ]);
+  const { withApp, promo, history } = await broadcastStats();
   const fmt = (d: Date) => d.toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
   return (
