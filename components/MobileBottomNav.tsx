@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { Home, LayoutGrid, ShoppingBag, FileText, User } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
 
-const HIDDEN_PREFIXES = ["/admin", "/picker", "/login", "/register", "/forgot-password", "/reset-password"];
+const HIDDEN_PREFIXES = ["/admin", "/picker", "/login", "/register", "/forgot-password", "/reset-password", "/academy"];
 
 /** Нижнее меню на телефоне — как TabBar приложения: плавающая полупрозрачная панель, активная вкладка — фиолетовая капсула. */
 export function MobileBottomNav() {

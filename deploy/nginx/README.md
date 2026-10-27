@@ -24,3 +24,12 @@ location ~* "^/api/1c/(?<kos_img>.+\.(?:jpe?g|png|webp|gif))$" { include snippet
 
 Уменьшенные копии nginx отдаёт без сравнения дат, поэтому при замене фото (обмен с 1С,
 scripts/import-images.js, scripts/compress-images.js) копии удаляются — `dropThumbs` в lib/thumb.ts.
+
+# nginx: test.kosmetichka-opt.ru (тесты для сотрудников)
+
+- `/etc/nginx/sites-enabled/kosmetichka-test` ← `test-subdomain.conf` (+ HTTPS, который дописывает certbot)
+- `/etc/nginx/snippets/kosmetichka-test-proxy.conf` ← `kosmetichka-test-proxy.conf`
+
+Поддомен проксирует на тот же сайт (127.0.0.1:3000), но наружу открыт только раздел `/academy`,
+его API и вход/выход сотрудника; остальные адреса ведут на `/academy`. Ставится и обновляется
+скриптом `deploy/academy-setup.sh` (миграция, тесты, nginx, certbot). Нужна A-запись `test` → IP сервера.
