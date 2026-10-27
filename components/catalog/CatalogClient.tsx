@@ -9,6 +9,7 @@ import { CatalogSidebar } from "./CatalogSidebar";
 import { CatalogHeader } from "./CatalogHeader";
 import { ProductGrid } from "./ProductGrid";
 import { useCartStore } from "@/store/cartStore";
+import { SUB_FILTERS } from "@/lib/subFilters";
 
 function getDescendantGuids(categories: any[], parentGuid: string): string[] {
   const result = [parentGuid];
@@ -55,6 +56,20 @@ export function CatalogClient({
     searchParams.getAll("quick").filter((q) => QUICK_FILTERS.some((f) => f.key === q))
   );
 
+  // Product-type chips inside a subcategory («Мисты», «Спреи»…), as in the app (?type=Мисты)
+  const [typeLabel, setTypeLabel] = useState<string | null>(() => searchParams.get("type"));
+  const selectedGuid = categories.find((c) => c.id === categoryId)?.guid as string | undefined;
+  const types = selectedGuid ? SUB_FILTERS[selectedGuid] : undefined;
+  const typeFilter = types?.find((t) => t.label === typeLabel);
+  // another category — its own chips, the previous choice no longer applies
+  const prevCategory = useRef(categoryId);
+  useEffect(() => {
+    if (prevCategory.current !== categoryId) {
+      prevCategory.current = categoryId;
+      setTypeLabel(null);
+    }
+  }, [categoryId]);
+
   const [priceBounds, setPriceBounds] = useState({ min: 0, max: 10000 });
 
   // Sync filters to URL for shareable links
@@ -68,9 +83,10 @@ export function CatalogClient({
     if (priceMax !== null) params.set("priceMax", String(priceMax));
     if (sort !== "popularity") params.set("sort", sort);
     quick.forEach((q) => params.append("quick", q));
+    if (typeFilter) params.set("type", typeFilter.label);
     const qs = params.toString();
     router.replace(qs ? `/catalog?${qs}` : "/catalog", { scroll: false });
-  }, [search, categoryId, brandGuids, onlyStock, priceMin, priceMax, sort, quick, router]);
+  }, [search, categoryId, brandGuids, onlyStock, priceMin, priceMax, sort, quick, typeFilter, router]);
 
   const [products, setProducts] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -101,7 +117,8 @@ export function CatalogClient({
         searchParams.get("priceMin") ||
         searchParams.get("priceMax") ||
         searchParams.get("sort") ||
-        searchParams.getAll("quick").length > 0;
+        searchParams.getAll("quick").length > 0 ||
+        searchParams.get("type");
       if (urlHasFilters) return;
 
       const savedScroll = sessionStorage.getItem("catalog_scroll");
@@ -208,6 +225,7 @@ export function CatalogClient({
     if (priceMin !== null) params.set("priceMin", String(priceMin));
     if (priceMax !== null) params.set("priceMax", String(priceMax));
     quick.forEach((q) => params.append("quick", q));
+    typeFilter?.q.forEach((q) => params.append("nameAny", q));
 
     try {
       const res = await fetch(`/api/catalog/products?${params.toString()}`, {
@@ -259,6 +277,7 @@ export function CatalogClient({
     priceMax,
     sort,
     quick,
+    typeFilter,
   ]);
 
   useEffect(() => {
@@ -287,6 +306,8 @@ export function CatalogClient({
     priceMin,
     priceMax,
     sort,
+    quick,
+    typeFilter,
   ]);
 
   return (
@@ -346,6 +367,25 @@ export function CatalogClient({
               );
             })}
           </div>
+
+          {types?.length ? (
+            <div className="quick-filters app-quick-row" role="group" aria-label="Тип товара">
+              {[{ label: "Все", q: [] as string[] }, ...types].map((t) => {
+                const on = t.label === "Все" ? !typeFilter : typeFilter?.label === t.label;
+                return (
+                  <button
+                    key={t.label}
+                    type="button"
+                    className={`quick-filter-chip${on ? " active" : ""}`}
+                    aria-pressed={on}
+                    onClick={() => setTypeLabel(t.label === "Все" ? null : t.label)}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
 
           <CatalogHeader total={total} sort={sort} setSort={setSort} />
 
