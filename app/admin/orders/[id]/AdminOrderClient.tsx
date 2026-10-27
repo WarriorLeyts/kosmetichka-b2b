@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { renderMsgContent, getProductImageUrl } from "@/lib/renderMsgContent";
 import { CHAT_ACCEPT, attachmentMessage, type ChatUpload } from "@/lib/chatAttachments";
 import type { IScannerControls } from "@zxing/browser";
+import type { LineChange, LineChanges, RemovedLine } from "@/lib/orderChanges";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -204,16 +205,19 @@ export default function AdminOrderClient({
   pickers,
   customerMessages: initialCustomerMessages,
   productImages = {},
+  changes: initialChanges = { lines: {}, removed: [] },
   maxmaStuck = null,
 }: {
   order: Order;
   pickers: PickerUser[];
   customerMessages: CustomerMessage[];
   productImages?: Record<number, string | null>;
+  changes?: { lines: Record<number, LineChanges>; removed: RemovedLine[] };
   maxmaStuck?: MaxmaStuck | null;
 }) {
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
+  const [changes, setChanges] = useState(initialChanges);
 
   // ── MAXMA sync (promo code / bonuses not synced) ──
   const [maxmaRetrying, setMaxmaRetrying] = useState(false);
@@ -1263,6 +1267,7 @@ export default function AdminOrderClient({
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium leading-snug">{item.productName}</div>
                       {item.variantName && <div className="text-xs text-blue-600 mt-0.5">🎨 {item.variantName}</div>}
+                      <ChangeBadges ch={changes.lines[item.id]} />
                       {item.barcode && <div className="text-xs text-slate-400 font-mono mt-0.5">{item.barcode}</div>}
                       {item.photos.length > 0 && (
                         <div className="mt-1 flex gap-1">
@@ -1364,6 +1369,7 @@ export default function AdminOrderClient({
                               </span>
                             </div>
                           )}
+                          <ChangeBadges ch={changes.lines[item.id]} />
                           {item.barcode && <div className="mt-0.5 text-xs text-slate-400 font-mono">{item.barcode}</div>}
                           {item.photos.length > 0 && (
                             <div className="mt-1 flex gap-1">
@@ -1444,6 +1450,7 @@ export default function AdminOrderClient({
           </div>
           </>
           )}
+          {!editMode && changes.removed.length > 0 && <RemovedLines removed={changes.removed} images={images} />}
 
           {order.comment && (
             <div className="mt-3 rounded-xl border bg-white p-3 text-sm text-slate-600">
@@ -2256,6 +2263,70 @@ function OrderItemsEditor({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Who changed the order lines ──────────────────────────────────────────────
+
+function changeWhat(ch: LineChange): string {
+  const bits: string[] = [];
+  if (ch.oldQuantity != null) bits.push(`${ch.oldQuantity} шт.`);
+  if (ch.oldPrice != null) bits.push(rub(ch.oldPrice));
+  if (ch.oldVariant != null) bits.push(ch.oldVariant);
+  return bits.length ? `, было ${bits.join(" · ")}` : "";
+}
+
+const atShort = (iso: string) =>
+  new Date(iso).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+/** Under a line: what the customer did to it (orange) and what staff did (blue, with the name). */
+function ChangeBadges({ ch }: { ch?: LineChanges }) {
+  if (!ch) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {ch.customer ? (
+        <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-800" title={atShort(ch.customer.at)}>
+          🛒 {ch.customer.kind === "added" ? "Добавил клиент" : `Клиент изменил${changeWhat(ch.customer)}`}
+        </span>
+      ) : null}
+      {ch.staff ? (
+        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700" title={atShort(ch.staff.at)}>
+          ✏️ {ch.staff.kind === "added" ? `Добавил ${ch.staff.actorName ?? "менеджер"}` : `${ch.staff.actorName ?? "Менеджер"} изменил${changeWhat(ch.staff)}`}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/** «Удалено из заказа»: lines taken out, by whom and when. */
+function RemovedLines({ removed, images }: { removed: RemovedLine[]; images: Record<number, string | null> }) {
+  return (
+    <div className="mt-3 rounded-2xl border border-red-200 bg-red-50/50 p-3">
+      <div className="mb-2 text-sm font-bold text-red-800">Удалено из заказа ({removed.length})</div>
+      <ul className="space-y-1.5">
+        {removed.map((r, i) => {
+          const raw = r.imageUrl ?? (r.productId ? images[r.productId] : null) ?? null;
+          const img = raw ? (raw.startsWith("http") || raw.startsWith("/") ? raw : getProductImageUrl(raw)) : null;
+          return (
+            <li key={i} className="flex items-center gap-2.5 rounded-xl bg-white/80 px-2.5 py-2">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-white opacity-60">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {img ? <img src={img} alt="" className="h-full w-full object-contain p-0.5 grayscale" /> : <span className="text-slate-300">📦</span>}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm text-slate-500 line-through">{r.productName}{r.variantName ? ` (${r.variantName})` : ""}</div>
+                <div className="text-xs text-slate-400">
+                  {r.quantity != null ? `${r.quantity} шт.` : ""}{r.price != null ? ` × ${rub(r.price)}` : ""} · {atShort(r.at)}
+                </div>
+              </div>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${r.side === "customer" ? "bg-orange-100 text-orange-800" : "bg-blue-50 text-blue-700"}`}>
+                {r.side === "customer" ? "🛒 удалил клиент" : `✏️ удалил ${r.actorName ?? "менеджер"}`}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
 import { orderSums } from "@/lib/orderPricing";
 import { isMaxmaOrder, loyaltyResponse, recalcOrderLoyalty } from "@/lib/maxmaOrders";
+import { logOrderChanges, orderChanges, summarizeRows } from "@/lib/orderChanges";
+import { notifyLater } from "@/lib/notify";
 
 function getSecret() {
   return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
@@ -153,6 +155,19 @@ export async function PUT(request: NextRequest, { params }: Props) {
   }
 
   const remaining = await prisma.orderItem.findMany({ where: { orderId } });
+
+  // who changed what — the customer sees it on the order and gets a notification
+  const staff = await prisma.user.findUnique({ where: { id: Number(user.id) }, select: { name: true } }).catch(() => null);
+  const changed = await logOrderChanges(orderId, "staff", staff?.name ?? "Менеджер", order.items, remaining);
+  if (changed.length > 0) {
+    notifyLater(order.customerId, {
+      kind: "order",
+      title: `Менеджер изменил заказ №${orderId}`,
+      body: summarizeRows(changed, 5),
+      link: `/order/${orderId}`,
+    });
+  }
+
   // Without a promo code / bonuses: total = Σ line totals. With them, recalcOrderLoyalty
   // below sets the line discounts, Order.discount, bonusesApplied and Order.total.
   const loyaltyOrder = isMaxmaOrder(order);

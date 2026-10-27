@@ -67,3 +67,6 @@ export const ORDER_STATUS_ACTIONS: Record<
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
 };
+
+/** Until the order is ready for payment the customer may change it: quantities, remove, add products. */
+export const CUSTOMER_EDITABLE_STATUSES = ["pending", "approved", "assembly", "consultation"];

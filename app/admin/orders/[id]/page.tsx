@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { orderChanges } from "@/lib/orderChanges";
 import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
@@ -148,12 +149,16 @@ export default async function AdminOrderPage({
     })),
   };
 
+  // who changed which line (customer / staff) — shown on the lines and as «Удалено из заказа»
+  const changes = await orderChanges(order.id, order.items);
+
   return (
     <AdminOrderClient
       order={serialized as any}
       pickers={pickers}
       customerMessages={serialized.customerMessages}
       productImages={productImages}
+      changes={changes}
       maxmaStuck={maxmaStuck.get(order.id) ?? null}
     />
   );
