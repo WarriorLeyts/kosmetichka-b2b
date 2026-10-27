@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { checkRegistration } from "./academy-register";
 
-const ok = { name: "Иванова Анна", login: "anna.ivanova", password: "secret123" };
+const ok = { name: "Иванова Анна", position: "Продавец-консультант", store: "Парфюм 2", login: "anna.ivanova", password: "secret123" };
 
 describe("checkRegistration", () => {
   it("принимает нормальные данные и чистит их", () => {
-    const r = checkRegistration({ name: "  Иванова   Анна ", login: " Anna.Ivanova ", password: "secret123" });
+    const r = checkRegistration({ ...ok, name: "  Иванова   Анна ", position: " продавец-консультант ", store: " Парфюм 2 ", login: " Anna.Ivanova " });
     expect(r).toEqual({ ok: true, data: ok });
   });
 
   it.each([
     [{ ...ok, name: "Анна" }, "name"],
     [{ ...ok, name: "" }, "name"],
+    [{ ...ok, position: "" }, "position"],
+    [{ ...ok, store: " " }, "store"],
+    [{ ...ok, store: "Левый магазин" }, "store"],
     [{ ...ok, login: "an" }, "login"],
     [{ ...ok, login: "анна" }, "login"],
     [{ ...ok, login: "anna ivanova" }, "login"],
@@ -31,6 +34,6 @@ describe("checkRegistration", () => {
 
   it("роль из запроса не принимается — её в результате просто нет", () => {
     const r = checkRegistration({ ...ok, role: "admin" });
-    expect(r.ok && Object.keys(r.data)).toEqual(["name", "login", "password"]);
+    expect(r.ok && Object.keys(r.data).sort()).toEqual(["login", "name", "password", "position", "store"]);
   });
 });

@@ -52,14 +52,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Слишком много регистраций. Попробуйте через час." }, { status: 429 });
   }
 
-  const { name, login, password } = check.data;
+  const { name, position, store, login, password } = check.data;
   const exists = await prisma.user.findUnique({ where: { login }, select: { id: true } });
   if (exists) return NextResponse.json({ error: "Такой логин уже занят", field: "login" }, { status: 409 });
 
   let user;
   try {
     user = await prisma.user.create({
-      data: { name, login, role: EMPLOYEE_ROLE, password: await bcrypt.hash(password, 10) },
+      data: { name, position, store, login, role: EMPLOYEE_ROLE, password: await bcrypt.hash(password, 10) },
     });
   } catch {
     // гонка двух одинаковых регистраций — уникальный индекс по login

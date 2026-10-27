@@ -5,6 +5,7 @@ import Link from "next/link";
 import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, GraduationCap } from "lucide-react";
+import { DEFAULT_POSITION, POSITION_SUGGESTIONS, STORES } from "@/lib/academy-register";
 
 const SMARTCAPTCHA_CLIENT_KEY = process.env.NEXT_PUBLIC_SMARTCAPTCHA_CLIENT_KEY ?? "";
 
@@ -13,7 +14,7 @@ type SmartCaptcha = {
   reset: (widgetId: number) => void;
 };
 
-type Field = "name" | "login" | "password" | "captcha";
+type Field = "name" | "position" | "store" | "login" | "password" | "captcha";
 
 const input =
   "h-12 w-full rounded-2xl border bg-slate-50 px-4 text-sm font-semibold outline-none focus:border-pink-300";
@@ -21,6 +22,8 @@ const input =
 export default function RegisterForm() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [position, setPosition] = useState(DEFAULT_POSITION);
+  const [store, setStore] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
@@ -57,6 +60,7 @@ export default function RegisterForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!store) return fail("Выберите магазин, где вы работаете", "store");
     if (password !== password2) return fail("Пароли не совпадают", "password");
     if (!captchaToken) return fail("Подтвердите, что вы не робот", "captcha");
     fail("");
@@ -65,7 +69,7 @@ export default function RegisterForm() {
       const res = await fetch("/api/academy/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, login, password, captchaToken }),
+        body: JSON.stringify({ name, position, store, login, password, captchaToken }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -113,6 +117,39 @@ export default function RegisterForm() {
                 autoComplete="name"
                 className={`${input} ${border("name")}`}
               />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold text-slate-500">Должность</span>
+              <input
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+                list="academy-positions"
+                placeholder="Например, продавец-консультант"
+                autoComplete="organization-title"
+                className={`${input} ${border("position")}`}
+              />
+              <datalist id="academy-positions">
+                {POSITION_SUGGESTIONS.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-bold text-slate-500">Магазин</span>
+              <select
+                value={store}
+                onChange={(e) => setStore(e.target.value)}
+                className={`${input} ${border("store")} cursor-pointer appearance-none ${store ? "" : "text-slate-400"}`}
+              >
+                <option value="" disabled>
+                  Выберите магазин
+                </option>
+                {STORES.map((s) => (
+                  <option key={s} value={s} className="text-slate-900">
+                    {s}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-bold text-slate-500">Логин (латиницей)</span>

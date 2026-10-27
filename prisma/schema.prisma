@@ -157,6 +157,8 @@ model User {
   login     String   @unique
   password  String
   role      String   @default("manager")
+  position  String? // должность — указывает сам сотрудник при регистрации в тестах
+  store     String? // магазин, где работает сотрудник
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
