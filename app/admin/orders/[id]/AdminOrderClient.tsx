@@ -355,7 +355,7 @@ export default function AdminOrderClient({
       await Promise.all([fetchPicker(), fetchCustomer()]).catch(() => {});
     };
     poll();
-    pollRef.current = setInterval(poll, activeTab === "chat" ? 8_000 : 20_000);
+    pollRef.current = setInterval(poll, activeTab === "chat" ? 3_000 : 15_000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [activeTab, order.id]);
 
