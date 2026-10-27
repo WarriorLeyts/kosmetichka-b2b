@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { EMPLOYEE_ROLE, requireStaffEditor } from "@/lib/academy";
-import { checkStaffEdit, DEFAULT_POSITION, POSITION_SUGGESTIONS, STORES } from "@/lib/academy-register";
+import { checkStaffEdit, DEFAULT_POSITION, POSITIONS, STORES } from "@/lib/academy-register";
 import ConfirmDeleteButton from "./ConfirmDeleteButton";
 
 export const dynamic = "force-dynamic";
@@ -111,12 +111,18 @@ export default async function StaffEditPage({
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-bold text-slate-500">Должность</span>
-          <input name="position" defaultValue={u.position ?? DEFAULT_POSITION} list="staff-positions" required className={input} />
-          <datalist id="staff-positions">
-            {POSITION_SUGGESTIONS.map((p) => (
-              <option key={p} value={p} />
+          <select
+            name="position"
+            defaultValue={u.position && POSITIONS.includes(u.position) ? u.position : DEFAULT_POSITION}
+            required
+            className={`${input} cursor-pointer`}
+          >
+            {POSITIONS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
             ))}
-          </datalist>
+          </select>
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-bold text-slate-500">Магазин</span>

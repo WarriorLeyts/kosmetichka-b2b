@@ -13,6 +13,7 @@ describe("checkRegistration", () => {
     [{ ...ok, name: "Анна" }, "name"],
     [{ ...ok, name: "" }, "name"],
     [{ ...ok, position: "" }, "position"],
+    [{ ...ok, position: "Кассир" }, "position"],
     [{ ...ok, store: " " }, "store"],
     [{ ...ok, store: "Левый магазин" }, "store"],
     [{ ...ok, login: "an" }, "login"],
@@ -27,6 +28,11 @@ describe("checkRegistration", () => {
     if (!r.ok) expect(r.field).toBe(field);
   });
 
+  it("должность только из списка, «стажер» = «Стажёр»", () => {
+    const r = checkRegistration({ ...ok, position: "стажер" });
+    expect(r.ok && r.data.position).toBe("Стажёр");
+  });
+
   it("не падает на мусоре", () => {
     expect(checkRegistration(null).ok).toBe(false);
     expect(checkRegistration({ name: 5, login: [], password: {} }).ok).toBe(false);
@@ -39,7 +45,7 @@ describe("checkRegistration", () => {
 });
 
 describe("checkStaffEdit", () => {
-  const base = { name: "Иванова Анна", position: "Кассир", store: "Концепт" };
+  const base = { name: "Иванова Анна", position: "Стажёр", store: "Концепт" };
   it("без пароля — пароль не меняется", () => {
     expect(checkStaffEdit(base)).toEqual({ ok: true, data: { ...base, password: null } });
   });
