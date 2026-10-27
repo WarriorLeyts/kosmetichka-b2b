@@ -5,6 +5,7 @@ import "./theme-dark-generated.css";
 import { ClientShell } from "@/components/ClientShell";
 import { CLIENT_DIAG } from "@/lib/clientDiag";
 import { THEME_INIT_SCRIPT } from "@/lib/themeScript";
+import { IOS_NO_ZOOM_SCRIPT } from "@/lib/iosNoZoom";
 
 export const metadata: Metadata = {
   title: {
@@ -38,6 +39,7 @@ export default function RootLayout({
     <html lang="ru" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: IOS_NO_ZOOM_SCRIPT }} />
         <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
         <meta name="theme-color" content="#170D25" media="(prefers-color-scheme: dark)" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
