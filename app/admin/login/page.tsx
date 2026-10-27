@@ -32,7 +32,9 @@ export default function AdminLoginPage() {
     }
 
     // Redirect based on role
-    if (data.role === "picker") {
+    if (data.role === "employee") {
+      router.push("/academy");
+    } else if (data.role === "picker") {
       router.push("/picker");
     } else {
       router.push("/admin/customers");

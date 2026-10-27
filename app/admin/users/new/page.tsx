@@ -11,6 +11,7 @@ const ROLE_OPTIONS = [
   { value: "manager", label: "Менеджер" },
   { value: "picker", label: "Сборщик" },
   { value: "admin", label: "Администратор" },
+  { value: "employee", label: "Сотрудник (только тесты)" },
 ];
 
 async function createUser(formData: FormData) {

@@ -164,6 +164,7 @@ model User {
   statusLogs     OrderStatusLog[]
   checks         OrderItemCheck[]
   assignedOrders Order[]          @relation("OrderPicker")
+  academyAttempts AcademyAttempt[]
 }
 
 model Order {
@@ -378,6 +379,70 @@ model MaxmaTask {
   @@index([status, nextAt])
   @@index([orderId])
 }
+
+// ── Тесты для сотрудников (test.kosmetichka-opt.ru → /academy) ────────────────────────────────
+// Тесты загружаются из academy/tests/*.json скриптом scripts/import-tests.js (upsert по slug;
+// вопросы теста при повторной загрузке заменяются целиком). Попытка хранит снимок вопросов и
+// ответов в JSON, поэтому старые результаты не ломаются после правки теста.
+model AcademyTest {
+  id           Int      @id @default(autoincrement())
+  slug         String   @unique
+  title        String
+  description  String?  @db.Text
+  passScore    Int      @default(80) // % правильных ответов для «сдал»
+  timeLimitMin Int? // ограничение по времени, минут (null — без ограничения)
+  showAnswers  Boolean  @default(true) // показывать правильные ответы после сдачи
+  shuffle      Boolean  @default(true) // перемешивать вопросы и варианты
+  isPublished  Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  questions AcademyQuestion[]
+  attempts  AcademyAttempt[]
+}
+
+model AcademyQuestion {
+  id          Int         @id @default(autoincrement())
+  testId      Int
+  test        AcademyTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+  order       Int
+  text        String      @db.Text
+  explanation String?     @db.Text // пояснение после ответа
+  productId   Int? // товар каталога — его картинка показывается в вопросе (без FK: товары приходят из 1С)
+
+  options AcademyOption[]
+
+  @@index([testId])
+}
+
+model AcademyOption {
+  id         Int             @id @default(autoincrement())
+  questionId Int
+  question   AcademyQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  order      Int
+  text       String          @db.Text
+  isCorrect  Boolean         @default(false)
+
+  @@index([questionId])
+}
+
+model AcademyAttempt {
+  id           Int         @id @default(autoincrement())
+  testId       Int
+  test         AcademyTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+  userId       Int
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score        Int // % правильных
+  correctCount Int
+  total        Int
+  passed       Boolean
+  details      Json // снимок: [{ text, options: [{ text, isCorrect, chosen }], correct }]
+  startedAt    DateTime
+  finishedAt   DateTime    @default(now())
+
+  @@index([testId, finishedAt])
+  @@index([userId, finishedAt])
 
 /// Errors and crashes reported by the mobile apps (POST /api/app-errors), grouped by `hash`
 model AppError {
