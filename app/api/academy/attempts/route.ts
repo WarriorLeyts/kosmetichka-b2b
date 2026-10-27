@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getStaff, gradeAttempt, productImages, readStart, TIME_GRACE_MS, type AnswerMap } from "@/lib/academy";
+import { getStaff, gradeAttempt, HR_ROLE, productImages, readStart, TIME_GRACE_MS, type AnswerMap } from "@/lib/academy";
 
 /** Сдать тест: проверка на сервере, сохранение попытки, результат с разбором (если включён). */
 export async function POST(request: Request) {
   const staff = await getStaff();
   if (!staff) return NextResponse.json({ error: "Войдите заново" }, { status: 401 });
+  if (staff.role === HR_ROLE) return NextResponse.json({ error: "HR не проходит тесты" }, { status: 403 });
 
   const body = await request.json().catch(() => null);
   const slug = typeof body?.slug === "string" ? body.slug : "";

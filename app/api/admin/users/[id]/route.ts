@@ -9,7 +9,7 @@ type Props = {
   }>;
 };
 
-const VALID_ROLES = ["manager", "picker", "admin", "employee"];
+const VALID_ROLES = ["manager", "picker", "admin", "employee", "hr"];
 
 function parseId(raw: string): number | null {
   const n = Number(raw);

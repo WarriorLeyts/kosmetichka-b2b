@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getStaff, productImages, signStart } from "@/lib/academy";
+import { getStaff, HR_ROLE, productImages, signStart } from "@/lib/academy";
 import TestRunner, { type RunnerQuestion } from "@/components/academy/TestRunner";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +32,7 @@ export default async function TestPage({ params }: Props) {
   const { slug } = await params;
   const staff = await getStaff();
   if (!staff) redirect(`/academy/login?next=/academy/t/${encodeURIComponent(slug)}`);
+  if (staff.role === HR_ROLE) redirect("/academy/results");
 
   const test = await prisma.academyTest.findUnique({
     where: { slug },

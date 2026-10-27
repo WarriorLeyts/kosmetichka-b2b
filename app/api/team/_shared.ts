@@ -33,6 +33,7 @@ export const ROLE_LABELS: Record<string, string> = {
   manager: "Менеджер",
   picker: "Сборщик",
   employee: "Сотрудник (только тесты)",
+  hr: "HR (результаты и сотрудники)",
 };
 
 export const PRICE_TYPE_LABELS: Record<string, string> = {

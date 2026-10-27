@@ -61,3 +61,20 @@ export function checkRegistration(raw: unknown): RegisterCheck {
 
   return { ok: true, data: { name, position, store, login, password } };
 }
+
+export type StaffEditInput = { name: string; position: string; store: string; password: string | null };
+export type StaffEditCheck = { ok: true; data: StaffEditInput } | { ok: false; error: string };
+
+/** Правка сотрудника HR-ом: те же правила, что при регистрации; пароль — только если задан новый. */
+export function checkStaffEdit(raw: { name?: unknown; position?: unknown; store?: unknown; password?: unknown; password2?: unknown }): StaffEditCheck {
+  const password = typeof raw.password === "string" ? raw.password : "";
+  const base = checkRegistration({ ...raw, login: "placeholder", password: password || "placeholder-ok" });
+  if (!base.ok) return { ok: false, error: base.error };
+  if (password) {
+    if (password !== raw.password2) return { ok: false, error: "Пароли не совпадают" };
+    if (password.length < PASSWORD_MIN) return { ok: false, error: `Пароль — не короче ${PASSWORD_MIN} символов` };
+    if (password.length > 72) return { ok: false, error: "Слишком длинный пароль" };
+  }
+  const { name, position, store } = base.data;
+  return { ok: true, data: { name, position, store, password: password || null } };
+}
