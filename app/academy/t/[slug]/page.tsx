@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getStaff, signStart } from "@/lib/academy";
+import { getStaff, productImages, signStart } from "@/lib/academy";
 import TestRunner, { type RunnerQuestion } from "@/components/academy/TestRunner";
 
 export const dynamic = "force-dynamic";
@@ -42,9 +42,11 @@ export default async function TestPage({ params }: Props) {
   if (!test || !test.isPublished) notFound();
 
   // В браузер — без признака правильности; «несколько ответов» подсказываем, иначе вопрос нечестный
+  const images = await productImages(test.questions.map((q) => q.productId));
   let questions: RunnerQuestion[] = test.questions.map((q) => ({
     id: q.id,
     text: q.text,
+    image: (q.productId && images.get(q.productId)) || null,
     multiple: q.options.filter((o) => o.isCorrect).length > 1,
     options: (test.shuffle ? shuffled(q.options) : q.options).map((o) => ({ id: o.id, text: o.text })),
   }));

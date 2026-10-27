@@ -7,6 +7,26 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { resolveImageUrl } from "@/lib/image";
+
+/** Первая картинка каждого товара (уменьшенная копия). Нет товара или фото — нет и ключа. */
+export async function productImages(ids: (number | null | undefined)[]): Promise<Map<number, string>> {
+  const uniq = [...new Set(ids.filter((id): id is number => typeof id === "number"))];
+  if (!uniq.length) return new Map();
+  const rows = await prisma.productImage.findMany({
+    where: { productId: { in: uniq } },
+    orderBy: { id: "asc" },
+    select: { productId: true, path: true },
+  });
+  const out = new Map<number, string>();
+  for (const r of rows) {
+    if (out.has(r.productId)) continue;
+    const url = resolveImageUrl(r.path, 480);
+    if (url) out.set(r.productId, url);
+  }
+  return out;
+}
 
 // ── Подписанный момент начала (время прохождения нельзя подделать с клиента) ──
 
@@ -73,6 +93,7 @@ export type AnswerMap = Record<string, number[]>;
 export type AttemptDetail = {
   questionId: number;
   text: string;
+  image?: string | null;
   explanation: string | null;
   correct: boolean;
   options: { id: number; text: string; isCorrect: boolean; chosen: boolean }[];

@@ -72,3 +72,6 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE "AcademyAttempt" ADD CONSTRAINT "AcademyAttempt_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Картинка товара в вопросе
+ALTER TABLE "AcademyQuestion" ADD COLUMN IF NOT EXISTS "productId" INTEGER;
