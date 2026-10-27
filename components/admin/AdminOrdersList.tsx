@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import { ORDER_STATUS_LABELS as STATUS_LABELS } from "@/lib/orderStatus";
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -43,6 +44,8 @@ export function AdminOrdersList({ orders }: { orders: OrderRow[] }) {
   const [applying, setApplying] = useState(false);
   const [confirming, setConfirming] = useState(false); // V-8: confirmation state
   const [bulkResult, setBulkResult] = useState<{ updated: number; skipped: number } | null>(null);
+  // new orders and status changes appear by themselves (paused while orders are being selected)
+  useLiveRefresh(30_000, selected.size === 0);
 
   const allIds = orders.map((o) => o.id);
   const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));

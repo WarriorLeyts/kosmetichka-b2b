@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { renderMsgContent, getProductImageUrl } from "@/lib/renderMsgContent";
 import { CHAT_ACCEPT, attachmentMessage, type ChatUpload } from "@/lib/chatAttachments";
 import type { IScannerControls } from "@zxing/browser";
+import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import type { LineChange, LineChanges, RemovedLine } from "@/lib/orderChanges";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -243,6 +244,12 @@ export default function AdminOrderClient({
 
   // Sync local state when server re-renders (after router.refresh())
   useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
+  // after a refresh the server sends the new history — take it (during render, not in an effect)
+  const [seenChanges, setSeenChanges] = useState(initialChanges);
+  if (seenChanges !== initialChanges) {
+    setSeenChanges(initialChanges);
+    setChanges(initialChanges);
+  }
 
   // ── Image lightbox ──
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
@@ -270,6 +277,11 @@ export default function AdminOrderClient({
   const [editItems, setEditItems] = useState<EditItem[]>([]);
   // photos by product: from the page + photos of items added while editing (shown right after saving)
   const [images, setImages] = useState<Record<number, string | null>>(productImages);
+  const [seenImages, setSeenImages] = useState(productImages);
+  if (seenImages !== productImages) {
+    setSeenImages(productImages);
+    setImages((prev) => ({ ...prev, ...productImages }));
+  }
   const [editError, setEditError] = useState("");
   const [saving, setSaving] = useState(false);
   // Promo code after the last item save: removed (red) or not recalculated — MAXMA unavailable (yellow)
@@ -318,11 +330,11 @@ export default function AdminOrderClient({
 
   // ── Effects ──
 
+  // status, items and who changed what update by themselves (not while the items are being edited)
+  useLiveRefresh(15_000, !editMode);
+
+  // both chats refresh by themselves (also on the other tabs — the «Чат (N)» count stays right)
   useEffect(() => {
-    if (activeTab !== "chat") {
-      if (pollRef.current) clearInterval(pollRef.current);
-      return;
-    }
     const fetchPicker = async () => {
       const res = await fetch(`/api/picker/messages/${order.id}`);
       if (res.ok) {
@@ -339,10 +351,11 @@ export default function AdminOrderClient({
     };
 
     const poll = async () => {
-      await Promise.all([fetchPicker(), fetchCustomer()]);
+      if (document.visibilityState !== "visible") return;
+      await Promise.all([fetchPicker(), fetchCustomer()]).catch(() => {});
     };
     poll();
-    pollRef.current = setInterval(poll, 20_000);
+    pollRef.current = setInterval(poll, activeTab === "chat" ? 8_000 : 20_000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [activeTab, order.id]);
 
