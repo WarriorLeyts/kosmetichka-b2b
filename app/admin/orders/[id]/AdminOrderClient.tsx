@@ -797,6 +797,7 @@ export default function AdminOrderClient({
       const data = await res.json();
       const added = Object.fromEntries(newItems.filter((i) => i.imagePath).map((i) => [i.productId, i.imagePath as string]));
       setImages((prev) => ({ ...prev, ...added, ...(data.productImages ?? {}) }));
+      if (data.changes) setChanges(data.changes);
       setOrder(data.order);
       setEditMode(false);
       setEditItems([]);

@@ -214,6 +214,9 @@ export async function PUT(request: NextRequest, { params }: Props) {
     : [];
   for (const r of imageRows) productImages[r.productId] ??= r.path;
 
-  if (!loyalty) return NextResponse.json({ order: updated, productImages });
-  return NextResponse.json({ order: updated, productImages, ...loyaltyResponse(loyalty) });
+  // who changed which line — the editor shows it right after saving
+  const changes = updated ? await orderChanges(orderId, updated.items) : null;
+
+  if (!loyalty) return NextResponse.json({ order: updated, productImages, changes });
+  return NextResponse.json({ order: updated, productImages, changes, ...loyaltyResponse(loyalty) });
 }
