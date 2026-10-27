@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { orderChanges } from "@/lib/orderChanges";
 import { parseCheckStatuses } from "@/lib/checkStatus";
 import { ANY_STAFF, requireStaff } from "../../../_auth";
 import { badId, notFound, parseId, productImageUrl } from "../../../_shared";
@@ -64,6 +65,9 @@ export async function GET(
     barcodeMap.set(p.id, p.barcode ?? null);
   }
 
+  // what the customer / staff changed (the picker must see it: added, changed, removed lines)
+  const changes = await orderChanges(order.id, order.items);
+
   return NextResponse.json({
     currentUserId: auth.session.id,
     order: {
@@ -86,6 +90,8 @@ export async function GET(
         variantName: item.variantName ?? null,
         variantImageUrl: item.variantImageUrl ?? null,
         imageUrl: imageMap.get(item.productId) ?? null,
+        customerChange: changes.lines[item.id]?.customer ?? null,
+        staffChange: changes.lines[item.id]?.staff ?? null,
         check: item.check
           ? {
               status: item.check.status,
@@ -101,6 +107,18 @@ export async function GET(
           url: p.url,
           createdAt: p.createdAt.toISOString(),
         })),
+      })),
+      removedItems: changes.removed.map((r) => ({
+        productId: r.productId,
+        productName: r.productName,
+        variantName: r.variantName,
+        barcode: r.barcode,
+        quantity: r.quantity,
+        price: r.price,
+        imagePath: r.imageUrl,
+        by: r.side,
+        actorName: r.actorName,
+        at: r.at,
       })),
     },
   });
