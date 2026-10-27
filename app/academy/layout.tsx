@@ -33,6 +33,9 @@ export default async function AcademyLayout({ children }: { children: React.Reac
               {canEditStaff(staff.role) && (
                 <Link href="/academy/staff" className="hover:text-pink-500">Сотрудники</Link>
               )}
+              {(staff.role === "admin" || staff.role === "manager") && (
+                <Link href="/admin" className="text-slate-400 hover:text-pink-500">← Админка</Link>
+              )}
             </nav>
             <div className="ml-auto flex items-center gap-3 text-sm">
               <span className="font-semibold text-slate-500">
