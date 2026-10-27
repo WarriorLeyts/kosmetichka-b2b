@@ -43,6 +43,16 @@ describe("gradeAttempt", () => {
     expect(r.details[1].correct).toBe(false);
   });
 
+  it("порог считается без округления: 39 из 49 при 80% — не сдано, 40 из 50 — сдано", () => {
+    const mk = (n: number): GradeQuestion[] =>
+      Array.from({ length: n }, (_, i) => ({ id: i + 1, text: "q", options: [{ id: 1000 + i, text: "a", isCorrect: true }, { id: 2000 + i, text: "b", isCorrect: false }] }));
+    const answer = (n: number, right: number) => Object.fromEntries(Array.from({ length: n }, (_, i) => [String(i + 1), [i < right ? 1000 + i : 2000 + i]]));
+    const r49 = gradeAttempt(mk(49), answer(49, 39), 80);
+    expect(r49.score).toBe(80);
+    expect(r49.passed).toBe(false);
+    expect(gradeAttempt(mk(50), answer(50, 40), 80).passed).toBe(true);
+  });
+
   it("пустой тест не считается сданным", () => {
     expect(gradeAttempt([], {}, 0).passed).toBe(false);
   });

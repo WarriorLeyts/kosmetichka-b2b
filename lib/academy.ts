@@ -102,7 +102,8 @@ export function gradeAttempt(questions: GradeQuestion[], answers: AnswerMap, pas
   const total = details.length;
   const correctCount = details.filter((d) => d.correct).length;
   const score = total ? Math.round((correctCount / total) * 100) : 0;
-  return { correctCount, total, score, passed: total > 0 && score >= passScore, details };
+  // «Сдал» — по точной доле, без округления: 39 из 49 (79,6%) при пороге 80% не сдано
+  return { correctCount, total, score, passed: total > 0 && correctCount * 100 >= passScore * total, details };
 }
 
 export { plural, formatDuration } from "@/lib/academy-format";
