@@ -32,11 +32,12 @@ async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
   }
 }
 
-const AUTO_APPROVE_TYPES = new Set(["retail", "discount"]);
+const AUTO_APPROVE_TYPES = new Set(["retail"]);
 
 export async function POST(request: Request) {
   const { name, companyName, phone, email, password, captchaToken, smsCode, priceType: rawPriceType } = await request.json();
-  const priceType = ["retail", "discount", "wholesale", "big_wholesale"].includes(rawPriceType)
+  // «Скидка» (скидочная карта MAXMA) is never self-selected — it comes from 1C or an admin
+  const priceType = ["retail", "wholesale", "big_wholesale"].includes(rawPriceType)
     ? rawPriceType
     : "wholesale";
 

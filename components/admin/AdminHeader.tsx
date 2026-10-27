@@ -54,7 +54,10 @@ export function AdminHeader({ user }: { user: any }) {
             </>
           )}
           {isAdmin && (
-            <Link href="/admin/users">Пользователи</Link>
+            <>
+              <Link href="/admin/users">Пользователи</Link>
+              <Link href="/admin/app-errors">Ошибки приложений</Link>
+            </>
           )}
         </nav>
 
@@ -97,7 +100,10 @@ export function AdminHeader({ user }: { user: any }) {
             </>
           )}
           {isAdmin && (
-            <Link href="/admin/users" onClick={() => setMenuOpen(false)} className="py-2">Пользователи</Link>
+            <>
+              <Link href="/admin/users" onClick={() => setMenuOpen(false)} className="py-2 border-b">Пользователи</Link>
+              <Link href="/admin/app-errors" onClick={() => setMenuOpen(false)} className="py-2">Ошибки приложений</Link>
+            </>
           )}
         </nav>
       )}

@@ -68,11 +68,12 @@ export async function priceOrderItems(
       throw new Error(`Товар ${item.id} не найден`);
     }
 
+    // as in priceFor(): a missing / zero price falls back — big wholesale → wholesale → retail
+    const positive = (t: string) => product.prices.find((p) => p.priceType === t && p.price > 0);
     const matchedPrice =
-      product.prices.find((p) => p.priceType === appliedPriceType) ??
-      // as in priceFor(): big wholesale without its own price → wholesale; guest/discount → retail
-      (appliedPriceType === "big_wholesale" ? product.prices.find((p) => p.priceType === "wholesale") : undefined);
-    const fallbackPrice = product.prices.find((p) => p.priceType === "retail");
+      positive(appliedPriceType) ??
+      (appliedPriceType === "big_wholesale" ? positive("wholesale") : undefined);
+    const fallbackPrice = positive("retail");
 
     const rawPrice = matchedPrice?.price ?? fallbackPrice?.price;
     if (!rawPrice || rawPrice <= 0) {

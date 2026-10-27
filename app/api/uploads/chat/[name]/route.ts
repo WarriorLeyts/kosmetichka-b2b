@@ -26,7 +26,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ name
   const headers: Record<string, string> = {
     "Content-Type": t.mime,
     "Accept-Ranges": "bytes",
-    "Cache-Control": "public, max-age=31536000, immutable",
+    // customers' photos / documents: browser cache only, never shared proxies
+    "Cache-Control": "private, max-age=31536000, immutable",
     "X-Content-Type-Options": "nosniff",
     // photos and videos open in place; documents download
     "Content-Disposition": t.kind === "file" ? "attachment" : "inline",

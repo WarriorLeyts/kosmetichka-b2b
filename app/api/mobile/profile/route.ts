@@ -97,3 +97,49 @@ export async function PATCH(request: Request) {
   const customer = await prisma.customer.update({ where: { id }, data, select: SELECT });
   return NextResponse.json({ success: true, customer });
 }
+
+/**
+ * DELETE /api/mobile/profile { password } — the customer deletes their account (App Store /
+ * Google Play requirement, 152-ФЗ). Personal data is erased; orders stay (accounting) but no
+ * longer point to a person; the account is blocked, so every session ends at once.
+ */
+export async function DELETE(request: Request) {
+  const id = await currentCustomerId();
+  if (!id) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
+
+  const body = await request.json().catch(() => ({}));
+  const password = String(body?.password ?? "");
+  const stored = await prisma.customer.findUnique({ where: { id }, select: { password: true, email: true } });
+  const ok = stored && password ? await bcrypt.compare(password, stored.password) : false;
+  if (!ok) return NextResponse.json({ error: "Неверный пароль", code: "current_password_wrong" }, { status: 400 });
+
+  const random = await bcrypt.hash(crypto.randomUUID(), 10);
+  await prisma.$transaction([
+    prisma.wishlistItem.deleteMany({ where: { customerId: id } }),
+    ...(stored?.email ? [prisma.passwordResetToken.deleteMany({ where: { email: stored.email } })] : []),
+    prisma.customer.update({
+      where: { id },
+      data: {
+        name: "Удалённый аккаунт",
+        companyName: null,
+        phone: null,
+        email: null,
+        inn: null,
+        city: null,
+        address: null,
+        loyaltyCard: null,
+        oneCId: null,
+        password: random,
+        isActive: false,
+        roleRequest: null,
+        roleRequestStatus: null,
+        roleRequestedAt: null,
+      },
+    }),
+  ]);
+  console.log(`[account] customer ${id} deleted their account`);
+
+  const res = NextResponse.json({ success: true });
+  res.cookies.delete("auth_token");
+  return res;
+}

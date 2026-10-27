@@ -9,6 +9,7 @@ import { AuthInit } from "@/components/AuthInit";
 import { AppBar } from "@/components/app/AppBar";
 import { HijabIcon } from "@/components/app/HijabIcon";
 import { PriceTypeSwitcher } from "@/components/profile/PriceTypeSwitcher";
+import { DeleteAccount } from "@/components/profile/DeleteAccount";
 import { roleInfo } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
@@ -314,6 +315,8 @@ export default async function ProfilePage({
             Сохранить изменения
           </button>
         </form>
+
+        <DeleteAccount />
       </div>
     </main>
   );
