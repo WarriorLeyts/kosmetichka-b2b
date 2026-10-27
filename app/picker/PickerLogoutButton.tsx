@@ -1,13 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-
 export default function PickerLogoutButton() {
-  const router = useRouter();
-
   async function handleLogout() {
-    await fetch("/api/admin/logout", { method: "POST" });
-    router.push("/admin/login");
+    await fetch("/api/admin/logout", { method: "POST" }).catch(() => {});
+    // полная перезагрузка намеренно: серверная шапка не должна остаться с прежним пользователем
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.href = "/admin/login";
   }
 
   return (
