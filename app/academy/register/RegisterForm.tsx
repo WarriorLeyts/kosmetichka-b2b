@@ -5,7 +5,7 @@ import Link from "next/link";
 import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, GraduationCap } from "lucide-react";
-import { DEFAULT_POSITION, POSITION_SUGGESTIONS, STORES } from "@/lib/academy-register";
+import { DEFAULT_POSITION, POSITIONS, STORES } from "@/lib/academy-register";
 
 const SMARTCAPTCHA_CLIENT_KEY = process.env.NEXT_PUBLIC_SMARTCAPTCHA_CLIENT_KEY ?? "";
 
@@ -120,19 +120,17 @@ export default function RegisterForm() {
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-bold text-slate-500">Должность</span>
-              <input
+              <select
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
-                list="academy-positions"
-                placeholder="Например, продавец-консультант"
-                autoComplete="organization-title"
-                className={`${input} ${border("position")}`}
-              />
-              <datalist id="academy-positions">
-                {POSITION_SUGGESTIONS.map((p) => (
-                  <option key={p} value={p} />
+                className={`${input} ${border("position")} cursor-pointer appearance-none`}
+              >
+                {POSITIONS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-bold text-slate-500">Магазин</span>
