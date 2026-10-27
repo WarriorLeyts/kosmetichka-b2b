@@ -224,7 +224,11 @@ export function describeChanges(
 
 /** Loads and describes the changes of one order (with photos for removed lines). */
 export async function orderChanges(orderId: number, currentLines: CurrentLine[]) {
-  const rows = await prisma.orderItemChange.findMany({ where: { orderId }, orderBy: { createdAt: "asc" } });
+  // the history is extra information: if it can't be read the order still opens
+  const rows = await prisma.orderItemChange.findMany({ where: { orderId }, orderBy: { createdAt: "asc" } }).catch((e) => {
+    console.error(`[order-changes] read ${orderId}:`, e instanceof Error ? e.message : e);
+    return [];
+  });
   const out = describeChanges(rows, currentLines);
   const need = [...new Set(out.removed.filter((r) => !r.imageUrl && r.productId).map((r) => r.productId as number))];
   if (need.length) {
