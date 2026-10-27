@@ -174,7 +174,7 @@ export default function OrderDetailClient({ order }: { order: Order }) {
           </div>
           {(order.bonusesCollected ?? 0) > 0 && order.status !== "cancelled" && (
             <div className="flex justify-between px-5 pb-4 -mt-2 text-sm">
-              <span className="text-slate-500">Начислится бонусов</span>
+              <span className="text-slate-500">{order.status === "exported" ? "Начислено бонусов" : "Начислится после выполнения"}</span>
               <span className="font-bold text-indigo-600">{(order.bonusesCollected ?? 0).toLocaleString("ru-RU")}</span>
             </div>
           )}

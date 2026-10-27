@@ -10,6 +10,9 @@ import { AppBar } from "@/components/app/AppBar";
 import { HijabIcon } from "@/components/app/HijabIcon";
 import { PriceTypeSwitcher } from "@/components/profile/PriceTypeSwitcher";
 import { DeleteAccount } from "@/components/profile/DeleteAccount";
+import { LoyaltyCard } from "@/components/profile/LoyaltyCard";
+import { PromoToggle } from "@/components/profile/PromoToggle";
+import { ThemePicker } from "@/components/profile/ThemePicker";
 import { roleInfo } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
@@ -128,6 +131,7 @@ export default async function ProfilePage({
       wholesaleAccess: true,
       roleRequest: true,
       roleRequestStatus: true,
+      pushPromo: true,
       manager: true,
     },
   });
@@ -193,7 +197,13 @@ export default async function ProfilePage({
           </div>
         )}
 
+        <LoyaltyCard phone={customer.phone} />
+
         <PriceTypeSwitcher initial={roleInfo(customer)} />
+
+        <PromoToggle initial={customer.pushPromo} />
+
+        <ThemePicker />
 
         {/* Read-only info */}
         {customer.inn && (

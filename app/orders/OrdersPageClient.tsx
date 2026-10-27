@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCartStore } from "@/store/cartStore";
+import { useOrdersNotifStore } from "@/store/ordersNotifStore";
 import { OrderChat } from "@/components/orders/OrderChat";
 import { getProductImageUrl } from "@/lib/renderMsgContent";
 import { ORDER_STATUS_LABELS_CUSTOMER as STATUS_LABELS } from "@/lib/orderStatus";
@@ -110,6 +111,8 @@ type EditableItem = {
 };
 
 function OrderCard({ order: initialOrder }: { order: Order }) {
+  // a new manager message in this order's chat — marked on the card, as in the app
+  const unreadChat = useOrdersNotifStore((s) => s.newMessageOrderIds.includes(initialOrder.id));
   const [order, setOrder] = useState(initialOrder);
   const [expanded, setExpanded] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -223,7 +226,12 @@ function OrderCard({ order: initialOrder }: { order: Order }) {
             {icon}
           </div>
           <div className="flex flex-col gap-0.5">
-            <span className="font-black text-slate-800">Заказ №{order.id}</span>
+            <span className="flex items-center gap-2 font-black text-slate-800">
+              Заказ №{order.id}
+              {unreadChat ? (
+                <span className="rounded-full bg-pink-100 px-2 py-0.5 text-[11px] font-bold text-pink-700">Новое сообщение</span>
+              ) : null}
+            </span>
             <span className="text-xs text-slate-400 font-medium">
               {formatDate(order.createdAt)} · {formatMoney(order.total)}
             </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, User, Heart, ShoppingBag, LayoutGrid, ClipboardList, X, ChevronRight, Bell, LogOut } from "lucide-react";
+import { Search, User, Heart, ShoppingBag, LayoutGrid, ClipboardList, X, ChevronRight, Bell, Clock, LogOut } from "lucide-react";
 import { effectivePriceType, rawCartTotal } from "@/lib/pricing";
 import { useCartStore } from "@/store/cartStore";
 import { useFavoriteStore } from "@/store/favoriteStore";
@@ -13,6 +13,8 @@ import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { useOrdersNotifStore } from "@/store/ordersNotifStore";
 import { useWishlistStore } from "@/store/wishlistStore";
+import { useNotifStore } from "@/store/notifStore";
+import { ScanButton } from "./ScanButton";
 
 type Category = {
   id: number;
@@ -51,6 +53,18 @@ export function TopBar({
   const pendingCount = useOrdersNotifStore((s) => s.pendingCount);
   const newMessageOrderIds = useOrdersNotifStore((s) => s.newMessageOrderIds);
   const totalBadge = pendingCount + newMessageOrderIds.length;
+  const notifUnread = useNotifStore((s) => s.unread);
+  const refreshNotif = useNotifStore((s) => s.refresh);
+  // bell count: on sign-in, then every minute while the page is open
+  useEffect(() => {
+    if (!customer?.id) return;
+    const id = customer.id;
+    refreshNotif(id);
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") refreshNotif(id);
+    }, 60_000);
+    return () => clearInterval(t);
+  }, [customer?.id, refreshNotif]);
   const loadWishlist = useWishlistStore((s) => s.load);
   const wishlistLoaded = useWishlistStore((s) => s.loaded);
   const wishlistProducts = useWishlistStore((s) => s.products);
@@ -218,6 +232,12 @@ export function TopBar({
           <button type="submit" className="app-search__go" aria-label="Найти">
             <Search size={22} />
           </button>
+          <ScanButton
+            onCode={(code) => {
+              setSearch(code);
+              router.push(`/catalog?search=${encodeURIComponent(code)}`);
+            }}
+          />
         </form>
 
         <div className="app-header__actions">
@@ -243,8 +263,12 @@ export function TopBar({
                     <ClipboardList size={17} /> Мои заказы
                     {totalBadge > 0 && <span className="app-badge" style={{ marginLeft: "auto" }}>{totalBadge}</span>}
                   </Link>
+                  <Link href="/notifications" onClick={() => setMenuOpen(false)}>
+                    <Bell size={17} /> Уведомления
+                    {notifUnread > 0 && <span className="app-badge" style={{ marginLeft: "auto" }}>{notifUnread > 99 ? "99+" : notifUnread}</span>}
+                  </Link>
                   <Link href="/wishlist" onClick={() => setMenuOpen(false)}>
-                    <Bell size={17} /> Лист ожидания
+                    <Clock size={17} /> Лист ожидания
                   </Link>
                   <button onClick={logout} className="app-menu__danger">
                     <LogOut size={17} /> Выйти
@@ -258,6 +282,12 @@ export function TopBar({
             </Link>
           )}
 
+          {mounted && customer ? (
+            <Link href="/notifications" className="app-glass" aria-label={notifUnread > 0 ? `Уведомления: новых ${notifUnread}` : "Уведомления"} title="Уведомления">
+              <Bell size={20} />
+              {notifUnread > 0 && <span className="app-badge">{notifUnread > 99 ? "99+" : notifUnread}</span>}
+            </Link>
+          ) : null}
           <button className="app-glass" onClick={openFavorite} aria-label="Избранное" title="Избранное">
             <Heart size={20} />
             {mounted && favoriteCount > 0 && <span className="app-badge">{favoriteCount > 99 ? "99+" : favoriteCount}</span>}
