@@ -264,6 +264,8 @@ export default function AdminOrderClient({
   // ── Order edit ──
   const [editMode, setEditMode] = useState(false);
   const [editItems, setEditItems] = useState<EditItem[]>([]);
+  // photos by product: from the page + photos of items added while editing (shown right after saving)
+  const [images, setImages] = useState<Record<number, string | null>>(productImages);
   const [editError, setEditError] = useState("");
   const [saving, setSaving] = useState(false);
   // Promo code after the last item save: removed (red) or not recalculated — MAXMA unavailable (yellow)
@@ -741,7 +743,7 @@ export default function AdminOrderClient({
       const imagePath =
         item.photos.length > 0
           ? item.photos[0].url
-          : (item.variantImageUrl ?? productImages[item.productId] ?? null);
+          : (item.variantImageUrl ?? images[item.productId] ?? null);
 
       const msgJson = JSON.stringify({
         _t: "product-problem",
@@ -789,6 +791,8 @@ export default function AdminOrderClient({
 
     if (res.ok) {
       const data = await res.json();
+      const added = Object.fromEntries(newItems.filter((i) => i.imagePath).map((i) => [i.productId, i.imagePath as string]));
+      setImages((prev) => ({ ...prev, ...added, ...(data.productImages ?? {}) }));
       setOrder(data.order);
       setEditMode(false);
       setEditItems([]);
@@ -1221,7 +1225,7 @@ export default function AdminOrderClient({
             <OrderItemsEditor
               items={editItems}
               setItems={setEditItems}
-              productImages={productImages}
+              productImages={images}
               before={order.items.reduce((sum, i) => sum + i.total, 0)}
               saving={saving}
               error={editError}
@@ -1240,7 +1244,7 @@ export default function AdminOrderClient({
           {/* Items list — mobile cards */}
           <div className="sm:hidden space-y-2">
             {order.items.map((item) => {
-              const rawImgPath = item.variantImageUrl ?? productImages[item.productId] ?? null;
+              const rawImgPath = item.variantImageUrl ?? images[item.productId] ?? null;
               const imgUrl = rawImgPath
                 ? (rawImgPath.startsWith("http") ? rawImgPath : getProductImageUrl(rawImgPath))
                 : null;
@@ -1324,7 +1328,7 @@ export default function AdminOrderClient({
               </thead>
               <tbody>
                 {order.items.map((item) => {
-                  const rawImgPath = item.variantImageUrl ?? productImages[item.productId] ?? null;
+                  const rawImgPath = item.variantImageUrl ?? images[item.productId] ?? null;
                   const imgUrl = rawImgPath
                     ? (rawImgPath.startsWith("http") ? rawImgPath : getProductImageUrl(rawImgPath))
                     : null;

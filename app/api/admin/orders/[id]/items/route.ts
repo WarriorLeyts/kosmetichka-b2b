@@ -188,6 +188,17 @@ export async function PUT(request: NextRequest, { params }: Props) {
     },
   });
 
-  if (!loyalty) return NextResponse.json({ order: updated });
-  return NextResponse.json({ order: updated, ...loyaltyResponse(loyalty) });
+  // first photo of every product in the order, so items added just now show their pictures at once
+  const productImages: Record<number, string> = {};
+  const imageRows = updated
+    ? await prisma.productImage.findMany({
+        where: { productId: { in: [...new Set(updated.items.map((i) => i.productId))] } },
+        select: { productId: true, path: true },
+        orderBy: { id: "asc" },
+      })
+    : [];
+  for (const r of imageRows) productImages[r.productId] ??= r.path;
+
+  if (!loyalty) return NextResponse.json({ order: updated, productImages });
+  return NextResponse.json({ order: updated, productImages, ...loyaltyResponse(loyalty) });
 }
