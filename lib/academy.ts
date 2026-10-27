@@ -55,13 +55,20 @@ export function readStart(token: unknown, testId: number, userId: number): numbe
 export const TIME_GRACE_MS = 60_000;
 
 /** Кто видит результаты всех сотрудников. */
-export const RESULTS_ROLES = ["admin", "manager"];
+export const RESULTS_ROLES = ["admin", "manager", "hr"];
+
+/** Кто редактирует сотрудников «только тесты» (раздел /academy/staff). */
+export const STAFF_EDIT_ROLES = ["admin", "hr"];
+
+/** HR: только результаты и сотрудники — сами тесты не проходит. */
+export const HR_ROLE = "hr";
 
 export const ROLE_NAMES: Record<string, string> = {
   admin: "Администратор",
   manager: "Менеджер",
   picker: "Сборщик",
   employee: "Сотрудник",
+  hr: "HR",
 };
 
 /** Роль самостоятельно зарегистрированных: доступ только к тестам (всё остальное пускает лишь admin/manager/picker). */
@@ -80,6 +87,22 @@ export async function getStaff(): Promise<StaffSession | null> {
 
 export function canSeeResults(role: string) {
   return RESULTS_ROLES.includes(role);
+}
+
+export function canEditStaff(role: string) {
+  return STAFF_EDIT_ROLES.includes(role);
+}
+
+/**
+ * Право редактировать сотрудников — по роли из БАЗЫ, а не из токена: токен живёт 30 дней,
+ * и снятая администратором роль HR не должна продолжать действовать.
+ */
+export async function requireStaffEditor(): Promise<StaffSession | null> {
+  const s = await getStaff();
+  if (!s) return null;
+  const u = await prisma.user.findUnique({ where: { id: s.id }, select: { role: true, login: true } });
+  if (!u || !canEditStaff(u.role)) return null;
+  return { id: s.id, login: u.login, role: u.role };
 }
 
 // ── Проверка ответов ───────────────────────────────────────────────────────

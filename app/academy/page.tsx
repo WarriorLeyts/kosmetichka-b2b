@@ -2,13 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CheckCircle2, Clock, ListChecks, XCircle } from "lucide-react";
 import { prisma } from "@/lib/prisma";
-import { getStaff, plural } from "@/lib/academy";
+import { getStaff, HR_ROLE, plural } from "@/lib/academy";
 
 export const dynamic = "force-dynamic";
 
 export default async function AcademyHome() {
   const staff = await getStaff();
   if (!staff) redirect("/academy/login");
+  if (staff.role === HR_ROLE) redirect("/academy/results"); // HR тесты не проходит
 
   const [tests, attempts] = await Promise.all([
     prisma.academyTest.findMany({

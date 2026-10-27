@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkRegistration } from "./academy-register";
+import { checkRegistration, checkStaffEdit } from "./academy-register";
 
 const ok = { name: "Иванова Анна", position: "Продавец-консультант", store: "Парфюм 2", login: "anna.ivanova", password: "secret123" };
 
@@ -35,5 +35,24 @@ describe("checkRegistration", () => {
   it("роль из запроса не принимается — её в результате просто нет", () => {
     const r = checkRegistration({ ...ok, role: "admin" });
     expect(r.ok && Object.keys(r.data).sort()).toEqual(["login", "name", "password", "position", "store"]);
+  });
+});
+
+describe("checkStaffEdit", () => {
+  const base = { name: "Иванова Анна", position: "Кассир", store: "Концепт" };
+  it("без пароля — пароль не меняется", () => {
+    expect(checkStaffEdit(base)).toEqual({ ok: true, data: { ...base, password: null } });
+  });
+  it("новый пароль должен совпасть и быть не короче 8", () => {
+    expect(checkStaffEdit({ ...base, password: "secret123", password2: "secret124" }).ok).toBe(false);
+    expect(checkStaffEdit({ ...base, password: "short", password2: "short" }).ok).toBe(false);
+    expect(checkStaffEdit({ ...base, password: "secret123", password2: "secret123" })).toEqual({
+      ok: true,
+      data: { ...base, password: "secret123" },
+    });
+  });
+  it("магазин только из списка, ФИО обязательно", () => {
+    expect(checkStaffEdit({ ...base, store: "Ашан" }).ok).toBe(false);
+    expect(checkStaffEdit({ ...base, name: "Анна" }).ok).toBe(false);
   });
 });

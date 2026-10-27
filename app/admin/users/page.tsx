@@ -11,6 +11,7 @@ const ROLE_LABELS: Record<string, string> = {
   manager: "Менеджер",
   picker: "Сборщик",
   employee: "Сотрудник (только тесты)",
+  hr: "HR (результаты и сотрудники)",
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -18,6 +19,7 @@ const ROLE_COLORS: Record<string, string> = {
   manager: "bg-blue-100 text-blue-700",
   picker: "bg-green-100 text-green-700",
   employee: "bg-pink-100 text-pink-700",
+  hr: "bg-amber-100 text-amber-700",
 };
 
 export default async function AdminUsersPage() {

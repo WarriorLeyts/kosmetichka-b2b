@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { requireAdminRole } from "@/lib/auth";
 
-const VALID_ROLES = ["manager", "picker", "admin", "employee"];
+const VALID_ROLES = ["manager", "picker", "admin", "employee", "hr"];
 
 export async function POST(request: Request) {
   // Staff accounts are managed by admins only (same as the /admin/users pages)
