@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { canSeeResults, formatDuration, getStaff, ROLE_NAMES } from "@/lib/academy";
+import { canSeeResults, EMPLOYEE_ROLE, formatDuration, getStaff } from "@/lib/academy";
 import { STORES } from "@/lib/academy-register";
 
 export const dynamic = "force-dynamic";
@@ -28,12 +28,12 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
       select: { id: true, title: true, isPublished: true },
     }),
     prisma.user.findMany({
-      where: store ? { store } : undefined,
+      where: { role: EMPLOYEE_ROLE, ...(store ? { store } : {}) },
       orderBy: { name: "asc" },
       select: { id: true, name: true, login: true, role: true, position: true, store: true },
     }),
     prisma.academyAttempt.findMany({
-      where: store ? { user: { store } } : undefined,
+      where: { user: { role: EMPLOYEE_ROLE, ...(store ? { store } : {}) } },
       orderBy: { finishedAt: "desc" },
       select: {
         id: true,
@@ -114,7 +114,7 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
                       <td className="sticky left-0 bg-white px-4 py-2.5">
                         <div className="font-bold text-slate-900">{u.name}</div>
                         <div className="text-xs text-slate-500">
-                          {[u.position ?? ROLE_NAMES[u.role] ?? u.role, u.store, u.login].filter(Boolean).join(" · ")}
+                          {[u.position, u.store ?? "магазин не указан", u.login].filter(Boolean).join(" · ")}
                         </div>
                       </td>
                       {shownTests.map((t) => {
@@ -153,7 +153,7 @@ export default async function ResultsPage({ searchParams }: { searchParams: Prom
         <h2 className="text-lg font-black text-slate-900">Последние попытки</h2>
         {attempts.length === 0 ? (
           <p className="text-sm font-semibold text-slate-500">
-            {store ? `Сотрудники магазина «${store}» ещё не проходили тесты.` : "Пока никто не проходил тесты."}
+            {store ? `Сотрудники магазина «${store}» ещё не проходили тесты.` : "Пока никто из сотрудников не проходил тесты."}
           </p>
         ) : (
           <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white">
