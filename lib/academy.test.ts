@@ -63,3 +63,16 @@ describe("plural", () => {
     [1, "вопрос"], [2, "вопроса"], [5, "вопросов"], [11, "вопросов"], [21, "вопрос"], [22, "вопроса"], [112, "вопросов"],
   ])("%i %s", (n, w) => expect(plural(n, "вопрос", "вопроса", "вопросов")).toBe(w));
 });
+
+describe("getStaff: только роли сотрудников", () => {
+  it("токен покупателя в admin_token не пускает в тесты", async () => {
+    const { cookies } = await import("next/headers");
+    const { verifyToken } = await import("@/lib/auth");
+    vi.mocked(cookies).mockResolvedValue({ get: () => ({ value: "t" }) } as never);
+    const { getStaff } = await import("./academy");
+    vi.mocked(verifyToken).mockResolvedValue({ id: 5, email: "c@d.ru", role: "customer" });
+    expect(await getStaff()).toBeNull();
+    vi.mocked(verifyToken).mockResolvedValue({ id: 5, email: "anna", role: "employee" });
+    expect(await getStaff()).toMatchObject({ id: 5, role: "employee" });
+  });
+});

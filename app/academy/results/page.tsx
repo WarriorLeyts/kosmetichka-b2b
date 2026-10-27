@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { canSeeResults, EMPLOYEE_ROLE, formatDuration, getStaff } from "@/lib/academy";
+import { canSeeResults, EMPLOYEE_ROLE, formatDuration, getStaffFresh as getStaff } from "@/lib/academy";
 import { STORES } from "@/lib/academy-register";
 
 export const dynamic = "force-dynamic";

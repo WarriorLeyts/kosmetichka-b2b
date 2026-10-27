@@ -4,25 +4,23 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { createToken } from "@/lib/auth";
 import { getClientIp } from "@/lib/rateLimit";
-import { checkLoginAttempt, clearLoginAttempts } from "@/lib/loginAttempts";
+import { checkLoginLimits, clearLoginLimits } from "@/lib/loginAttempts";
 
-// Same limits as the customer login (/api/auth/login), separate counter
-const MAX_ATTEMPTS = 10;
+// Same limits as the customer login (/api/auth/login), separate counters (see checkLoginLimits)
 const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 export async function POST(request: Request) {
-  const rateKey = `admin_${getClientIp(request)}`;
+  const ip = getClientIp(request);
+  const body = await request.json().catch(() => null);
+  const login = typeof body?.login === "string" ? body.login.slice(0, 64) : "";
+  const password = typeof body?.password === "string" ? body.password.slice(0, 200) : "";
 
-  if (!(await checkLoginAttempt(rateKey, MAX_ATTEMPTS, WINDOW_MS))) {
+  if (!(await checkLoginLimits("admin", ip, login, WINDOW_MS))) {
     return NextResponse.json(
       { error: "Слишком много попыток входа. Подождите 15 минут." },
       { status: 429 }
     );
   }
-
-  const body = await request.json().catch(() => null);
-  const login = typeof body?.login === "string" ? body.login : "";
-  const password = typeof body?.password === "string" ? body.password : "";
 
   if (!login || !password) {
     return NextResponse.json(
@@ -51,7 +49,7 @@ export async function POST(request: Request) {
     );
   }
 
-  await clearLoginAttempts(rateKey); // успешный вход — сбрасываем счётчик
+  await clearLoginLimits("admin", ip, login); // успешный вход — сбрасываем счётчики этого IP и аккаунта
 
   const token = await createToken({
     id: user.id,

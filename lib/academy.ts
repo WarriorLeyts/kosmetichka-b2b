@@ -76,17 +76,30 @@ export const EMPLOYEE_ROLE = "employee";
 
 export type StaffSession = { id: number; login: string; role: string };
 
+/** Роли из таблицы User. Токен покупателя (role "customer") сюда не проходит — у него id из другой таблицы. */
+export const STAFF_ROLES = ["admin", "manager", "picker", "employee", "hr"];
+
 /** Любой сотрудник (таблица User) с действующим admin_token. */
 export async function getStaff(): Promise<StaffSession | null> {
   const token = (await cookies()).get("admin_token")?.value;
   if (!token) return null;
   const p = await verifyToken(token);
   if (!p || typeof p.id !== "number" || typeof p.role !== "string") return null;
+  if (!STAFF_ROLES.includes(p.role)) return null;
   return { id: p.id, login: String(p.email ?? ""), role: p.role };
 }
 
 export function canSeeResults(role: string) {
   return RESULTS_ROLES.includes(role);
+}
+
+/** Сессия с ролью из БАЗЫ (токен живёт 30 дней — снятая или понижённая роль должна действовать сразу). */
+export async function getStaffFresh(): Promise<StaffSession | null> {
+  const s = await getStaff();
+  if (!s) return null;
+  const u = await prisma.user.findUnique({ where: { id: s.id }, select: { role: true, login: true } });
+  if (!u || !STAFF_ROLES.includes(u.role)) return null;
+  return { id: s.id, login: u.login, role: u.role };
 }
 
 export function canEditStaff(role: string) {

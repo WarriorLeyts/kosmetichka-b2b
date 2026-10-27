@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { canSeeResults, formatDuration, getStaff, type AttemptDetail } from "@/lib/academy";
+import { canSeeResults, formatDuration, getStaffFresh as getStaff, type AttemptDetail } from "@/lib/academy";
 import { Review } from "@/components/academy/TestRunner";
 
 export const dynamic = "force-dynamic";

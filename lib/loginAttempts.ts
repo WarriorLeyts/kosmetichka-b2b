@@ -35,3 +35,22 @@ export async function checkLoginAttempt(
 export async function clearLoginAttempts(key: string) {
   await prisma.loginAttempt.deleteMany({ where: { ip: key } }).catch(() => {});
 }
+
+/**
+ * Два счётчика на вход: по IP и по аккаунту. Раньше был только IP-счётчик, и он обнулялся при любом
+ * успешном входе с этого IP — можно было чередовать 9 попыток подбора чужого пароля и вход в свой
+ * аккаунт без ограничений. Теперь у каждого аккаунта свой лимит, и успешный вход сбрасывает только его.
+ */
+const ACCOUNT_MAX = 20;
+const IP_MAX = 30;
+
+export async function checkLoginLimits(prefix: string, ip: string, account: string, windowMs: number) {
+  const okIp = await checkLoginAttempt(`${prefix}_${ip}`, IP_MAX, windowMs);
+  const okAccount = await checkLoginAttempt(`${prefix}_acct_${account.trim().toLowerCase()}`, ACCOUNT_MAX, windowMs);
+  return okIp && okAccount;
+}
+
+export async function clearLoginLimits(prefix: string, ip: string, account: string) {
+  await clearLoginAttempts(`${prefix}_${ip}`);
+  await clearLoginAttempts(`${prefix}_acct_${account.trim().toLowerCase()}`);
+}

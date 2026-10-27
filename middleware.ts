@@ -100,7 +100,9 @@ export async function middleware(request: NextRequest) {
     };
     if (!token) return toLogin();
     try {
-      await jwtVerify(token, secret);
+      const { payload } = await jwtVerify(token, secret);
+      // только роли сотрудников: токен покупателя подписан тем же секретом
+      if (!["admin", "manager", "picker", "employee", "hr"].includes(payload.role as string)) return toLogin();
     } catch {
       return toLogin();
     }
@@ -119,7 +121,9 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
     try {
-      await jwtVerify(token, secret);
+      const { payload } = await jwtVerify(token, secret);
+      // токен сотрудника подписан тем же секретом — в кабинет покупателя не пускаем
+      if (payload.role !== "customer") return NextResponse.redirect(new URL("/login", request.url));
     } catch {
       return NextResponse.redirect(new URL("/login", request.url));
     }
