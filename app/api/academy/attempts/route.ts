@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getStaff, gradeAttempt, readStart, TIME_GRACE_MS, type AnswerMap } from "@/lib/academy";
+import { getStaff, gradeAttempt, productImages, readStart, TIME_GRACE_MS, type AnswerMap } from "@/lib/academy";
 
 /** Сдать тест: проверка на сервере, сохранение попытки, результат с разбором (если включён). */
 export async function POST(request: Request) {
@@ -28,6 +28,12 @@ export async function POST(request: Request) {
   const late = test.timeLimitMin != null && elapsed > test.timeLimitMin * 60_000 + TIME_GRACE_MS;
 
   const result = gradeAttempt(test.questions, late ? {} : answers, test.passScore);
+  const images = await productImages(test.questions.map((q) => q.productId));
+  const productOf = new Map(test.questions.map((q) => [q.id, q.productId]));
+  for (const d of result.details) {
+    const pid = productOf.get(d.questionId);
+    d.image = (pid && images.get(pid)) || null;
+  }
 
   const attempt = await prisma.academyAttempt.create({
     data: {

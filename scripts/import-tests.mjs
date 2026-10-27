@@ -54,7 +54,10 @@ export function normalizeTest(raw, file = "файл") {
     if (!options.some((o) => o.isCorrect)) fail(`${where}: не отмечен ни один правильный ответ`);
     if (new Set(options.map((o) => o.text.toLowerCase())).size !== options.length) fail(`${where}: повторяются варианты`);
 
-    return { order: qi, text, explanation: str(q.explanation) || null, options };
+    const productId = q.productId ?? null;
+    if (productId !== null && (!Number.isInteger(productId) || productId < 1)) fail(`${where}: productId — номер товара из каталога`);
+
+    return { order: qi, text, explanation: str(q.explanation) || null, productId, options };
   });
 
   return {

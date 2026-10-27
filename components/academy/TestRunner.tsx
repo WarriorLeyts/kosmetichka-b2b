@@ -8,6 +8,7 @@ import { formatDuration, plural } from "@/lib/academy-format";
 export type RunnerQuestion = {
   id: number;
   text: string;
+  image: string | null;
   multiple: boolean;
   options: { id: number; text: string }[];
 };
@@ -15,6 +16,7 @@ export type RunnerQuestion = {
 type Detail = {
   questionId: number;
   text: string;
+  image?: string | null;
   explanation: string | null;
   correct: boolean;
   options: { id: number; text: string; isCorrect: boolean; chosen: boolean }[];
@@ -190,7 +192,10 @@ export default function TestRunner({ slug, title, description, passScore, timeLi
           Вопрос {index + 1} из {questions.length}
           {q.multiple && <span className="ml-2 normal-case text-purple-600">· несколько правильных ответов</span>}
         </p>
-        <h2 className="mt-2 whitespace-pre-line text-lg font-bold leading-snug text-slate-900">{q.text}</h2>
+        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start">
+          {q.image && <ProductPhoto key={q.id} src={q.image} className="h-44 w-full sm:h-40 sm:w-40" />}
+          <h2 className="whitespace-pre-line text-lg font-bold leading-snug text-slate-900">{q.text}</h2>
+        </div>
 
         <div className="mt-5 space-y-2.5" role={q.multiple ? "group" : "radiogroup"}>
           {q.options.map((o) => {
@@ -328,6 +333,8 @@ export function Review({ details }: { details: Detail[] }) {
           key={d.questionId}
           className={`rounded-3xl border bg-white p-5 ${d.correct ? "border-slate-200" : "border-rose-200"}`}
         >
+          <div className="flex items-start gap-3">
+          {d.image && <ProductPhoto src={d.image} className="h-16 w-16 shrink-0" />}
           <p className="flex items-start gap-2 font-bold text-slate-900">
             {d.correct ? (
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" aria-label="Верно" />
@@ -338,6 +345,7 @@ export function Review({ details }: { details: Detail[] }) {
               {i + 1}. {d.text}
             </span>
           </p>
+          </div>
           <ul className="mt-3 space-y-1.5 pl-7 text-sm">
             {d.options.map((o) => (
               <li
@@ -368,5 +376,17 @@ export function Review({ details }: { details: Detail[] }) {
         </article>
       ))}
     </section>
+  );
+}
+
+/** Фото товара из каталога; если файл не загрузился — блок просто исчезает. */
+function ProductPhoto({ src, className }: { src: string; className: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <div className={`flex items-center justify-center overflow-hidden rounded-2xl border border-slate-100 bg-white p-2 ${className}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" loading="lazy" className="h-full w-full object-contain" onError={() => setFailed(true)} />
+    </div>
   );
 }

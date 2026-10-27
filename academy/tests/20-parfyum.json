@@ -11,6 +11,7 @@
   "questions": [
     {
       "text": "Tom Ford Lost Cherry EDP, 50 мл\nКакая нота определяет узнаваемый характер этого аромата?",
+      "productId": 118268,
       "options": [
         "Зелёный чай",
         "Морская соль",
@@ -21,6 +22,7 @@
     },
     {
       "text": "Parfums de Marly Delina Limited Edition, 75 мл\nКакое цветочное направление характерно для Delina?",
+      "productId": 120463,
       "options": [
         "Горький кофе с табаком",
         "Яркая роза с фруктовой свежестью",
@@ -31,6 +33,7 @@
     },
     {
       "text": "Marc-Antoine Barrois Tilia EDP, 100 мл\nС каким цветущим деревом ассоциируется Tilia?",
+      "productId": 120153,
       "options": [
         "Апельсин",
         "Липа",
@@ -41,6 +44,7 @@
     },
     {
       "text": "HFC Devil’s Intrigue, 75 мл\nКакое описание лучше соответствует этому аромату?",
+      "productId": 113168,
       "options": [
         "Чисто цитрусовый без сладости",
         "Свежий травяной с морской солью",
@@ -51,6 +55,7 @@
     },
     {
       "text": "Lattafa Al Qiam Silver EDP, 100 мл\nКакое сочетание нот указано в обучении?",
+      "productId": 114048,
       "options": [
         "Кофе и белые цветы",
         "Вишня и миндаль",
@@ -61,6 +66,7 @@
     },
     {
       "text": "Versace Bright Crystal EDT, 90 мл\nКакому клиенту лучше предложить этот аромат?",
+      "productId": 111632,
       "options": [
         "Любителю нежных повседневных ароматов",
         "Покупателю тяжёлого амбрового парфюма",
@@ -71,6 +77,7 @@
     },
     {
       "text": "M. Micallef Ananda EDP, 100 мл\nКакой характер у аромата?",
+      "productId": 112656,
       "options": [
         "Солёный морской",
         "Табачно-амбровый",
@@ -81,6 +88,7 @@
     },
     {
       "text": "Lattafa Khamrah Dukhan EDP, 100 мл\nКакое направление наиболее точно описывает аромат?",
+      "productId": 114449,
       "options": [
         "Воздушный пудровый мускус",
         "Дымный пряный с табачным акцентом",
@@ -91,6 +99,7 @@
     },
     {
       "text": "Tom Ford Lost Cherry, 100 мл\nКакая пара нот лучше всего помогает описать Lost Cherry покупателю?",
+      "productId": 121358,
       "options": [
         "Сирень и чай",
         "Лотос и инжир",
@@ -101,6 +110,7 @@
     },
     {
       "text": "Victoria’s Secret Bombshell EDP, 100 мл\nКакую фруктовую ноту содержит Bombshell согласно обучению?",
+      "productId": 118577,
       "options": [
         "Инжир",
         "Дыня",
@@ -111,6 +121,7 @@
     },
     {
       "text": "Lattafa Ajwad EDP, 60 мл\nКакой характер у Lattafa Ajwad?",
+      "productId": 113869,
       "options": [
         "Сухой цитрусово-травяной",
         "Чистый аромат свежего белья",
@@ -121,6 +132,7 @@
     },
     {
       "text": "Zimaya Farah EDP, 100 мл\nКакой цветочный акцент является ключевым в Farah?",
+      "productId": 115584,
       "options": [
         "Тубероза и жасмин",
         "Пион и сирень",
@@ -131,6 +143,7 @@
     },
     {
       "text": "Xerjoff Erba Pura EDP, 100 мл\nКакой ароматический профиль у Erba Pura?",
+      "productId": 121773,
       "options": [
         "Морские ноты и травы",
         "Сочные фрукты и мускус",
@@ -141,6 +154,7 @@
     },
     {
       "text": "Moschino Funny! EDT, 100 мл\nКому особенно подойдёт Moschino Funny!?",
+      "productId": 112761,
       "options": [
         "Любителю густых амбровых ароматов",
         "Покупателю табачной гурманики",
@@ -151,6 +165,7 @@
     },
     {
       "text": "Lattafa Yara Candy, 100 мл\nНа что по характеру похожа Yara Candy?",
+      "productId": 113923,
       "options": [
         "На сухую древесную стружку",
         "На сладкие фруктовые конфеты",
@@ -161,6 +176,7 @@
     },
     {
       "text": "Zimaya Bahjah EDP, 10 мл\nКакой акцент отличает описанный аромат Bahjah?",
+      "productId": 115472,
       "options": [
         "Кофе и пралине",
         "Вишня и миндаль",
@@ -171,6 +187,7 @@
     },
     {
       "text": "Zarkoperfume The Muse, 100 мл\nКакая ассоциация лучше передаёт The Muse?",
+      "productId": 118434,
       "options": [
         "Спелая вишня",
         "Тёплая карамель",
@@ -181,6 +198,7 @@
     },
     {
       "text": "Lattafa Mayar, 100 мл\nКакие ноты помогут представить Lattafa Mayar покупателю?",
+      "productId": 119229,
       "options": [
         "Лаванда, кожа и смола",
         "Ягоды, личи и белые цветы",
@@ -191,6 +209,7 @@
     },
     {
       "text": "Chanel Allure Homme Sport EDT, 100 мл\nДля кого в обучении рекомендован Allure Homme Sport?",
+      "productId": 119573,
       "options": [
         "Для любителя плотной конфетной сладости",
         "Для клиента, ищущего аромат чистого белья",
@@ -201,6 +220,7 @@
     },
     {
       "text": "Parfums de Marly Valaya, 75 мл\nКак лучше всего описать характер Valaya?",
+      "productId": 119674,
       "options": [
         "Пряный табачный",
         "Воздушный цветочно-мускусный",
@@ -211,6 +231,7 @@
     },
     {
       "text": "Gucci Flora Gorgeous Orchid EDP, 100 мл\nКакой оттенок сладости характерен для Gorgeous Orchid?",
+      "productId": 120684,
       "options": [
         "Медовый табак",
         "Карамельный кофе",
@@ -221,6 +242,7 @@
     },
     {
       "text": "Creed Aventus EDP, 100 мл\nКакая фруктовая нота выделена в Creed Aventus?",
+      "productId": 113194,
       "options": [
         "Ананас",
         "Киви",
@@ -231,6 +253,7 @@
     },
     {
       "text": "Lattafa Fakhar Women, 100 мл\nКакому клиенту стоит предложить Fakhar Women?",
+      "productId": 117850,
       "options": [
         "Любителю сухой кожи и табака",
         "Поклоннику солёной морской свежести",
@@ -241,6 +264,7 @@
     },
     {
       "text": "Attar Collection Musk Kashmir, 100 мл\nКакое описание лучше подходит Musk Kashmir?",
+      "productId": 112316,
       "options": [
         "Нежный пудровый мускус",
         "Густой кофейный аромат",
@@ -251,6 +275,7 @@
     },
     {
       "text": "Lattafa Mayar Natural Intense, 100 мл\nКакую водную ноту содержит Mayar Natural Intense?",
+      "productId": 114000,
       "options": [
         "Кокосовая вода",
         "Морская соль",
@@ -261,6 +286,7 @@
     },
     {
       "text": "Lattafa Emaan, 100 мл\nКаким покупателям рекомендовать Lattafa Emaan?",
+      "productId": 119427,
       "options": [
         "Любителям светлых цветочных ароматов",
         "Любителям тяжёлого табака",
@@ -271,6 +297,7 @@
     },
     {
       "text": "Lattafa Victoria EDP, 100 мл\nНа какой десерт по описанию похожа Lattafa Victoria?",
+      "productId": 114447,
       "options": [
         "Карамельно-ореховый",
         "Вишнёво-миндальный",
@@ -281,6 +308,7 @@
     },
     {
       "text": "Ex Nihilo Blue Talisman Extrait, 100 мл\nКак консультанту поступить с нотами Ex Nihilo Blue Talisman Extrait?",
+      "productId": 116242,
       "options": [
         "Полностью приравнять её к версии EDP",
         "Сверить пирамиду именно версии Extrait",
@@ -291,6 +319,7 @@
     },
     {
       "text": "Lattafa Sakeena, 100 мл\nКакой характер у Lattafa Sakeena?",
+      "productId": 119192,
       "options": [
         "Чистый морской",
         "Горький цитрусово-травяной",
@@ -301,6 +330,7 @@
     },
     {
       "text": "Chanel Chance Eau Tendre, 100 мл\nКакое сочетание нот указано у Chance Eau Tendre?",
+      "productId": 112179,
       "options": [
         "Кофе и ваниль",
         "Табак и ладан",
@@ -321,6 +351,7 @@
     },
     {
       "text": "Lattafa Dynasty EDP, 100 мл\nКак раскрывается Lattafa Dynasty согласно обучению?",
+      "productId": 115457,
       "options": [
         "От свежих специй к чайно-древесному шлейфу",
         "От кофе к шоколаду",
@@ -331,6 +362,7 @@
     },
     {
       "text": "Dolce & Gabbana L’Imperatrice 3 EDT, 100 мл\nКакая фруктовая нота особенно характерна для L’Imperatrice 3?",
+      "productId": 118916,
       "options": [
         "Арбуз",
         "Вишня",
@@ -341,6 +373,7 @@
     },
     {
       "text": "Gucci Flora Gorgeous Gardenia EDP, 100 мл\nКакой цветок определяет основное направление Gorgeous Gardenia?",
+      "productId": 115741,
       "options": [
         "Лаванда",
         "Гардения",
@@ -351,6 +384,7 @@
     },
     {
       "text": "Yves Saint Laurent Black Opium EDP, 90 мл\nКакая нота формирует узнаваемую гурманскую сторону Black Opium?",
+      "productId": 122347,
       "options": [
         "Морская соль",
         "Лотос",
@@ -361,6 +395,7 @@
     },
     {
       "text": "Lattafa Liam Blue Shine, 100 мл\nКакую свежесть даёт Liam Blue Shine?",
+      "productId": 120098,
       "options": [
         "Вишнёво-миндальную",
         "Лимонно-ванильную десертную",
@@ -371,6 +406,7 @@
     },
     {
       "text": "Byredo Bal d’Afrique, 100 мл\nКак описать Bal d’Afrique одним коротким сочетанием?",
+      "productId": 111467,
       "options": [
         "Солнечный цитрус и мягкая древесина",
         "Сладкая вишня и миндаль",
@@ -381,6 +417,7 @@
     },
     {
       "text": "Maison Alhambra Kismet Moscow, 100 мл\nКакому покупателю предложить Kismet Moscow?",
+      "productId": 113862,
       "options": [
         "Ищущему ягодные конфеты",
         "Предпочитающему строгую прохладную свежесть",
@@ -391,6 +428,7 @@
     },
     {
       "text": "Attar Collection Musk Kashmir EDP, 100 мл\nКакие оттенки преобладают в Musk Kashmir EDP?",
+      "productId": 112316,
       "options": [
         "Ягодные и конфетные",
         "Морские и солёные",
@@ -401,6 +439,7 @@
     },
     {
       "text": "Lanvin Éclat d’Arpège EDP, 100 мл\nКакое цветочное направление характерно для Éclat d’Arpège?",
+      "productId": 112755,
       "options": [
         "Тяжёлая тубероза с ладаном",
         "Ванильная орхидея с сахаром",
@@ -411,6 +450,7 @@
     },
     {
       "text": "Yves Saint Laurent Libre, 90 мл\nКакой контраст нот отличает YSL Libre?",
+      "productId": 111631,
       "options": [
         "Лаванда и белые цветы с ванилью",
         "Кофе и шоколад",
@@ -431,6 +471,7 @@
     },
     {
       "text": "Maison Alhambra Kismet for Men, 100 мл\nКакому покупателю рекомендовать Kismet for Men?",
+      "productId": 113858,
       "options": [
         "Ищущему лёгкую водную свежесть",
         "Ищущему тёплый пряный аромат для прохлады",
@@ -441,6 +482,7 @@
     },
     {
       "text": "Gucci Flora Gorgeous Gardenia Intense EDP, 100 мл\nКакая нота добавляет мягкости и глубины Gorgeous Gardenia Intense?",
+      "productId": 111005,
       "options": [
         "Розмарин",
         "Кокосовая вода",
@@ -451,6 +493,7 @@
     },
     {
       "text": "Chanel Chance Eau Vive, 100 мл\nКакое звучание наиболее точно описывает Chance Eau Vive?",
+      "productId": 114938,
       "options": [
         "Яркое кофейно-ванильное",
         "Бодрящее цитрусово-цветочное",
@@ -461,6 +504,7 @@
     },
     {
       "text": "Kilian Good Girl Gone Bad, 50 мл\nКакой букет характерен для Kilian Good Girl Gone Bad?",
+      "productId": 116480,
       "options": [
         "Лотос, цикламен и водные ноты",
         "Сирень, пион и зелёный чай",
@@ -471,6 +515,7 @@
     },
     {
       "text": "Lattafa Hayaatim, 100 мл\nЧто важно сделать до запоминания нот Lattafa Hayaatim?",
+      "productId": 112229,
       "options": [
         "Считать все версии одинаковыми",
         "Уточнить, Hayatim это или Hayaati",
@@ -481,6 +526,7 @@
     },
     {
       "text": "Antonio Banderas Blue Seduction EDT, 100 мл\nКакому покупателю подойдёт Blue Seduction?",
+      "productId": 112733,
       "options": [
         "Любящему дымные табачные композиции",
         "Ищущему лёгкую водно-фруктовую свежесть на каждый день",
@@ -491,6 +537,7 @@
     },
     {
       "text": "Tiziana Terenzi Kirke, 100 мл\nКакими нотами начинается Kirke согласно обучению?",
+      "productId": 112371,
       "options": [
         "Ладан, табак и амбра",
         "Лаванда, шалфей и розмарин",
