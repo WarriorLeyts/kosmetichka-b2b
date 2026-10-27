@@ -202,8 +202,9 @@ model Order {
   pickerId Int?
   picker   User? @relation("OrderPicker", fields: [pickerId], references: [id])
 
-  messages   OrderMessage[]
-  statusLogs OrderStatusLog[]
+  messages    OrderMessage[]
+  statusLogs  OrderStatusLog[]
+  itemChanges OrderItemChange[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -238,6 +239,36 @@ model OrderItem {
 
   @@index([orderId])
   @@index([productId])
+}
+
+/// History of changes to order lines: who (manager / customer) added, removed or changed what.
+/// The customer sees the manager's changes, staff see the customer's — nothing goes unnoticed.
+model OrderItemChange {
+  id          Int      @id @default(autoincrement())
+  orderId     Int
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// The line (kept after it was removed — then no OrderItem has this id any more)
+  orderItemId Int?
+  productId   Int?
+  productName String
+  barcode     String?
+  /// "added" | "removed" | "changed"
+  kind        String
+  /// "staff" | "customer"
+  side        String
+  /// Staff member's name / «Битрикс24»; null for the customer
+  actorName   String?
+  oldQuantity Int?
+  newQuantity Int?
+  oldPrice    Int?
+  newPrice    Int?
+  oldVariant  String?
+  newVariant  String?
+  /// Variant photo of the line (removed lines have no OrderItem to take it from)
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+
+  @@index([orderId, createdAt])
 }
 
 model OrderItemCheck {

@@ -357,6 +357,15 @@ Query: `q` (name/companyName/email без регистра, phone — подст
 
 ---
 
+### GET /api/team/push — **только A**
+
+«Рассылки»: `{ promo, withApp, audiences: [{value,label}], history: [{ id, title, body, audience, audienceLabel, link, recipients, devices, createdAt }] }`.
+`POST /api/team/push { title, body, audience, article? }` → `{ ok, recipients, devices }` (400 — пусто / товар не найден).
+
+### GET /api/team/app-errors — **только A**
+
+«Ошибки приложений» за 30 дней: `{ items: [{ id, app, platform, fatal, message, stack, screen, version, count, customers, firstAt, lastAt }] }`.
+
 ## 2. Существующие маршруты, которые использует приложение
 
 ### Вход / выход

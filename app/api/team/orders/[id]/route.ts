@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { orderChanges } from "@/lib/orderChanges";
 import { parseCheckStatuses } from "@/lib/checkStatus";
 import {
   ORDER_STATUS_ACTIONS,
@@ -93,6 +94,9 @@ export async function GET(
   const productBarcodes = new Map<number, string | null>();
   for (const p of productRows) productBarcodes.set(p.id, p.barcode ?? null);
 
+  // who changed which line (customer / staff) and what was removed
+  const changes = await orderChanges(order.id, order.items);
+
   const allowedTransitions = ORDER_STATUS_TRANSITIONS[order.status] ?? [];
   const actions = (ORDER_STATUS_ACTIONS[order.status] ?? []).map((a) => ({
     label: a.label,
@@ -156,6 +160,9 @@ export async function GET(
           variantImageUrl: item.variantImageUrl ?? null,
           imagePath,
           imageUrl: productImageUrl(imagePath),
+          /** what the customer / staff did to this line: { kind: "added"|"changed", oldQuantity, oldPrice, oldVariant, actorName, at } */
+          customerChange: changes.lines[item.id]?.customer ?? null,
+          staffChange: changes.lines[item.id]?.staff ?? null,
           check: item.check
             ? {
                 status: item.check.status,
@@ -174,6 +181,19 @@ export async function GET(
           })),
         };
       }),
+      /** lines taken out of the order: by the customer ("customer") or staff ("staff", actorName) */
+      removedItems: changes.removed.map((r) => ({
+        productId: r.productId,
+        productName: r.productName,
+        variantName: r.variantName,
+        barcode: r.barcode,
+        quantity: r.quantity,
+        price: r.price,
+        imagePath: r.imageUrl,
+        by: r.side,
+        actorName: r.actorName,
+        at: r.at,
+      })),
       // picker↔manager chat (same shape as GET /api/picker/messages/:orderId, plus userRole)
       messages: order.messages.map((m) => ({
         id: m.id,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { logOrderChanges } from "@/lib/orderChanges";
 import { isMaxmaOrder, loyaltyWarning, promoWarning, recalcOrderLoyalty } from "@/lib/maxmaOrders";
 import { notifyOrderStatus } from "@/lib/notify";
 
@@ -148,6 +149,12 @@ export async function POST(request: NextRequest) {
           } else {
             newTotal += orderItem.price * orderItem.quantity;
           }
+        }
+
+        if (itemsChanged) {
+          // quantities / prices changed by the manager in Bitrix24 — logged so the customer sees them
+          const after = await prisma.orderItem.findMany({ where: { orderId } });
+          await logOrderChanges(orderId, "staff", "Битрикс24", order.items, after);
         }
 
         if (isMaxmaOrder(order)) {
