@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isMaxmaOrder, loyaltyWarning, promoWarning, recalcOrderLoyalty } from "@/lib/maxmaOrders";
+import { notifyOrderStatus } from "@/lib/notify";
 
 // Битрикс24 вызывает этот endpoint когда сделка переходит в стадию "Оплачен"
 // Настройка: CRM → Автоматизация → стадия "Оплачен" → Робот "Вебхук"
@@ -183,6 +184,7 @@ export async function POST(request: NextRequest) {
   });
 
   console.log(`[Bitrix webhook] Заказ №${orderId} → payment${dealId ? ` (deal ${dealId})` : ""}`);
+  if (order.status !== "payment") void notifyOrderStatus(orderId, "payment");
 
   return NextResponse.json({ ok: true, orderId, status: "payment" });
 }

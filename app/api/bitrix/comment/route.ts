@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { notifyManagerMessage } from "@/lib/notify";
 
 // Bitrix24 calls this endpoint when a timeline comment is added to any deal.
 // Setup (one time): POST {BITRIX_WEBHOOK_URL}event.bind.json
@@ -127,6 +128,7 @@ export async function POST(request: NextRequest) {
         },
       });
       console.log(`[Comment webhook] ✓ Saved manager message order=${order.id} comment=${commentId}`);
+      void notifyManagerMessage(order.id, commentText);
     } catch {
       console.log(`[Comment webhook] Duplicate comment ${commentId}, skipped`);
     }

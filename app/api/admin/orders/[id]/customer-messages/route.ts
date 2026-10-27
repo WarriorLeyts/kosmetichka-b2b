@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendMail } from "@/lib/mail";
+import { notifyManagerMessage } from "@/lib/notify";
 
 export async function GET(
   _: Request,
@@ -68,6 +69,8 @@ export async function POST(
       select: { name: true },
     }),
   ]);
+
+  void notifyManagerMessage(orderId, text.trim());
 
   // UX-2: Email notification to customer when manager replies
   const order = await prisma.order.findUnique({

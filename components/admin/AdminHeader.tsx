@@ -61,6 +61,7 @@ export function AdminHeader({ user }: { user: any }) {
           {isAdmin && (
             <>
               <Link href="/admin/users">Пользователи</Link>
+              <Link href="/admin/push">Рассылки</Link>
               <Link href="/admin/app-errors">Ошибки приложений</Link>
             </>
           )}
@@ -108,6 +109,7 @@ export function AdminHeader({ user }: { user: any }) {
           {isAdmin && (
             <>
               <Link href="/admin/users" onClick={() => setMenuOpen(false)} className="py-2 border-b">Пользователи</Link>
+              <Link href="/admin/push" onClick={() => setMenuOpen(false)} className="py-2 border-b">Рассылки</Link>
               <Link href="/admin/app-errors" onClick={() => setMenuOpen(false)} className="py-2">Ошибки приложений</Link>
             </>
           )}

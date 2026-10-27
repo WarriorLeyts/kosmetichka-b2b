@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ORDER_STATUS_TRANSITIONS } from "@/lib/orderStatus";
 import { onOrderStatus } from "@/lib/maxmaOrders";
+import { notifyOrderStatus } from "@/lib/notify";
 
 export async function POST(request: NextRequest) {
   const user = await requireAdmin();
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
     ]);
     // MAXMA: confirm / cancel via the queue (tasks saved now, calls in the background)
     await onOrderStatus(updated, toStatus, { background: true });
+    void notifyOrderStatus(updated, toStatus);
   }
 
   return NextResponse.json({ updated, skipped });

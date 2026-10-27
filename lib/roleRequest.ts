@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isWholesaleRole, maxAccess } from "@/lib/roles";
+import { notify } from "@/lib/notify";
 
 /**
  * Admin decision on a customer's request for a wholesale price type.
@@ -27,5 +28,9 @@ export async function decideRoleRequest(customerId: number, action: "approve" | 
         : { roleRequestStatus: "rejected" },
   });
   console.log(`[role] customer ${customerId}: request ${c.roleRequest} ${action}d`);
+  const label = c.roleRequest === "big_wholesale" ? "Крупный опт" : "Опт";
+  void notify(customerId, action === "approve"
+    ? { kind: "role", title: `Доступ к ценам «${label}» открыт`, body: "Цены в каталоге и корзине уже пересчитаны. Переключаться между розницей и оптом можно в профиле.", link: "/profile" }
+    : { kind: "role", title: `Заявка на «${label}» отклонена`, body: "Если есть вопросы, свяжитесь с менеджером.", link: "/profile" });
   return true;
 }

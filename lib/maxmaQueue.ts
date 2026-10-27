@@ -8,6 +8,7 @@ import {
   setLoyaltyOrderQuery,
   type SetOrderQuery,
 } from "@/lib/maxma";
+import { notifyBonusesAccrued } from "@/lib/notify";
 
 /**
  * Outbox for MAXMA calls made after an order is saved (v2/set-order, confirm-order,
@@ -97,6 +98,7 @@ async function execute(task: { orderId: number; action: string; payload: Prisma.
   if (task.action === "confirm") {
     await confirmOrder(id);
     console.log(`[maxma] confirm-order site-${id} ok`);
+    void notifyBonusesAccrued(id);
     return;
   }
   if (task.action === "cancel") {

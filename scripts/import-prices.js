@@ -29,6 +29,54 @@ function normalizePriceType(name) {
   return value;
 }
 
+/**
+ * «Уведомления» in the app + push to the customer's phones (Expo push → FCM), same as lib/notify.ts
+ * on the site. Adds the wishlist item ids it notified to `notifiedIds`. Never throws.
+ */
+async function notifyRestockInApp(items, notifiedIds) {
+  try {
+    const rows = items.map((it) => ({
+      customerId: it.customer.id,
+      kind: "restock",
+      title: "Товар снова в наличии",
+      body: it.product.name.slice(0, 300),
+      link: `/product/${it.product.id}`,
+    }));
+    if (!rows.length) return;
+    await prisma.notification.createMany({ data: rows });
+    for (const it of items) if (!notifiedIds.includes(it.id)) notifiedIds.push(it.id);
+
+    const tokens = await prisma.pushToken.findMany({
+      where: { customerId: { in: [...new Set(rows.map((r) => r.customerId))] } },
+      select: { token: true, customerId: true },
+    });
+    const msgs = [];
+    for (const r of rows) {
+      for (const t of tokens) {
+        if (t.customerId !== r.customerId) continue;
+        msgs.push({ to: t.token, title: r.title, body: r.body, data: { link: r.link, kind: "restock" }, sound: "default", channelId: "default", priority: "high" });
+      }
+    }
+    for (let i = 0; i < msgs.length; i += 100) {
+      const res = await fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(process.env.EXPO_ACCESS_TOKEN ? { Authorization: `Bearer ${process.env.EXPO_ACCESS_TOKEN}` } : {}),
+        },
+        body: JSON.stringify(msgs.slice(i, i + 100)),
+        signal: AbortSignal.timeout(15000),
+      }).catch((e) => console.error("[push] restock send failed:", e.message));
+      const data = res ? await res.json().catch(() => null) : null;
+      const gone = (data?.data ?? []).map((t, k) => (t.details?.error === "DeviceNotRegistered" ? msgs[i + k].to : null)).filter(Boolean);
+      if (gone.length) await prisma.pushToken.deleteMany({ where: { token: { in: gone } } });
+    }
+    console.log(`Уведомления в приложении: ${rows.length}, push: ${msgs.length}`);
+  } catch (err) {
+    console.error("Уведомления в приложении не отправлены:", err.message);
+  }
+}
+
 async function sendWishlistNotifications(productIds) {
   if (!productIds.length) return;
 
@@ -92,6 +140,9 @@ async function sendWishlistNotifications(productIds) {
       console.error(`Ошибка отправки на ${item.customer.email}:`, err.message);
     }
   }
+
+  // In-app notification + push («Товар появился») — for everyone waiting, with or without e-mail
+  await notifyRestockInApp(items, notifiedIds);
 
   if (notifiedIds.length) {
     await prisma.wishlistItem.updateMany({

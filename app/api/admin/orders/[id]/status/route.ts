@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { sendMail } from "@/lib/mail";
 import { onOrderStatus } from "@/lib/maxmaOrders";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
+import { notifyOrderStatus } from "@/lib/notify";
 
 export async function POST(
   request: Request,
@@ -61,6 +62,7 @@ export async function POST(
 
   // MAXMA: confirm / cancel via the queue (one attempt now; retried by the worker; never fails the request)
   await onOrderStatus(Number(id), toStatus);
+  if (order.status !== toStatus) void notifyOrderStatus(Number(id), toStatus);
 
   // Уведомление покупателю о смене статуса
   const notifyStatuses = ["payment", "cancelled", "assembly", "exported", "consultation"];

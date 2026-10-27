@@ -7,6 +7,7 @@ import { dropThumbs } from "@/lib/thumb";
 import { cmlComment, cmlItemDiscounts, cmlItemSum } from "@/lib/commerceml";
 import { MAXMA_ORDER_WHERE, onOrderStatus } from "@/lib/maxmaOrders";
 import { DATA_ROOT } from "@/lib/dataDir";
+import { notifyOrderStatus } from "@/lib/notify";
 
 // Auth: any login + SYNC_API_KEY as password (set in .env)
 const COOKIE_NAME = "1C_SESS";
@@ -290,10 +291,12 @@ export async function POST(request: NextRequest) {
         where: { id: { in: ids }, status: { not: "exported" }, ...MAXMA_ORDER_WHERE },
         select: { id: true },
       });
+      const moved = await prisma.order.findMany({ where: { id: { in: ids }, status: { not: "exported" } }, select: { id: true } });
       await prisma.order.updateMany({
         where: { id: { in: ids } },
         data: { oneCExportedAt: new Date(), status: "exported" },
       });
+      void notifyOrderStatus(moved.map((o) => o.id), "exported");
       console.log(`[exchange] acknowledged orders: ${ids.join(", ")}`);
       // MAXMA: confirm promo-code / bonus orders via the queue (tasks saved now, calls in the background)
       if (toConfirm.length) await onOrderStatus(toConfirm.map((o) => o.id), "exported", { background: true });
