@@ -8,6 +8,7 @@ import { useAuthStore } from "@/store/authStore";
 import { Button } from "../ui/button";
 import { useState, useEffect, useRef } from "react";
 import { SafeImage } from "./SafeImage";
+import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
 import {
   effectivePriceType,
   priceFor,
@@ -476,7 +477,7 @@ export function CartDrawer() {
                   )}
 
                   {/* MAXMA bonuses: spending — retail customers with a linked card; accrual — any linked card */}
-                  {customer && bonuses && (
+                  {customer && bonuses && SITE_RETAIL_ENABLED && (
                     <div className="cart-bonuses">
                       {bonuses.canSpend && (
                         <label className={`cart-bonuses-toggle ${bonuses.maxToApply <= 0 ? "cart-bonuses-toggle--off" : ""}`}>

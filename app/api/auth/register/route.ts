@@ -6,6 +6,7 @@ import { createToken } from "@/lib/auth";
 import { normalizePhone, toSmsAeroPhone } from "@/lib/phone";
 import { getClientIp } from "@/lib/rateLimit";
 import { isWholesaleRole } from "@/lib/roles";
+import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
 
 async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
   const serverKey = process.env.SMARTCAPTCHA_SERVER_KEY;
@@ -35,7 +36,12 @@ async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
 const AUTO_APPROVE_TYPES = new Set(["retail"]);
 
 export async function POST(request: Request) {
-  const { name, companyName, phone, email, password, captchaToken, smsCode, priceType: rawPriceType } = await request.json();
+  const { name, companyName, phone, email, password, captchaToken, smsCode, priceType: rawPriceType, source } = await request.json();
+
+  // the website registers wholesale customers only for now (retail signs up in the app)
+  if (source === "site" && !SITE_RETAIL_ENABLED && rawPriceType !== "wholesale" && rawPriceType !== "big_wholesale") {
+    return NextResponse.json({ error: "На сайте регистрируются только оптовые клиенты. Розничные покупки — в приложении «Косметичка»." }, { status: 400 });
+  }
   // «Скидка» (скидочная карта MAXMA) is never self-selected — it comes from 1C or an admin
   const priceType = ["retail", "wholesale", "big_wholesale"].includes(rawPriceType)
     ? rawPriceType

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
 
 type Option = { value: string; label: string; state: "current" | "available" | "request" | "pending" };
 type Info = {
@@ -27,8 +28,13 @@ export function PriceTypeSwitcher({ initial }: { initial: Info }) {
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // on the site for now only «Опт» / «Крупный опт» can be chosen (retail is in the app)
+  const options = SITE_RETAIL_ENABLED
+    ? info.roleOptions
+    : info.roleOptions.filter((o) => o.value === "wholesale" || o.value === "big_wholesale" || o.state === "current");
+
   // hidden only when there is nothing to choose
-  if (info.roleOptions.length < 2) return null;
+  if (options.length < 2) return null;
 
   async function pick(o: Option) {
     if (busy || o.state === "current" || o.state === "pending") return;
@@ -74,7 +80,7 @@ export function PriceTypeSwitcher({ initial }: { initial: Info }) {
       <p className="mt-1 text-sm text-slate-500">Сейчас: {info.priceTypeLabel}</p>
 
       <div className="mt-4 space-y-2">
-        {info.roleOptions.map((o) => (
+        {options.map((o) => (
           <button
             key={o.value}
             type="button"
