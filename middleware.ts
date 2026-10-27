@@ -82,6 +82,30 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // --- Staff tests (/academy, test.kosmetichka-opt.ru): any staff account ---
+  if (pathname.startsWith("/academy") && pathname !== "/academy/login") {
+    const token = request.cookies.get("admin_token")?.value;
+    // Внешний адрес берём из заголовков nginx: сам Next за прокси знает только 127.0.0.1
+    const toLogin = () => {
+      const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+      const proto = request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "");
+      let url: URL;
+      try {
+        url = new URL("/academy/login", host ? `${proto}://${host}` : request.url);
+      } catch {
+        url = new URL("/academy/login", request.url); // кривой Host — не падаем
+      }
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    };
+    if (!token) return toLogin();
+    try {
+      await jwtVerify(token, secret);
+    } catch {
+      return toLogin();
+    }
+  }
+
   // --- Customer routes: require auth_token ---
   // /catalog is intentionally public — guests can browse with retail prices
   const customerRoutes = ["/orders", "/profile", "/wishlist"];
@@ -109,6 +133,8 @@ export const config = {
     "/api/admin/:path*",
     "/admin/:path*",
     "/picker/:path*",
+    "/academy",
+    "/academy/:path*",
     "/orders/:path*",
     "/orders",
     "/profile",
