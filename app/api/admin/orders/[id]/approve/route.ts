@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
+import { notifyOrderStatus } from "@/lib/notify";
 
 type Props = {
   params: Promise<{
@@ -46,6 +47,8 @@ export async function POST(request: Request, { params }: Props) {
       },
     }),
   ]);
+
+  void notifyOrderStatus(orderId, toStatus);
 
   return NextResponse.json({ success: true, order: updatedOrder });
 }

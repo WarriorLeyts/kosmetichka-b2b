@@ -14,6 +14,7 @@ const SELECT = {
   city: true,
   address: true,
   priceType: true,
+  pushPromo: true,
   wholesaleAccess: true,
   roleRequest: true,
   roleRequestStatus: true,
@@ -81,6 +82,12 @@ export async function PATCH(request: Request) {
     }
   }
 
+  // «Акции и новости» toggle alone: { pushPromo: true|false } without the rest of the form
+  if (typeof body?.pushPromo === "boolean" && Object.keys(body).length === 1) {
+    const customer = await prisma.customer.update({ where: { id }, data: { pushPromo: body.pushPromo }, select: SELECT });
+    return NextResponse.json({ success: true, customer });
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const data: any = { name, companyName, phone, email, city, address };
 
@@ -116,6 +123,8 @@ export async function DELETE(request: Request) {
   const random = await bcrypt.hash(crypto.randomUUID(), 10);
   await prisma.$transaction([
     prisma.wishlistItem.deleteMany({ where: { customerId: id } }),
+    prisma.pushToken.deleteMany({ where: { customerId: id } }),
+    prisma.notification.deleteMany({ where: { customerId: id } }),
     ...(stored?.email ? [prisma.passwordResetToken.deleteMany({ where: { email: stored.email } })] : []),
     prisma.customer.update({
       where: { id },

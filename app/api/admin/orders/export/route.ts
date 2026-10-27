@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { cmlComment, cmlHasLoyalty, cmlItemDiscounts, cmlItemSum } from "@/lib/commerceml";
 import { ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
 import { onOrderStatus } from "@/lib/maxmaOrders";
+import { notifyOrderStatus } from "@/lib/notify";
 
 function xml(value: any) {
   return String(value ?? "")
@@ -178,6 +179,7 @@ export async function POST() {
     ]);
     // MAXMA: confirm promo-code / bonus orders via the queue (tasks saved now, calls in the background)
     await onOrderStatus(orderIds, "exported", { background: true });
+    void notifyOrderStatus(orderIds.filter((id) => statusByOrderId.get(id) !== "exported"), "exported");
   }
 
   return new NextResponse(xmlFile, {

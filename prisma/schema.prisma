@@ -133,6 +133,8 @@ model Customer {
   /// "pending" | "rejected"
   roleRequestStatus String?
   roleRequestedAt   DateTime?
+  /// Consent to promo push notifications (акции); order / bonus / chat notifications are always sent
+  pushPromo         Boolean   @default(false)
 
   isActive   Boolean @default(true)
   /// MAXMA loyalty card number linked in the app (confirmed by an SMS code from MAXMA)
@@ -143,6 +145,8 @@ model Customer {
 
   orders        Order[]
   wishlistItems WishlistItem[]
+  notifications Notification[]
+  pushTokens    PushToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -464,4 +468,46 @@ model AppError {
   lastAt    DateTime @default(now())
 
   @@index([lastAt(sort: Desc)])
+}
+
+/// In-app notifications («Уведомления» in the app, bell dot); also sent as push to the customer's phones
+model Notification {
+  id         Int       @id @default(autoincrement())
+  customerId Int
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  kind       String // "order" | "chat" | "restock" | "bonus" | "role" | "promo"
+  title      String
+  body       String    @db.Text
+  /// in-app route to open on tap, e.g. "/order/12", "/product/5"
+  link       String?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([customerId, createdAt(sort: Desc)])
+}
+
+/// Expo push tokens of the customer's devices (one per installed app)
+model PushToken {
+  id         Int      @id @default(autoincrement())
+  token      String   @unique
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  platform   String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([customerId])
+}
+
+/// Promo push campaigns sent from the admin panel («Рассылки»)
+model PushBroadcast {
+  id         Int      @id @default(autoincrement())
+  title      String
+  body       String   @db.Text
+  audience   String // "all" | "retail" | "wholesale" | "big_wholesale"
+  link       String?
+  recipients Int      @default(0)
+  devices    Int      @default(0)
+  userId     Int?
+  createdAt  DateTime @default(now())
 }
