@@ -443,6 +443,7 @@ model AcademyAttempt {
 
   @@index([testId, finishedAt])
   @@index([userId, finishedAt])
+}
 
 /// Errors and crashes reported by the mobile apps (POST /api/app-errors), grouped by `hash`
 model AppError {
