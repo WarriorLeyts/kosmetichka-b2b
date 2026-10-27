@@ -14,7 +14,8 @@ async function getUser() {
   try {
     const { payload } = await jwtVerify(token, getSecret());
     const role = payload.role as string;
-    if (!["admin", "manager"].includes(role)) return null;
+    // сборщик читает категории для каталога в карточке заказа
+    if (!["admin", "manager", "picker"].includes(role)) return null;
     return { id: payload.id as number, role };
   } catch {
     return null;

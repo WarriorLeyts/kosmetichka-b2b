@@ -36,7 +36,12 @@ export async function middleware(request: NextRequest) {
 
     try {
       const { payload } = await jwtVerify(token, secret);
-      if (payload.role !== "admin" && payload.role !== "manager") {
+      // Сборщику — каталог в карточке заказа (поиск товаров и категории, только чтение)
+      const pickerReadable =
+        request.method === "GET" &&
+        (pathname === "/api/admin/products/search" || pathname === "/api/admin/categories");
+      const allowed = payload.role === "admin" || payload.role === "manager" || (pickerReadable && payload.role === "picker");
+      if (!allowed) {
         return NextResponse.json({ error: "Недостаточно прав" }, { status: 403 });
       }
     } catch {

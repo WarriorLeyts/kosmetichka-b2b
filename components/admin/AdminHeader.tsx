@@ -11,7 +11,11 @@ export function AdminHeader({ user }: { user: any }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [orderBadge, setOrderBadge] = useState(0);
 
+  const canSeeOrders = (user?.role === "admin" || user?.role === "manager") && pathname !== "/admin/login";
+
   useEffect(() => {
+    // Опрос только у тех, кому счётчик доступен: иначе каждые 30 с летел 401/403
+    if (!canSeeOrders) return;
     async function fetchCount() {
       try {
         const res = await fetch("/api/admin/orders/count");
@@ -24,7 +28,7 @@ export function AdminHeader({ user }: { user: any }) {
     fetchCount();
     const interval = setInterval(fetchCount, 30_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [canSeeOrders]);
 
   if (pathname === "/admin/login") {
     return null;
