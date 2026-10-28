@@ -68,5 +68,17 @@ export const ORDER_STATUS_ACTIONS: Record<
   ],
 };
 
-/** Until the order is ready for payment the customer may change it: quantities, remove, add products. */
-export const CUSTOMER_EDITABLE_STATUSES = ["pending", "approved", "assembly", "consultation"];
+/**
+ * When the customer may change the order himself (quantities, remove, add products): before the
+ * picker starts («Ожидание», «Подтверждён») and on «Консультация». Not during «Сборка» (the picker
+ * is collecting — changes go through the manager in the chat), not once it is «Заказ оформлен».
+ */
+export const CUSTOMER_EDITABLE_STATUSES = ["pending", "approved", "consultation"];
+
+/** Why the customer can't change the order now (shown instead of «Изменить»), or null. */
+export function customerEditBlockedReason(status: string): string | null {
+  if (CUSTOMER_EDITABLE_STATUSES.includes(status)) return null;
+  if (status === "assembly") return "Заказ собирается — изменить его сейчас можно только через менеджера в чате заказа.";
+  if (status === "payment" || status === "exported") return "Заказ уже оформлен — изменить его нельзя. Напишите менеджеру в чате заказа.";
+  return "Этот заказ изменить нельзя.";
+}

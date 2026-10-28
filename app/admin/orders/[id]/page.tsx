@@ -94,6 +94,7 @@ export default async function AdminOrderPage({
     createdAt: order.createdAt.toISOString(),
     updatedAt: undefined,
     customerConfirmed: order.customerConfirmed,
+    confirmRequestedAt: order.confirmRequestedAt ? order.confirmRequestedAt.toISOString() : null,
     pickerId: order.pickerId ?? null,
     picker: order.picker ?? null,
     customer: {

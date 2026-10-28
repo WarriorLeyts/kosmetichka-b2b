@@ -50,7 +50,7 @@ const put = (body: object) => PUT(new Request("https://x/api/orders/7/items", { 
 
 beforeEach(() => {
   vi.clearAllMocks();
-  db.order.findUnique.mockResolvedValue(order("assembly"));
+  db.order.findUnique.mockResolvedValue(order("consultation"));
 });
 
 describe("customer edits an order", () => {
@@ -59,6 +59,20 @@ describe("customer edits an order", () => {
     const r = await put({ items: [{ id: 1, quantity: 3 }] });
     expect(r.status).toBe(400);
     expect(db.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("refused while the picker is collecting it (assembly) — through the manager", async () => {
+    db.order.findUnique.mockResolvedValue(order("assembly"));
+    const r = await put({ items: [{ id: 1, quantity: 3 }] });
+    expect(r.status).toBe(400);
+    expect((await r.json()).error).toContain("собирается");
+  });
+
+  it("the customer's own change clears the pending confirmation of the manager's changes", async () => {
+    db.order.findUnique.mockResolvedValue({ ...order("consultation"), confirmRequestedAt: new Date() });
+    db.order.update = vi.fn(async () => ({}));
+    await put({ items: [{ id: 1, quantity: 3 }] });
+    expect(db.order.update).toHaveBeenCalledWith({ where: { id: 7 }, data: { confirmRequestedAt: null, customerConfirmed: true } });
   });
 
   it("someone else's order → 403", async () => {

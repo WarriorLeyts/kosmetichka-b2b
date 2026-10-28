@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
   const orders = await prisma.order.findMany({
     where: { id: { in: orderIds } },
-    select: { id: true, status: true },
+    select: { id: true, status: true, confirmRequestedAt: true },
   });
 
   const updated: number[] = [];
@@ -29,7 +29,8 @@ export async function POST(request: NextRequest) {
   // Separate eligible orders from those whose status transition is not allowed
   for (const order of orders) {
     const allowed = ORDER_STATUS_TRANSITIONS[order.status] ?? [];
-    if (!allowed.includes(toStatus)) {
+    // «Заказ оформлен» waits for the customer's confirmation of staff changes
+    if (!allowed.includes(toStatus) || (toStatus === "payment" && order.confirmRequestedAt)) {
       skipped.push(order.id);
     } else {
       updated.push(order.id);

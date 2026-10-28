@@ -162,8 +162,8 @@ export async function PUT(request: NextRequest, { params }: Props) {
   if (changed.length > 0) {
     notifyLater(order.customerId, {
       kind: "order",
-      title: `Менеджер изменил заказ №${orderId}`,
-      body: summarizeRows(changed, 5),
+      title: `Менеджер изменил заказ №${orderId} — подтвердите`,
+      body: `${summarizeRows(changed, 5)}\nОткройте заказ и нажмите «Подтвердить».`,
       link: `/order/${orderId}`,
     });
   }
@@ -178,6 +178,8 @@ export async function PUT(request: NextRequest, { params }: Props) {
       ...(loyaltyOrder ? {} : { total: sums.total }),
       customerConfirmed: false,
       changesSnapshot: snapshot,
+      // the customer must confirm these changes before the order can become «Заказ оформлен»
+      ...(changed.length > 0 ? { confirmRequestedAt: new Date(), confirmReminders: 0 } : {}),
     },
   });
   const loyalty = loyaltyOrder ? await recalcOrderLoyalty(orderId) : null;

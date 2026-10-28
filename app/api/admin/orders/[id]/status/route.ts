@@ -5,6 +5,7 @@ import { sendMail } from "@/lib/mail";
 import { onOrderStatus } from "@/lib/maxmaOrders";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
 import { notifyOrderStatus } from "@/lib/notify";
+import { AWAITING_CONFIRMATION, isAwaiting } from "@/lib/orderConfirm";
 
 export async function POST(
   request: Request,
@@ -26,6 +27,11 @@ export async function POST(
       { error: `Нельзя перейти из "${order.status}" в "${toStatus}"` },
       { status: 400 }
     );
+  }
+
+  // «Заказ оформлен» only after the customer confirmed the staff changes — no way around it
+  if (toStatus === "payment" && isAwaiting(order)) {
+    return NextResponse.json({ error: AWAITING_CONFIRMATION, code: "awaiting_confirmation" }, { status: 409 });
   }
 
   // If moving back to assembly (or reverting from assembly) — delete existing checks so picker re-checks

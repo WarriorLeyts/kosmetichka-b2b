@@ -6,7 +6,7 @@ import { orderSums, priceOrderItems, type PricedLine } from "@/lib/orderPricing"
 import { minOrderFor } from "@/lib/pricing";
 import { isMaxmaOrder, loyaltyResponse, recalcOrderLoyalty } from "@/lib/maxmaOrders";
 import { logOrderChanges, summarizeRows } from "@/lib/orderChanges";
-import { CUSTOMER_EDITABLE_STATUSES } from "@/lib/orderStatus";
+import { CUSTOMER_EDITABLE_STATUSES, customerEditBlockedReason } from "@/lib/orderStatus";
 
 /**
  * Customer edits their order (app / site): change quantities, remove lines, add products.
@@ -34,10 +34,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (order.customerId !== customer.id) return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
 
   if (!CUSTOMER_EDITABLE_STATUSES.includes(order.status)) {
-    return NextResponse.json(
-      { error: "Заказ уже оформлен — изменить его нельзя. Напишите менеджеру в чате заказа." },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: customerEditBlockedReason(order.status) }, { status: 400 });
   }
 
   const body = (await request.json().catch(() => ({}))) as {
@@ -137,6 +134,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
   const after = await prisma.orderItem.findMany({ where: { orderId }, orderBy: { id: "asc" } });
   const rows = await logOrderChanges(orderId, "customer", null, order.items, after);
+  // the customer saw the manager's changes and answered with his own: no separate confirmation needed
+  if (rows.length > 0 && order.confirmRequestedAt) {
+    await prisma.order.update({ where: { id: orderId }, data: { confirmRequestedAt: null, customerConfirmed: true } }).catch(() => {});
+  }
   if (rows.length > 0) {
     // staff see it at once: in the order chat (admin site, Team app, Bitrix) as a message from the customer
     await prisma.orderMessage

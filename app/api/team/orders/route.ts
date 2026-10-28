@@ -78,6 +78,7 @@ export async function GET(request: NextRequest) {
         bonusesCollected: true,
         createdAt: true,
         pickerId: true,
+        confirmRequestedAt: true,
         customer: { select: { name: true, companyName: true, phone: true } },
         _count: { select: { items: true } },
         items: {
@@ -109,6 +110,8 @@ export async function GET(request: NextRequest) {
       bonusesCollected: o.bonusesCollected,
       createdAt: o.createdAt.toISOString(),
       pickerId: o.pickerId,
+      /** waiting for the customer to confirm staff changes */
+      awaitingConfirmation: !!o.confirmRequestedAt,
       customer: o.customer,
       itemsCount: o._count.items,
       checkedCount: o.items.filter((i) => i.check).length,

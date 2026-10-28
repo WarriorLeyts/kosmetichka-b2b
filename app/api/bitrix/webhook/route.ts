@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { logOrderChanges } from "@/lib/orderChanges";
+import { logOrderChanges, summarizeRows } from "@/lib/orderChanges";
+import { requestConfirmation } from "@/lib/orderConfirm";
 import { isMaxmaOrder, loyaltyWarning, promoWarning, recalcOrderLoyalty } from "@/lib/maxmaOrders";
-import { notifyOrderStatus } from "@/lib/notify";
+import { notifyLater, notifyOrderStatus } from "@/lib/notify";
 
 // Битрикс24 вызывает этот endpoint когда сделка переходит в стадию "Оплачен"
 // Настройка: CRM → Автоматизация → стадия "Оплачен" → Робот "Вебхук"
@@ -154,7 +155,17 @@ export async function POST(request: NextRequest) {
         if (itemsChanged) {
           // quantities / prices changed by the manager in Bitrix24 — logged so the customer sees them
           const after = await prisma.orderItem.findMany({ where: { orderId } });
-          await logOrderChanges(orderId, "staff", "Битрикс24", order.items, after);
+          const rows = await logOrderChanges(orderId, "staff", "Битрикс24", order.items, after);
+          // the customer has to confirm these changes before the order is «Заказ оформлен»
+          if (rows.length > 0) {
+            await requestConfirmation(orderId);
+            notifyLater(order.customerId, {
+              kind: "order",
+              title: `Менеджер изменил заказ №${orderId} — подтвердите`,
+              body: `${summarizeRows(rows, 5)}\nОткройте заказ и нажмите «Подтвердить».`,
+              link: `/order/${orderId}`,
+            });
+          }
         }
 
         if (isMaxmaOrder(order)) {
@@ -182,16 +193,20 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Обновить статус и сохранить dealId ────────────────────────────────────
+  // Staff changes the customer hasn't confirmed yet: not «Заказ оформлен» but «Консультация» —
+  // the customer gets «подтвердите изменения», the order moves on after his confirmation.
+  const fresh = await prisma.order.findUnique({ where: { id: orderId }, select: { confirmRequestedAt: true } });
+  const toStatus = fresh?.confirmRequestedAt ? "consultation" : "payment";
   await prisma.order.update({
     where: { id: orderId },
     data: {
-      status: "payment",
+      status: toStatus,
       ...(dealId ? { bitrixDealId: dealId } : {}),
     },
   });
 
-  console.log(`[Bitrix webhook] Заказ №${orderId} → payment${dealId ? ` (deal ${dealId})` : ""}`);
-  if (order.status !== "payment") void notifyOrderStatus(orderId, "payment");
+  console.log(`[Bitrix webhook] Заказ №${orderId} → ${toStatus}${dealId ? ` (deal ${dealId})` : ""}${toStatus === "consultation" ? " — ждём подтверждения клиента" : ""}`);
+  if (order.status !== toStatus) void notifyOrderStatus(orderId, toStatus);
 
-  return NextResponse.json({ ok: true, orderId, status: "payment" });
+  return NextResponse.json({ ok: true, orderId, status: toStatus });
 }

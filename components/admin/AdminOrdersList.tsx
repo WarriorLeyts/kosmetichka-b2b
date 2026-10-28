@@ -35,6 +35,8 @@ type OrderRow = {
   items: { check: { status: string } | null }[];
   hasIssues: boolean;
   checkedCount: number;
+  /** staff changed the order, the customer hasn't confirmed yet */
+  awaitingConfirmation?: boolean;
 };
 
 export function AdminOrdersList({ orders }: { orders: OrderRow[] }) {
@@ -205,6 +207,11 @@ export function AdminOrdersList({ orders }: { orders: OrderRow[] }) {
                     {order.hasIssues && (
                       <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-bold text-orange-700">
                         ⚠ Проблемы
+                      </span>
+                    )}
+                    {order.awaitingConfirmation && (
+                      <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">
+                        ⏳ Ждём подтверждения клиента
                       </span>
                     )}
                     {order.status === "assembly" && order.checkedCount > 0 && (

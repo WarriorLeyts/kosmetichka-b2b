@@ -43,6 +43,7 @@ export async function GET(request: Request) {
         comment: true,
         createdAt: true,
         customerConfirmed: true,
+        confirmRequestedAt: true,
         changesSnapshot: true,
         items: {
           orderBy: { id: "asc" },
@@ -107,6 +108,8 @@ export async function GET(request: Request) {
       comment: o.comment,
       createdAt: o.createdAt.toISOString(),
       customerConfirmed: o.customerConfirmed,
+      /** the manager changed the order and waits for the customer's «Подтвердить» */
+      needsConfirm: !!o.confirmRequestedAt,
       changesSnapshot: o.changesSnapshot ?? null,
       items: o.items.map((item) => ({
         ...item,

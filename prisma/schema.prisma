@@ -198,6 +198,11 @@ model Order {
   bitrixDealId      Int?
   customerConfirmed Boolean  @default(false)
   changesSnapshot   Json?
+  /// Staff changed the items and wait for the customer to confirm: «Заказ оформлен» (payment) is
+  /// blocked until then. Cleared when the customer confirms or changes the order himself.
+  confirmRequestedAt DateTime?
+  /// Reminders already sent about that confirmation (push after 2 h and after 24 h)
+  confirmReminders   Int       @default(0)
 
   pickerId Int?
   picker   User? @relation("OrderPicker", fields: [pickerId], references: [id])
@@ -212,6 +217,7 @@ model Order {
   @@index([customerId])
   @@index([status])
   @@index([createdAt]) // used in admin order lists and 1C export ordering
+  @@index([confirmRequestedAt]) // reminders: orders waiting for the customer's confirmation
 }
 
 model OrderItem {
