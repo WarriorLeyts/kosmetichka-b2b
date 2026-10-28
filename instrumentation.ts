@@ -7,4 +7,9 @@ export async function register() {
     const { startMaxmaQueueWorker } = await import("./lib/maxmaQueue");
     startMaxmaQueueWorker(60_000);
   }
+  // Reminders to customers who haven't confirmed the manager's changes (2 h, 24 h)
+  if (process.env.NEXT_RUNTIME === "nodejs" && process.env.CONFIRM_REMINDERS !== "off") {
+    const { startConfirmReminders } = await import("./lib/orderConfirm");
+    startConfirmReminders();
+  }
 }

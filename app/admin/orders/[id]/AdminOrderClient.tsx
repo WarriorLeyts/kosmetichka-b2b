@@ -70,6 +70,8 @@ type Order = {
   bonusesCollected?: number;
   comment: string | null;
   customerConfirmed: boolean;
+  /** staff changed the items and wait for the customer's confirmation since then (ISO) — «Заказ оформлен» is blocked */
+  confirmRequestedAt?: string | null;
   pickerId: number | null;
   picker: { id: number; name: string } | null;
   customer: {
@@ -1070,17 +1072,19 @@ export default function AdminOrderClient({
         </div>
       )}
 
-      {/* Customer confirmed badge */}
-      {order.customerConfirmed && (
+      {/* Customer's confirmation of staff changes */}
+      {order.confirmRequestedAt ? (
+        <div className="no-print mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          <div className="font-bold">⏳ Ждём подтверждения клиента — с {atShort(order.confirmRequestedAt)}</div>
+          <div className="mt-0.5 text-amber-700">
+            Состав заказа изменён. «Заказ оформлен» станет доступен, когда клиент нажмёт «Подтвердить» (или сам изменит заказ). Клиенту придёт напоминание через 2 ч и через сутки.
+          </div>
+        </div>
+      ) : order.customerConfirmed && ["consultation", "assembly", "pending", "approved"].includes(order.status) ? (
         <div className="no-print mb-4 rounded-xl bg-green-50 border border-green-200 p-3 text-sm text-green-700 flex items-center gap-2">
-          ✅ Клиент подтвердил замены
+          ✅ Клиент подтвердил изменения
         </div>
-      )}
-      {!order.customerConfirmed && order.status === "consultation" && (
-        <div className="no-print mb-4 rounded-xl bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-700 flex items-center gap-2">
-          ⏳ Ожидание подтверждения клиента
-        </div>
-      )}
+      ) : null}
 
       {/* Status Pipeline */}
       {order.status !== "cancelled" && (
@@ -1146,21 +1150,26 @@ export default function AdminOrderClient({
       {/* Status action buttons */}
       {(transitions.length > 0 || ["pending", "approved", "assembly"].includes(order.status)) && (
         <div className="no-print mb-6 flex flex-wrap gap-3">
-          {transitions.map((t) => (
-            <button
-              key={t.to}
-              onClick={() => {
-                if (t.to === "cancelled") {
-                  if (!confirm("Отменить заказ? Это действие необратимо.")) return;
-                }
-                changeStatus(t.to);
-              }}
-              disabled={changingStatus}
-              className={`rounded-xl px-5 py-2.5 text-sm font-bold transition-all disabled:opacity-50 ${t.style}`}
-            >
-              {changingStatus ? "..." : t.label}
-            </button>
-          ))}
+          {transitions.map((t) => {
+            // «Заказ оформлен» only after the customer confirmed the changes
+            const blocked = t.to === "payment" && !!order.confirmRequestedAt;
+            return (
+              <button
+                key={t.to}
+                onClick={() => {
+                  if (t.to === "cancelled") {
+                    if (!confirm("Отменить заказ? Это действие необратимо.")) return;
+                  }
+                  changeStatus(t.to);
+                }}
+                disabled={changingStatus || blocked}
+                title={blocked ? "Ждём подтверждения клиента" : undefined}
+                className={`rounded-xl px-5 py-2.5 text-sm font-bold transition-all disabled:opacity-50 ${blocked ? "cursor-not-allowed" : ""} ${t.style}`}
+              >
+                {changingStatus ? "..." : blocked ? `${t.label} · ждём клиента` : t.label}
+              </button>
+            );
+          })}
           {["pending", "approved", "assembly"].includes(order.status) && (
             <button
               onClick={selfAssemble}

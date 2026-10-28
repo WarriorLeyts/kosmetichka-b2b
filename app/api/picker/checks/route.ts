@@ -132,7 +132,9 @@ export async function POST(request: Request) {
     return true;
   });
 
-  const newStatus = hasIssues ? "consultation" : "payment";
+  // all OK but the customer hasn't confirmed staff changes yet → the manager waits for him (consultation)
+  const waiting = await prisma.order.findUnique({ where: { id: orderId }, select: { confirmRequestedAt: true } });
+  const newStatus = hasIssues || waiting?.confirmRequestedAt ? "consultation" : "payment";
 
   await prisma.order.update({
     where: { id: orderId },

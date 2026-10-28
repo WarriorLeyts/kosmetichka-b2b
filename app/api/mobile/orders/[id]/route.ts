@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../../_auth";
 import { orderChanges } from "@/lib/orderChanges";
-import { CUSTOMER_EDITABLE_STATUSES } from "@/lib/orderStatus";
+import { CUSTOMER_EDITABLE_STATUSES, customerEditBlockedReason } from "@/lib/orderStatus";
 
 // GET /api/mobile/orders/:id — one order of the logged-in customer
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -35,6 +35,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     customerConfirmed: order.customerConfirmed,
     /** the customer may still change the order (quantities, remove, add) */
     editable: CUSTOMER_EDITABLE_STATUSES.includes(order.status),
+    /** why not (shown instead of «Изменить»), for an active order */
+    editBlockedReason: ["assembly", "payment"].includes(order.status) ? customerEditBlockedReason(order.status) : null,
+    /** the manager changed the order and waits for «Подтвердить» (until then it can't be «Заказ оформлен») */
+    needsConfirm: !!order.confirmRequestedAt,
+    confirmRequestedAt: order.confirmRequestedAt ? order.confirmRequestedAt.toISOString() : null,
     status: order.status,
     total: order.total,
     promoCode: order.promoCode ?? null,

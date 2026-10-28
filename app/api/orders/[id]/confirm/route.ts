@@ -33,22 +33,23 @@ export async function POST(
     return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
   }
 
-  // Confirmation only makes sense in "consultation" status
-  if (order.status !== "consultation") {
-    return NextResponse.json(
-      { error: "Подтверждение недоступно для текущего статуса заказа" },
-      { status: 400 }
-    );
-  }
-
-  if (order.customerConfirmed) {
-    return NextResponse.json({ success: true }); // idempotent
+  // Confirmation: the staff changed the order and wait for the customer (confirmRequestedAt), or the
+  // old «consultation» flow. Not once the order is «Заказ оформлен» / done / cancelled.
+  const waiting = !!order.confirmRequestedAt;
+  const legacy = order.status === "consultation" && !order.customerConfirmed;
+  if (["payment", "exported", "cancelled"].includes(order.status) || (!waiting && !legacy)) {
+    if (order.customerConfirmed) return NextResponse.json({ success: true }); // idempotent
+    return NextResponse.json({ error: "Подтверждение недоступно для текущего статуса заказа" }, { status: 400 });
   }
 
   await prisma.order.update({
     where: { id: orderId },
-    data: { customerConfirmed: true },
+    data: { customerConfirmed: true, confirmRequestedAt: null },
   });
+  // staff see it at once in the order chat (admin, Team, Bitrix); «Заказ оформлен» is now available
+  await prisma.orderMessage
+    .create({ data: { orderId, source: "customer", text: "✅ Клиент подтвердил изменения в заказе" } })
+    .catch(() => {});
 
   return NextResponse.json({ success: true });
 }

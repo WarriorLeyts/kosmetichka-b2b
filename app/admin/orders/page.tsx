@@ -97,6 +97,7 @@ export default async function AdminOrdersPage({
         status: true,
         total: true,
         createdAt: true,
+        confirmRequestedAt: true,
         customer: { select: { name: true, companyName: true, phone: true } },
         _count: { select: { items: true } },
         items: {
@@ -251,6 +252,8 @@ export default async function AdminOrdersPage({
         orders={orders.map((order) => ({
           ...order,
           createdAt: order.createdAt.toISOString(),
+          awaitingConfirmation: !!order.confirmRequestedAt,
+          confirmRequestedAt: undefined,
           hasIssues: order.items.some((i) => {
             if (!i.check) return false;
             return parseCheckStatuses(i.check.status).some((s) => s !== "ok");

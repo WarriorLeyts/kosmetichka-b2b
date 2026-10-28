@@ -97,11 +97,15 @@ export async function GET(
   // who changed which line (customer / staff) and what was removed
   const changes = await orderChanges(order.id, order.items);
 
-  const allowedTransitions = ORDER_STATUS_TRANSITIONS[order.status] ?? [];
-  const actions = (ORDER_STATUS_ACTIONS[order.status] ?? []).map((a) => ({
-    label: a.label,
-    to: a.to,
-  }));
+  // «Заказ оформлен» waits for the customer's confirmation of staff changes — the button is not offered
+  const awaiting = !!order.confirmRequestedAt;
+  const allowedTransitions = (ORDER_STATUS_TRANSITIONS[order.status] ?? []).filter((t) => !(awaiting && t === "payment"));
+  const actions = (ORDER_STATUS_ACTIONS[order.status] ?? [])
+    .filter((a) => !(awaiting && a.to === "payment"))
+    .map((a) => ({
+      label: a.label,
+      to: a.to,
+    }));
 
   return NextResponse.json({
     order: {
@@ -125,6 +129,9 @@ export async function GET(
       comment: order.comment ?? null,
       customerConfirmed: order.customerConfirmed,
       changesSnapshot: order.changesSnapshot ?? null,
+      /** staff changed the order; waiting for the customer's «Подтвердить» since then — «Заказ оформлен» is blocked */
+      awaitingConfirmationSince: order.confirmRequestedAt ? order.confirmRequestedAt.toISOString() : null,
+      confirmReminders: order.confirmReminders,
       oneCExportedAt: order.oneCExportedAt ? order.oneCExportedAt.toISOString() : null,
       bitrixDealId: order.bitrixDealId ?? null,
       createdAt: order.createdAt.toISOString(),
