@@ -41,9 +41,10 @@ export async function PUT(request: NextRequest, { params }: Props) {
   });
   if (!order) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
-  if (!["pending", "consultation", "assembly"].includes(order.status)) {
+  // the manager changes the order only while collecting it («Сборка»)
+  if (order.status !== "assembly") {
     return NextResponse.json(
-      { error: "Редактирование доступно только для заказов в ожидании, консультации или сборке" },
+      { error: "Менять состав можно только во время сборки. Нажмите «Собрать заказ» или «Вернуть на сборку»." },
       { status: 400 }
     );
   }
@@ -190,8 +191,8 @@ export async function PUT(request: NextRequest, { params }: Props) {
       .catch((e) => console.error("[order-changes] chat:", e instanceof Error ? e.message : e));
     notifyLater(order.customerId, {
       kind: "order",
-      title: `Менеджер изменил заказ №${orderId} — подтвердите`,
-      body: `${summarizeRows(changed, 5)}\nОткройте заказ и нажмите «Подтвердить».`,
+      title: `Менеджер изменил заказ №${orderId}`,
+      body: summarizeRows(changed, 5),
       link: `/order/${orderId}`,
     });
   }
@@ -206,8 +207,7 @@ export async function PUT(request: NextRequest, { params }: Props) {
       ...(loyaltyOrder ? {} : { total: sums.total }),
       customerConfirmed: false,
       changesSnapshot: snapshot,
-      // the customer must confirm these changes before the order can become «Заказ оформлен»
-      ...(changed.length > 0 ? { confirmRequestedAt: new Date(), confirmReminders: 0 } : {}),
+      // the customer confirms the whole order when it is sent to him «На проверку»
     },
   });
   const loyalty = loyaltyOrder ? await recalcOrderLoyalty(orderId) : null;

@@ -1,4 +1,4 @@
-/** «Заказ оформлен» (payment) is refused while the customer hasn't confirmed staff changes. */
+/** «Заказ оформлен» (payment) only after the customer confirmed the order sent «На проверке». */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/auth", () => ({ requireAdmin: vi.fn(async () => ({ id: 1, role: "manager" })) }));
@@ -31,8 +31,26 @@ describe("status → payment", () => {
   });
 
   it("allowed once confirmed", async () => {
-    db.order.findUnique.mockResolvedValue({ id: 3, status: "consultation", confirmRequestedAt: null });
+    db.order.findUnique.mockResolvedValue({ id: 3, status: "consultation", confirmRequestedAt: null, customerConfirmed: true });
     expect((await call("payment")).status).toBe(200);
+  });
+
+  it("blocked when the customer hasn't confirmed the order yet", async () => {
+    db.order.findUnique.mockResolvedValue({ id: 3, status: "consultation", confirmRequestedAt: null, customerConfirmed: false });
+    expect((await call("payment")).status).toBe(409);
+  });
+
+  it("not straight from «Сборка»: first «На проверке»", async () => {
+    db.order.findUnique.mockResolvedValue({ id: 3, status: "assembly", confirmRequestedAt: null, customerConfirmed: true });
+    expect((await call("payment")).status).toBe(400);
+  });
+
+  it("«На проверке» asks the customer to confirm", async () => {
+    db.order.findUnique.mockResolvedValue({ id: 3, status: "assembly", confirmRequestedAt: null, customerConfirmed: true });
+    expect((await call("consultation")).status).toBe(200);
+    const data = (db.order.update.mock.calls[0] as unknown as [{ data: Record<string, unknown> }])[0].data;
+    expect(data.confirmRequestedAt).toBeInstanceOf(Date);
+    expect(data.customerConfirmed).toBe(false);
   });
 
   it("other statuses are not blocked (e.g. cancel)", async () => {

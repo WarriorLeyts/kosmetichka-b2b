@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ORDER_STATUS_TRANSITIONS } from "@/lib/orderStatus";
 import { onOrderStatus } from "@/lib/maxmaOrders";
 import { notifyOrderStatus } from "@/lib/notify";
+import { confirmRequest, paymentBlocked } from "@/lib/orderConfirm";
 
 export async function POST(request: NextRequest) {
   const user = await requireAdmin();
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
 
   const orders = await prisma.order.findMany({
     where: { id: { in: orderIds } },
-    select: { id: true, status: true, confirmRequestedAt: true },
+    select: { id: true, status: true, confirmRequestedAt: true, customerConfirmed: true },
   });
 
   const updated: number[] = [];
@@ -29,8 +30,8 @@ export async function POST(request: NextRequest) {
   // Separate eligible orders from those whose status transition is not allowed
   for (const order of orders) {
     const allowed = ORDER_STATUS_TRANSITIONS[order.status] ?? [];
-    // «Заказ оформлен» waits for the customer's confirmation of staff changes
-    if (!allowed.includes(toStatus) || (toStatus === "payment" && order.confirmRequestedAt)) {
+    // «Заказ оформлен» waits for the customer's confirmation of the order
+    if (!allowed.includes(toStatus) || (toStatus === "payment" && paymentBlocked(order))) {
       skipped.push(order.id);
     } else {
       updated.push(order.id);
@@ -42,7 +43,11 @@ export async function POST(request: NextRequest) {
     await prisma.$transaction([
       prisma.order.updateMany({
         where: { id: { in: updated } },
-        data: { status: toStatus },
+        data: {
+          status: toStatus,
+          ...(toStatus === "consultation" ? confirmRequest() : {}),
+          ...(["assembly", "pending", "approved"].includes(toStatus) ? { confirmRequestedAt: null, customerConfirmed: false } : {}),
+        },
       }),
       prisma.orderStatusLog.createMany({
         data: updated.map((orderId) => ({

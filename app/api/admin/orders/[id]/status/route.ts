@@ -5,7 +5,7 @@ import { sendMail } from "@/lib/mail";
 import { onOrderStatus } from "@/lib/maxmaOrders";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
 import { notifyOrderStatus } from "@/lib/notify";
-import { AWAITING_CONFIRMATION, isAwaiting } from "@/lib/orderConfirm";
+import { AWAITING_CONFIRMATION, confirmRequest, paymentBlocked } from "@/lib/orderConfirm";
 
 export async function POST(
   request: Request,
@@ -29,8 +29,8 @@ export async function POST(
     );
   }
 
-  // «Заказ оформлен» only after the customer confirmed the staff changes — no way around it
-  if (toStatus === "payment" && isAwaiting(order)) {
+  // «Заказ оформлен» only after the customer confirmed the order — no way around it
+  if (toStatus === "payment" && paymentBlocked(order)) {
     return NextResponse.json({ error: AWAITING_CONFIRMATION, code: "awaiting_confirmation" }, { status: 409 });
   }
 
@@ -54,6 +54,10 @@ export async function POST(
       data: {
         status: toStatus,
         ...(resetConfirm ? { customerConfirmed: false } : {}),
+        // «На проверке»: the customer is asked to check and confirm the collected order
+        ...(toStatus === "consultation" ? confirmRequest() : {}),
+        // back to the manager (assembly / earlier): nothing to confirm until it is sent again
+        ...(toStatus === "assembly" || toStatus === "pending" || toStatus === "approved" ? { confirmRequestedAt: null } : {}),
       },
     }),
     prisma.orderStatusLog.create({

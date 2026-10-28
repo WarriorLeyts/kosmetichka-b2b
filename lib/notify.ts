@@ -97,7 +97,7 @@ export function notifyLater(customerIds: number | number[], msg: NotifyMessage):
 const STATUS_TEXT: Record<string, (id: number) => { title: string; body: string }> = {
   approved: (id) => ({ title: `Заказ №${id} подтверждён`, body: "Менеджер подтвердил заказ, скоро начнём сборку." }),
   assembly: (id) => ({ title: `Заказ №${id} собирается`, body: "Собираем ваш заказ." }),
-  consultation: (id) => ({ title: `Нужно уточнение по заказу №${id}`, body: "Менеджер свяжется с вами или напишет в чате заказа." }),
+  consultation: (id) => ({ title: `Проверьте заказ №${id}`, body: "Заказ собран. Проверьте состав и изменения и нажмите «Подтвердить заказ»." }),
   payment: (id) => ({ title: `Заказ №${id} оформлен`, body: "Заказ собран и оформлен. Подробности — в заказе." }),
   exported: (id) => ({ title: `Заказ №${id} выполнен`, body: "Спасибо за покупку!" }),
   cancelled: (id) => ({ title: `Заказ №${id} отменён`, body: "Если это ошибка, напишите менеджеру в чате заказа." }),

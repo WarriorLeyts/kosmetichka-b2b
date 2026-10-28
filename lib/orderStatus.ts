@@ -8,7 +8,7 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: "Ожидание",
   approved: "Подтверждён",
   assembly: "Сборка",
-  consultation: "Консультация",
+  consultation: "На проверке",
   payment: "Заказ оформлен",
   exported: "Выгружен в 1С",
   cancelled: "Отменён",
@@ -19,7 +19,7 @@ export const ORDER_STATUS_LABELS_CUSTOMER: Record<string, string> = {
   pending: "Ожидает подтверждения",
   approved: "Подтверждён",
   assembly: "Сборка",
-  consultation: "На консультации",
+  consultation: "На проверке",
   payment: "Заказ оформлен",
   exported: "Выполнен",
   cancelled: "Отменён",
@@ -31,8 +31,9 @@ export const ORDER_STATUS_LABELS_CUSTOMER: Record<string, string> = {
  */
 export const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   pending: ["assembly", "cancelled"],
-  approved: ["assembly", "payment", "cancelled"], // legacy status
-  assembly: ["pending", "approved", "consultation", "payment", "cancelled"],
+  approved: ["assembly", "cancelled"], // legacy status
+  // «Заказ оформлен» only from «На проверке», after the customer confirmed the order
+  assembly: ["pending", "consultation", "cancelled"],
   consultation: ["assembly", "payment", "cancelled"],
   payment: ["assembly", "consultation", "exported", "cancelled"],
   exported: [],
@@ -49,17 +50,17 @@ export const ORDER_STATUS_ACTIONS: Record<
     { label: "✕ Отменить заказ", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
   approved: [
-    { label: "✓ Заказ оформлен", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
+  // the manager collects the order himself and changes it only here; then sends it to the customer to check
   assembly: [
-    { label: "💬 На консультацию", to: "consultation", style: "bg-orange-100 hover:bg-orange-200 text-orange-700" },
-    { label: "✓ Заказ оформлен", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
+    { label: "📨 Отправить клиенту на проверку", to: "consultation", style: "bg-orange-100 hover:bg-orange-200 text-orange-700" },
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
+  // «Заказ оформлен» is offered only after the customer confirmed the order
   consultation: [
     { label: "↩ Вернуть на сборку", to: "assembly", style: "bg-blue-100 hover:bg-blue-200 text-blue-700" },
-    { label: "✓ Подтвердить: заказ оформлен", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
+    { label: "✓ Заказ оформлен", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
   payment: [
@@ -68,16 +69,17 @@ export const ORDER_STATUS_ACTIONS: Record<
 };
 
 /**
- * When the customer may change the order himself (quantities, remove, add products): before the
- * picker starts («Ожидание», «Подтверждён») and on «Консультация». Not during «Сборка» (the picker
- * is collecting — changes go through the manager in the chat), not once it is «Заказ оформлен».
+ * When the customer may change the order himself (quantities, remove, add products): only before the
+ * manager starts collecting it («Ожидание», «Подтверждён»). During «Сборка» only the manager changes it,
+ * on «На проверке» the customer checks and confirms (or writes to the manager in the chat).
  */
-export const CUSTOMER_EDITABLE_STATUSES = ["pending", "approved", "consultation"];
+export const CUSTOMER_EDITABLE_STATUSES = ["pending", "approved"];
 
 /** Why the customer can't change the order now (shown instead of «Изменить»), or null. */
 export function customerEditBlockedReason(status: string): string | null {
   if (CUSTOMER_EDITABLE_STATUSES.includes(status)) return null;
-  if (status === "assembly") return "Заказ собирается — изменить его сейчас можно только через менеджера в чате заказа.";
+  if (status === "assembly") return "Менеджер собирает заказ — изменить его сейчас можно только через менеджера в чате заказа.";
+  if (status === "consultation") return "Заказ собран — проверьте его и подтвердите. Если что-то не так, напишите менеджеру в чате заказа.";
   if (status === "payment" || status === "exported") return "Заказ уже оформлен — изменить его нельзя. Напишите менеджеру в чате заказа.";
   return "Этот заказ изменить нельзя.";
 }

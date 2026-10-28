@@ -1156,7 +1156,7 @@ export default function AdminOrderClient({
         <div className="no-print mb-6 flex flex-wrap gap-3">
           {transitions.map((t) => {
             // «Заказ оформлен» only after the customer confirmed the changes
-            const blocked = t.to === "payment" && !!order.confirmRequestedAt;
+            const blocked = t.to === "payment" && (!!order.confirmRequestedAt || !order.customerConfirmed);
             return (
               <button
                 key={t.to}

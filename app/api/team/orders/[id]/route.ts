@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { orderChanges } from "@/lib/orderChanges";
+import { paymentBlocked } from "@/lib/orderConfirm";
 import { parseCheckStatuses } from "@/lib/checkStatus";
 import {
   ORDER_STATUS_ACTIONS,
@@ -101,8 +102,8 @@ export async function GET(
   // who changed which line (customer / staff) and what was removed
   const changes = await orderChanges(order.id, order.items);
 
-  // «Заказ оформлен» waits for the customer's confirmation of staff changes — the button is not offered
-  const awaiting = !!order.confirmRequestedAt;
+  // «Заказ оформлен» waits for the customer's confirmation of the order — the button is not offered
+  const awaiting = paymentBlocked(order);
   const allowedTransitions = (ORDER_STATUS_TRANSITIONS[order.status] ?? []).filter((t) => !(awaiting && t === "payment"));
   const actions = (ORDER_STATUS_ACTIONS[order.status] ?? [])
     .filter((a) => !(awaiting && a.to === "payment"))
@@ -230,7 +231,7 @@ export async function GET(
     allowedTransitions,
     actions,
     // Items can be edited (PUT /api/admin/orders/:id/items) only in these statuses
-    canEditItems: ["pending", "consultation", "assembly"].includes(order.status),
+    canEditItems: order.status === "assembly",
     statusLabels: ORDER_STATUS_LABELS,
     customerMessagesUrl: `/api/admin/orders/${order.id}/customer-messages`,
   });

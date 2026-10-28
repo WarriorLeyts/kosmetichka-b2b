@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { confirmRequest } from "@/lib/orderConfirm";
+import { notifyOrderStatus } from "@/lib/notify";
 import { denyIfNotAllowed, getPickerUser, parseId } from "../_access";
 
 export async function POST(request: Request) {
@@ -132,14 +134,15 @@ export async function POST(request: Request) {
     return true;
   });
 
-  // all OK but the customer hasn't confirmed staff changes yet → the manager waits for him (consultation)
-  const waiting = await prisma.order.findUnique({ where: { id: orderId }, select: { confirmRequestedAt: true } });
-  const newStatus = hasIssues || waiting?.confirmRequestedAt ? "consultation" : "payment";
+  // collected → «На проверке»: the customer checks and confirms, then the manager sets «Заказ оформлен»
+  void hasIssues;
+  const newStatus = "consultation";
 
   await prisma.order.update({
     where: { id: orderId },
-    data: { status: newStatus },
+    data: { status: newStatus, ...confirmRequest() },
   });
+  void notifyOrderStatus(orderId, newStatus);
 
   // Log the status change
   await prisma.orderStatusLog.create({
