@@ -20,6 +20,12 @@ export async function POST(request: Request) {
   });
   if (!test || !test.isPublished) return NextResponse.json({ error: "Тест не найден" }, { status: 404 });
 
+  // Тест отредактировали, пока сотрудник отвечал: вопросы уже другие — засчитывать нечестно
+  const current = new Set(test.questions.map((q) => String(q.id)));
+  if (Object.keys(answers).some((qid) => !current.has(qid))) {
+    return NextResponse.json({ error: "Пока вы проходили тест, его изменили. Откройте тест заново." }, { status: 409 });
+  }
+
   const startedAt = readStart(body?.start, test.id, staff.id);
   if (startedAt === null) {
     return NextResponse.json({ error: "Сессия теста устарела — откройте тест заново" }, { status: 400 });

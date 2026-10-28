@@ -31,7 +31,10 @@ export default async function AcademyLayout({ children }: { children: React.Reac
                 <Link href="/academy/results" className="hover:text-pink-500">Результаты сотрудников</Link>
               )}
               {canEditStaff(staff.role) && (
-                <Link href="/academy/staff" className="hover:text-pink-500">Сотрудники</Link>
+                <>
+                  <Link href="/academy/staff" className="hover:text-pink-500">Сотрудники</Link>
+                  <Link href="/academy/manage" className="hover:text-pink-500">Редактор тестов</Link>
+                </>
               )}
               {(staff.role === "admin" || staff.role === "manager") && (
                 <Link href="/admin" className="text-slate-400 hover:text-pink-500">← Админка</Link>

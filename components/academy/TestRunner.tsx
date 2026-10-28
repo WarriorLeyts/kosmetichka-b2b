@@ -379,7 +379,7 @@ export function Review({ details }: { details: Detail[] }) {
 }
 
 /** Фото товара из каталога; если файл не загрузился — блок просто исчезает. */
-function ProductPhoto({ src, className }: { src: string; className: string }) {
+export function ProductPhoto({ src, className }: { src: string; className: string }) {
   const [failed, setFailed] = useState(false);
   if (failed) return null;
   return (
