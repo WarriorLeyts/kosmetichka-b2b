@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
 import { orderSums } from "@/lib/orderPricing";
+import { priceFor, resolveCustomerPriceType } from "@/lib/pricing";
 import { isMaxmaOrder, loyaltyResponse, recalcOrderLoyalty } from "@/lib/maxmaOrders";
 import { changeChatMessage, logOrderChanges, orderChanges, summarizeRows } from "@/lib/orderChanges";
 import { notifyLater } from "@/lib/notify";
@@ -36,7 +37,7 @@ export async function PUT(request: NextRequest, { params }: Props) {
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    include: { items: true },
+    include: { items: true, customer: { select: { priceType: true } } },
   });
   if (!order) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
@@ -70,6 +71,29 @@ export async function PUT(request: NextRequest, { params }: Props) {
   for (const u of updates) {
     if (!orderItemIds.has(u.id)) {
       return NextResponse.json({ error: `Позиция ${u.id} не принадлежит заказу` }, { status: 400 });
+    }
+  }
+
+  // Nobody changes prices in an order: existing lines keep their price, added products get the
+  // customer's catalogue price (by their price type) — whatever price the screen sent is ignored.
+  const origPrice = new Map(order.items.map((i) => [i.id, i.price]));
+  for (const u of updates) u.price = origPrice.get(u.id) ?? 0;
+  if (newItems.length > 0) {
+    const type = resolveCustomerPriceType(order.customer);
+    const products = await prisma.product.findMany({
+      where: { id: { in: newItems.map((ni) => Number(ni.productId)) } },
+      select: { id: true, name: true, prices: { select: { priceType: true, price: true } } },
+    });
+    const byId = new Map(products.map((p) => [p.id, p]));
+    for (const ni of newItems) {
+      const p = byId.get(Number(ni.productId));
+      if (!p) return NextResponse.json({ error: `Товар ${ni.productId} не найден` }, { status: 400 });
+      const pm = Object.fromEntries(p.prices.map((x) => [x.priceType, Number(x.price)]));
+      const price = Math.round(
+        priceFor({ retailPrice: pm.retail, discountPrice: pm.discount, wholesalePrice: pm.wholesale, bigWholesalePrice: pm.big_wholesale }, type)
+      );
+      if (!price) return NextResponse.json({ error: `Цена для товара «${p.name}» не найдена` }, { status: 400 });
+      ni.price = price;
     }
   }
 

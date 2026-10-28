@@ -107,6 +107,7 @@ export default async function AdminOrderPage({
       city: order.customer.city ?? null,
       inn: order.customer.inn ?? null,
       manager: order.customer.manager ?? null,
+      priceType: order.customer.priceType ?? null,
     },
     items: order.items.map((item) => ({
       id: item.id,

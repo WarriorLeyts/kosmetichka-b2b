@@ -26,6 +26,8 @@ export async function GET(
       guid: true,
       stock: true,
       images: { select: { id: true, path: true } },
+      // read only: prices come from 1C (the staff app shows all four)
+      prices: { select: { priceType: true, price: true } },
     },
   });
 
