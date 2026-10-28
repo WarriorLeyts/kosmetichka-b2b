@@ -8,6 +8,7 @@ import { CHAT_ACCEPT, attachmentMessage, type ChatUpload } from "@/lib/chatAttac
 import type { IScannerControls } from "@zxing/browser";
 import { useLiveRefresh } from "@/lib/useLiveRefresh";
 import type { LineChange, LineChanges, RemovedLine } from "@/lib/orderChanges";
+import { priceFor, resolveCustomerPriceType } from "@/lib/pricing";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -81,6 +82,7 @@ type Order = {
     city: string | null;
     inn: string | null;
     manager: string | null;
+    priceType?: string | null;
   };
   items: OrderItem[];
   messages: Message[];
@@ -292,7 +294,6 @@ export default function AdminOrderClient({
   const [saving, setSaving] = useState(false);
   // Promo code after the last item save: removed (red) or not recalculated — MAXMA unavailable (yellow)
   const [promoNotice, setPromoNotice] = useState<{ kind: "removed" | "error"; text: string } | null>(null);
-  const [discountPct, setDiscountPct] = useState("");
 
   // ── Catalog modal ──
   // mode: "order" = add to order, "chat-picker" | "chat-customer" = send product card in chat
@@ -601,6 +602,14 @@ export default function AdminOrderClient({
     }, 500);
   }
 
+  // the price the order will get (the server sets it the same way): the customer's price type from the catalogue
+  function customerPrice(p: CatalogProduct) {
+    const pm = Object.fromEntries(p.prices.map((x) => [x.priceType, Number(x.price)]));
+    return Math.round(
+      priceFor({ retailPrice: pm.retail, discountPrice: pm.discount, wholesalePrice: pm.wholesale, bigWholesalePrice: pm.big_wholesale }, resolveCustomerPriceType(order.customer)) || p.price
+    );
+  }
+
   function addProductToEdit(p: CatalogProduct, variant?: CatalogProductVariant) {
     setEditItems((prev) => {
       const idx = prev.findIndex((i) => i.productId === p.id && !i.isNew);
@@ -619,7 +628,7 @@ export default function AdminOrderClient({
           productName: p.name,
           barcode: p.barcode,
           quantity: 1,
-          price: p.price,
+          price: customerPrice(p),
           isNew: true,
           removed: false,
           variantName: variant?.name ?? null,
@@ -714,18 +723,8 @@ export default function AdminOrderClient({
     setEditMode(false);
     setEditItems([]);
     setEditError("");
-    setDiscountPct("");
   }
 
-  function applyDiscount() {
-    const pct = parseFloat(discountPct);
-    if (isNaN(pct) || pct <= 0 || pct >= 100) return;
-    const factor = 1 - pct / 100;
-    setEditItems((prev) =>
-      prev.map((i) => ({ ...i, price: Math.max(0, Math.round(i.price * factor)) }))
-    );
-    setDiscountPct("");
-  }
 
   // ── Notify customer about problems ──
   async function notifyClientAboutProblems() {
@@ -1262,9 +1261,6 @@ export default function AdminOrderClient({
               before={order.items.reduce((sum, i) => sum + i.total, 0)}
               saving={saving}
               error={editError}
-              discountPct={discountPct}
-              setDiscountPct={setDiscountPct}
-              onDiscount={applyDiscount}
               onAdd={() => openCatalog("order")}
               onVariant={openVariantPickerForItem}
               onCancel={cancelEdit}
@@ -2079,12 +2075,12 @@ const NUM_INPUT =
 
 /**
  * «Редактировать позиции»: one card per item (photo, name, − qty +, price, line sum, remove),
- * add from the catalog and a % discount on top, «было → станет» and Save / Cancel pinned at the bottom.
+ * add from the catalog (at the customer's price — prices are not edited in an order), «было → станет» and Save / Cancel pinned at the bottom.
  * Only local state here; saving is the caller's saveEdit (PUT /api/admin/orders/:id/items).
  */
 function OrderItemsEditor({
-  items, setItems, productImages, stock, before, saving, error, discountPct, setDiscountPct,
-  onDiscount, onAdd, onVariant, onCancel, onSave,
+  items, setItems, productImages, stock, before, saving, error,
+  onAdd, onVariant, onCancel, onSave,
 }: {
   items: EditItem[];
   setItems: React.Dispatch<React.SetStateAction<EditItem[]>>;
@@ -2093,9 +2089,6 @@ function OrderItemsEditor({
   before: number;
   saving: boolean;
   error: string;
-  discountPct: string;
-  setDiscountPct: (v: string) => void;
-  onDiscount: () => void;
   onAdd: () => void;
   onVariant: (idx: number) => void;
   onCancel: () => void;
@@ -2106,7 +2099,6 @@ function OrderItemsEditor({
   const after = Math.round(live.reduce((s, i) => s + i.price * i.quantity, 0) * 100) / 100;
   const pieces = live.reduce((s, i) => s + i.quantity, 0);
   const diff = after - before;
-  const pct = parseFloat(discountPct);
 
   return (
     <div className="no-print mb-4 rounded-2xl border border-amber-200 bg-white shadow-sm">
@@ -2115,7 +2107,7 @@ function OrderItemsEditor({
         <div className="text-xs text-amber-800/80">Изменения применятся к заказу только после «Сохранить»</div>
       </div>
 
-      {/* add + discount */}
+      {/* add */}
       <div className="flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:items-center">
         <button
           onClick={onAdd}
@@ -2123,31 +2115,6 @@ function OrderItemsEditor({
         >
           <span className="text-lg leading-none">+</span> Добавить товар из каталога
         </button>
-        <div className="flex h-11 items-center gap-2 rounded-xl border bg-slate-50 pl-3 pr-1.5">
-          <span className="whitespace-nowrap text-sm text-slate-600">Скидка на все цены</span>
-          <div className="relative">
-            <input
-              type="number"
-              inputMode="decimal"
-              min="1"
-              max="99"
-              value={discountPct}
-              onChange={(e) => setDiscountPct(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && onDiscount()}
-              placeholder="0"
-              aria-label="Скидка в процентах"
-              className={`h-8 w-16 rounded-lg border bg-white pl-2 pr-6 text-right text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-300 ${NUM_INPUT}`}
-            />
-            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm text-slate-400">%</span>
-          </div>
-          <button
-            onClick={onDiscount}
-            disabled={!(pct > 0 && pct < 100)}
-            className="ml-auto h-8 rounded-lg bg-purple-600 px-3 text-sm font-bold text-white hover:bg-purple-700 disabled:bg-slate-200 disabled:text-slate-400"
-          >
-            Применить
-          </button>
-        </div>
       </div>
 
       {error ? <div className="mx-4 mt-3 rounded-xl bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div> : null}
@@ -2244,20 +2211,8 @@ function OrderItemsEditor({
                       </button>
                     </div>
                     <span className="text-sm text-slate-400">×</span>
-                    {/* price */}
-                    <div className="relative">
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        step="0.01"
-                        value={item.price}
-                        onChange={(e) => patch(idx, { price: Math.max(0, Number(e.target.value) || 0) })}
-                        aria-label="Цена за штуку"
-                        className={`h-10 w-24 rounded-xl border bg-white pl-2 pr-6 text-right text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-300 ${NUM_INPUT}`}
-                      />
-                      <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">₽</span>
-                    </div>
+                    {/* price: from the catalogue by the customer's price type — nobody changes it in an order */}
+                    <span className="text-sm font-semibold text-slate-700">{rub(item.price)}</span>
                     <span className="ml-auto whitespace-nowrap text-base font-black text-slate-900">{rub(Math.round(item.price * item.quantity * 100) / 100)}</span>
                   </div>
                 </div>
