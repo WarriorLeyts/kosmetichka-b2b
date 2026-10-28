@@ -4,7 +4,7 @@ import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
 import { orderSums } from "@/lib/orderPricing";
 import { isMaxmaOrder, loyaltyResponse, recalcOrderLoyalty } from "@/lib/maxmaOrders";
-import { logOrderChanges, orderChanges, summarizeRows } from "@/lib/orderChanges";
+import { changeChatMessage, logOrderChanges, orderChanges, summarizeRows } from "@/lib/orderChanges";
 import { notifyLater } from "@/lib/notify";
 
 function getSecret() {
@@ -160,6 +160,10 @@ export async function PUT(request: NextRequest, { params }: Props) {
   const staff = await prisma.user.findUnique({ where: { id: Number(user.id) }, select: { name: true } }).catch(() => null);
   const changed = await logOrderChanges(orderId, "staff", staff?.name ?? "Менеджер", order.items, remaining);
   if (changed.length > 0) {
+    // the same card in the order chat (photos + what changed) — from the manager, the customer sees it there
+    await prisma.orderMessage
+      .create({ data: { orderId, source: "customer", userId: Number(user.id), text: await changeChatMessage("staff", staff?.name ?? null, changed) } })
+      .catch((e) => console.error("[order-changes] chat:", e instanceof Error ? e.message : e));
     notifyLater(order.customerId, {
       kind: "order",
       title: `Менеджер изменил заказ №${orderId} — подтвердите`,

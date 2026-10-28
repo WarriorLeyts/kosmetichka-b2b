@@ -44,12 +44,11 @@ export const ORDER_STATUS_ACTIONS: Record<
   string,
   { label: string; to: string; style: string }[]
 > = {
+  // «Собрать заказ» (to assembly + open the picker's screen) is a separate button on the order page
   pending: [
-    { label: "▶ Передать на сборку", to: "assembly", style: "bg-blue-600 hover:bg-blue-700 text-white" },
     { label: "✕ Отменить заказ", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
   approved: [
-    { label: "▶ Передать на сборку", to: "assembly", style: "bg-blue-600 hover:bg-blue-700 text-white" },
     { label: "✓ Заказ оформлен", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],

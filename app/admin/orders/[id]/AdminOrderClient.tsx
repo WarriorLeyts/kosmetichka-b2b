@@ -1179,9 +1179,9 @@ export default function AdminOrderClient({
             <button
               onClick={selfAssemble}
               disabled={changingStatus}
-              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition-all disabled:opacity-50"
+              className="order-first rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition-all disabled:opacity-50"
             >
-              {changingStatus ? "..." : "📦 Собрать самому"}
+              {changingStatus ? "..." : order.status === "assembly" ? "📦 Продолжить сборку" : "📦 Собрать заказ"}
             </button>
           )}
           {canRevert && prevStatus && !transitions.some((t) => t.to === prevStatus) && (
