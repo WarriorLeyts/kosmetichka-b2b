@@ -187,6 +187,9 @@ model Order {
   total   Int     @default(0)
   /// Customer's price type when the order was placed (the customer can switch it later)
   priceType String?
+  /// Prices the order's lines are at: «Опт» customers get them by the order sum (lib/pricing.ts cartPriceTier),
+  /// recalculated when the manager changes the order; null — old orders (the customer's type)
+  priceTier String?
   comment String? @db.Text
 
   // Promo code (validated and calculated by MAXMA); discount in whole roubles, total already reduced by it

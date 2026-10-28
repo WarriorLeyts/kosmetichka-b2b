@@ -3,7 +3,8 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
 import { orderSums } from "@/lib/orderPricing";
-import { priceFor, resolveCustomerPriceType } from "@/lib/pricing";
+import { priceFor } from "@/lib/pricing";
+import { orderTier, repriceOrder } from "@/lib/orderTier";
 import { isMaxmaOrder, loyaltyResponse, recalcOrderLoyalty } from "@/lib/maxmaOrders";
 import { changeChatMessage, logOrderChanges, orderChanges, summarizeRows } from "@/lib/orderChanges";
 import { notifyLater } from "@/lib/notify";
@@ -81,7 +82,8 @@ export async function PUT(request: NextRequest, { params }: Props) {
   const origPrice = new Map(order.items.map((i) => [i.id, i.price]));
   for (const u of updates) u.price = origPrice.get(u.id) ?? 0;
   if (newItems.length > 0) {
-    const type = resolveCustomerPriceType(order.customer);
+    // at the order's current prices («Опт»: by its sum); repriceOrder below moves every line if the sum crosses 5 000 / 50 000 ₽
+    const type = orderTier(order);
     const products = await prisma.product.findMany({
       where: { id: { in: newItems.map((ni) => Number(ni.productId)) } },
       select: { id: true, name: true, prices: { select: { priceType: true, price: true } } },
@@ -180,6 +182,12 @@ export async function PUT(request: NextRequest, { params }: Props) {
     await prisma.$transaction([...updateOps, ...createOps]);
   }
 
+  // «Опт»: the sum moved across 5 000 / 50 000 ₽ → every line at the new price
+  const tierChange = await repriceOrder(orderId).catch((e) => {
+    console.error("[order-items] tier:", e instanceof Error ? e.message : e);
+    return null;
+  });
+
   const remaining = await prisma.orderItem.findMany({ where: { orderId } });
 
   // added from the customer's «Добавить товар» card in the chat → the card shows «Добавлено» from now on
@@ -197,6 +205,11 @@ export async function PUT(request: NextRequest, { params }: Props) {
     await prisma.orderMessage
       .create({ data: { orderId, source: "customer", isFromPicker: true, userId: Number(user.id), text: await changeChatMessage("staff", staff?.name ?? null, changed) } })
       .catch((e) => console.error("[order-changes] chat:", e instanceof Error ? e.message : e));
+    if (tierChange) {
+      await prisma.orderMessage
+        .create({ data: { orderId, source: "customer", isFromPicker: true, userId: Number(user.id), text: tierChange.text } })
+        .catch((e) => console.error("[order-changes] tier chat:", e instanceof Error ? e.message : e));
+    }
     notifyLater(order.customerId, {
       kind: "order",
       title: `Менеджер изменил заказ №${orderId}`,

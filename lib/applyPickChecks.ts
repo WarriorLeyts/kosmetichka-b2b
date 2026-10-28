@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { orderSums } from "@/lib/orderPricing";
 import { isMaxmaOrder, recalcOrderLoyalty } from "@/lib/maxmaOrders";
 import { changeChatMessage, logOrderChanges, type ChangeRow } from "@/lib/orderChanges";
+import { repriceOrder } from "@/lib/orderTier";
 
 /**
  * The manager collected the order (the assembly screen, «Отправить проверку»): what he found becomes
@@ -68,12 +69,23 @@ export async function applyPickChecks(orderId: number, actor: { id: number; name
     ...updates.map((p) => prisma.orderItem.update({ where: { id: p.item.id }, data: { quantity: p.qty, total: p.qty * p.item.price } })),
   ]);
 
+  // «Опт»: the sum fell below 5 000 / 50 000 ₽ → every line at the new price
+  const tierChange = await repriceOrder(orderId).catch((e) => {
+    console.error("[pick] tier:", e instanceof Error ? e.message : e);
+    return null;
+  });
+
   const remaining = await prisma.orderItem.findMany({ where: { orderId } });
   const changed = await logOrderChanges(orderId, "staff", actor.name ?? "Менеджер", order.items, remaining);
   if (changed.length > 0) {
     await prisma.orderMessage
       .create({ data: { orderId, source: "customer", isFromPicker: true, userId: actor.id, text: await changeChatMessage("staff", actor.name, changed) } })
       .catch((e) => console.error("[pick] chat:", e instanceof Error ? e.message : e));
+  }
+  if (tierChange) {
+    await prisma.orderMessage
+      .create({ data: { orderId, source: "customer", isFromPicker: true, userId: actor.id, text: tierChange.text } })
+      .catch((e) => console.error("[pick] tier chat:", e instanceof Error ? e.message : e));
   }
 
   // total: Σ lines; with a promo code / bonuses MAXMA recalculates the discounts and the total

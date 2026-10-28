@@ -5,8 +5,8 @@ import { notifyStaffLater } from "@/lib/staffNotify";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { sendMail } from "@/lib/mail";
 import { orderCreationLimiter } from "@/lib/rateLimit";
-import { priceOrderItems, type PricedLine } from "@/lib/orderPricing";
-import { minOrderFor } from "@/lib/pricing";
+import { priceOrder, type PricedLine } from "@/lib/orderPricing";
+import type { PriceType } from "@/lib/pricing";
 import {
   BONUS_SPEND_FORBIDDEN,
   calcLoyalty,
@@ -97,28 +97,18 @@ export async function POST(request: Request) {
 
   let order;
   let lines: PricedLine[];
+  let tier: PriceType;
   let promo: PromoResult | null = null;
 
   try {
-    lines = await priceOrderItems(customer, items);
+    ({ lines, tier } = await priceOrder(customer, items));
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Не удалось создать заказ";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  // Опт — заказ от 5 000 ₽, крупный опт — от 50 000 ₽ (в ценах клиента)
-  const minOrder = minOrderFor(customer);
-  const linesSum = lines.reduce((s, l) => s + l.total, 0);
-  if (minOrder > 0 && linesSum < minOrder) {
-    return NextResponse.json(
-      {
-        error: `Минимальная сумма заказа — ${minOrder.toLocaleString("ru-RU")} ₽. Добавьте товаров ещё на ${(minOrder - linesSum).toLocaleString("ru-RU")} ₽.`,
-        code: "min_order",
-      },
-      { status: 400 }
-    );
-  }
+  // no minimum order: «Опт» gets the price by the order sum (discount → wholesale → big wholesale)
 
   // Promo code / bonuses: MAXMA calculates them again on the server-side prices (one
   // v2/calculate-purchase, like the shop's cash desks). A linked card also gets the accrual.
@@ -170,6 +160,7 @@ export async function POST(request: Request) {
     customerId: Number(payload.id),
     status: "pending",
     priceType: customer.priceType,
+    priceTier: tier,
     total: linesTotal - promoDiscount - bonusesApplied,
     comment: comment || null,
     ...(promo ? { promoCode, discount: promo.discount } : {}),

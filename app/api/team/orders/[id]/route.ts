@@ -1,3 +1,4 @@
+import { orderTier } from "@/lib/orderTier";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { orderChanges } from "@/lib/orderChanges";
@@ -161,6 +162,8 @@ export async function GET(
         manager: order.customer.manager ?? null,
         // price type of this order (the customer may have switched since)
         priceType: order.priceType ?? order.customer.priceType,
+        // the prices of this order («Опт»: by the order sum — discount / wholesale / big wholesale)
+        priceTier: orderTier(order),
       },
       pickerId: order.pickerId ?? null,
       picker: order.picker ?? null,

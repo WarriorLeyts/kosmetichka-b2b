@@ -1,15 +1,20 @@
 /**
  * Centralised pricing logic (the apps keep an identical copy in src/pricing.ts).
  *
- * Тарифы — цена сразу по типу клиента, без порогов по сумме корзины:
+ * Тарифы:
  *   guest         → discountPrice ?? retailPrice   (не авторизован)
  *   retail        → retailPrice                    (бонусная карта MAXMA: бонусы начисляются и списываются)
  *   discount      → discountPrice ?? retailPrice   (скидочная карта MAXMA: бонусы тоже работают)
- *   wholesale     → wholesalePrice                 (без бонусов), заказ от 5 000 ₽
- *   big_wholesale → bigWholesalePrice              (без бонусов), заказ от 50 000 ₽
+ *   wholesale     → цена по сумме заказа (cartPriceTier), без бонусов:
+ *                     от 50 000 ₽ в крупнооптовых ценах → bigWholesalePrice,
+ *                     от 5 000 ₽ в оптовых ценах        → wholesalePrice,
+ *                     меньше                            → discountPrice ?? retailPrice
+ *   big_wholesale → bigWholesalePrice при любой сумме (крупный опт, назначенный менеджером), без бонусов
+ *
+ * Каталог показывает цены по типу клиента (effectivePriceType), корзина и заказ — по сумме (cartPriceTier).
  */
 
-/** Минимальная сумма заказа для опта и крупного опта (в ценах клиента). */
+/** Пороги цены для клиента «Опт»: от 5 000 ₽ в оптовых ценах — опт, от 50 000 ₽ в крупнооптовых — крупный опт. */
 export const WHOLESALE_MIN_ORDER = 5_000;
 export const BIG_WHOLESALE_MIN_ORDER = 50_000;
 
@@ -65,8 +70,8 @@ export function rawCartTotal(cart: any[], type: PriceType): number {
 }
 
 /**
- * Тариф для корзины / оформления заказа — всегда тип клиента
- * (корзина оставлена в параметрах для совместимости вызовов).
+ * Тариф для каталога — тип клиента (оптовому клиенту каталог показывает оптовые цены).
+ * Корзина и заказ считаются по cartPriceTier.
  */
 export function effectivePriceType(
   _cart: any[],
@@ -75,24 +80,57 @@ export function effectivePriceType(
   return resolveCustomerPriceType(customer);
 }
 
-/** Минимальная сумма заказа для клиента (0 — без минимума). */
-export function minOrderFor(customer: { priceType?: string | null } | null): number {
+/**
+ * Цена корзины / заказа. Клиент «Опт» — по сумме: от 50 000 ₽ (в крупнооптовых ценах) — крупный опт,
+ * от 5 000 ₽ (в оптовых) — опт, меньше — скидочная цена. Остальные — по своему типу.
+ */
+export function cartPriceTier(
+  cart: any[],
+  customer: { priceType?: string | null } | null
+): PriceType {
   const base = resolveCustomerPriceType(customer);
-  if (base === "big_wholesale") return BIG_WHOLESALE_MIN_ORDER;
-  if (base === "wholesale") return WHOLESALE_MIN_ORDER;
-  return 0;
+  if (base !== "wholesale") return base;
+  if (rawCartTotal(cart, "big_wholesale") >= BIG_WHOLESALE_MIN_ORDER) return "big_wholesale";
+  if (rawCartTotal(cart, "wholesale") >= WHOLESALE_MIN_ORDER) return "wholesale";
+  return "discount";
 }
 
 /**
- * Сколько рублей не хватает до минимальной суммы заказа (в ценах клиента).
- * 0 — можно оформлять.
+ * Подсказка клиенту «Опт»: какая цена следующая, сколько добрать (в её ценах) и сколько он сэкономит
+ * на том, что уже в корзине. null — выше некуда (или клиент не «Опт»).
  */
-export function amountUntilMinOrder(
+export function nextPriceTier(
   cart: any[],
   customer: { priceType?: string | null } | null
+): { type: PriceType; need: number; save: number } | null {
+  if (resolveCustomerPriceType(customer) !== "wholesale" || cart.length === 0) return null;
+  const tier = cartPriceTier(cart, customer);
+  if (tier === "discount") {
+    return {
+      type: "wholesale",
+      need: Math.max(0, WHOLESALE_MIN_ORDER - rawCartTotal(cart, "wholesale")),
+      save: Math.max(0, rawCartTotal(cart, "discount") - rawCartTotal(cart, "wholesale")),
+    };
+  }
+  if (tier === "wholesale") {
+    return {
+      type: "big_wholesale",
+      need: Math.max(0, BIG_WHOLESALE_MIN_ORDER - rawCartTotal(cart, "big_wholesale")),
+      save: Math.max(0, rawCartTotal(cart, "wholesale") - rawCartTotal(cart, "big_wholesale")),
+    };
+  }
+  return null;
+}
+
+/** Минимальной суммы заказа больше нет: маленький заказ клиента «Опт» идёт по скидочной цене. */
+export function minOrderFor(_customer: { priceType?: string | null } | null): number {
+  return 0;
+}
+
+/** Сколько не хватает до минимальной суммы — всегда 0 (минимума нет, см. cartPriceTier). */
+export function amountUntilMinOrder(
+  _cart: any[],
+  _customer: { priceType?: string | null } | null
 ): number {
-  const min = minOrderFor(customer);
-  if (!min) return 0;
-  const total = rawCartTotal(cart, resolveCustomerPriceType(customer));
-  return Math.max(0, min - total);
+  return 0;
 }
