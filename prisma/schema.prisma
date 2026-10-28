@@ -175,6 +175,7 @@ model User {
   checks         OrderItemCheck[]
   assignedOrders Order[]          @relation("OrderPicker")
   academyAttempts AcademyAttempt[]
+  webPushSubs     StaffWebPushSubscription[]
 }
 
 model Order {
@@ -553,6 +554,21 @@ model WebPushSubscription {
   lastSeenAt DateTime @default(now())
 
   @@index([customerId])
+}
+
+/// Browser Web Push for staff: the admin website (/admin, Team web app) on this browser
+model StaffWebPushSubscription {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 /// Promo push campaigns sent from the admin panel («Рассылки»)

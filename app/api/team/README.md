@@ -362,6 +362,11 @@ Query: `q` (name/companyName/email без регистра, phone — подст
 «Рассылки»: `{ promo, withApp, audiences: [{value,label}], history: [{ id, title, body, audience, audienceLabel, link, recipients, devices, createdAt }] }`.
 `POST /api/team/push { title, body, audience, article? }` → `{ ok, recipients, devices }` (400 — пусто / товар не найден).
 
+### Web Push для сотрудников (сайт-админка /admin) — A, M, P
+`GET /api/team/web-push/key` → `{ enabled, publicKey? }`; `POST /api/team/web-push/subscribe { endpoint, keys: { p256dh, auth } }` → `{ ok }` (400 — неверная подписка, 403 — с чужого сайта, 503 — ключи не заданы); `POST /api/team/web-push/unsubscribe { endpoint }` (без входа). Уведомления (только A и M): новый заказ, сообщение клиента в чате заказа, клиент подтвердил / отменил заказ (`lib/staffNotify.ts`). Ссылка в данных: `link` = `/admin/order/N`, `path` = `/order/N`.
+
+В `GET /api/team/orders` (каждый заказ) и `GET /api/team/orders/:id` (`order`): `lastCustomerMessageId`, `lastCustomerMessageAt`, `lastStaffMessageId` — для отметки «Новое сообщение».
+
 ### GET /api/team/app-errors — **только A**
 
 «Ошибки приложений» за 30 дней: `{ items: [{ id, app, platform, fatal, message, stack, screen, version, count, customers, firstAt, lastAt }] }`.

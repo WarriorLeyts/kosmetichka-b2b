@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { notifyStaffLater } from "@/lib/staffNotify";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { sendMail } from "@/lib/mail";
 import { orderCreationLimiter } from "@/lib/rateLimit";
@@ -261,6 +262,9 @@ export async function POST(request: Request) {
     // Promo code / accrual only: registered in MAXMA through the queue (one attempt now, retried later)
     if (promo || bonusesCollected > 0) await enqueueMaxmaTask(order.id, "set", maxmaQuery);
   }
+
+  // staff browsers (admin website): «Новый заказ №N»
+  notifyStaffLater({ kind: "new-order", orderId: order.id });
 
   // Уведомление покупателю о принятом заказе
   if (customer.email) {
