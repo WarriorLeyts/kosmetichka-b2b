@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { withFlatPrices } from "@/lib/utils";
 import { verifyCustomerToken } from "@/lib/customerAuth";
+import { verifyToken } from "@/lib/auth";
 import { createHash } from "crypto";
 
 const SORTS = ["popularity", "price_asc", "price_desc", "name"] as const;
@@ -77,7 +78,10 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
   const payload = token ? await verifyCustomerToken(token) : null;
-  const isAuthenticated = Boolean(payload?.id);
+  // staff (admin / Team app, admin_token) browse the same catalogue with real prices
+  const staffToken = payload?.id ? null : cookieStore.get("admin_token")?.value;
+  const staff = staffToken ? await verifyToken(staffToken) : null;
+  const isAuthenticated = Boolean(payload?.id) || ["admin", "manager", "picker"].includes(String(staff?.role ?? ""));
 
   const page = Number(searchParams.get("page") || 1);
   const limit = 40;

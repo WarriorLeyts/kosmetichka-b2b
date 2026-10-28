@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
 import { messageLimiter } from "@/lib/rateLimit";
+import { buildProductRequest, PRODUCT_REQUEST_STATUSES } from "@/lib/productRequest";
 
 async function getCustomer() {
   const cookieStore = await cookies();
@@ -59,11 +60,26 @@ export async function POST(
     return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
   }
 
-  const { text } = await request.json();
+  const body = (await request.json().catch(() => ({}))) as { text?: unknown; productRequest?: { productId: unknown; quantity: unknown; variantName?: unknown } };
+
+  // «Добавить товар»: a product card for the manager, built on the server from the product id
+  let text = body.text;
+  if (body.productRequest) {
+    if (!PRODUCT_REQUEST_STATUSES.includes(order.status)) {
+      return NextResponse.json({ error: "Заказ уже оформлен — добавить товар нельзя. Оформите новый заказ." }, { status: 400 });
+    }
+    const who = await prisma.customer.findUnique({ where: { id: customer.id }, select: { priceType: true } });
+    const card = await buildProductRequest(who ?? {}, body.productRequest);
+    if ("error" in card) return NextResponse.json({ error: card.error }, { status: 400 });
+    text = JSON.stringify(card);
+  } else if (typeof text === "string" && text.trim().startsWith("{") && /"_t"\s*:\s*"product-request"/.test(text)) {
+    // only the server writes these cards
+    return NextResponse.json({ error: "Неверное сообщение" }, { status: 400 });
+  }
   if (!text || typeof text !== "string" || text.trim().length === 0) {
     return NextResponse.json({ error: "Пустое сообщение" }, { status: 400 });
   }
-  if (text.length > 2000) {
+  if (text.length > (body.productRequest ? 4000 : 2000)) {
     return NextResponse.json({ error: "Сообщение слишком длинное" }, { status: 400 });
   }
 
