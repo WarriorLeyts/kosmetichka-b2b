@@ -35,7 +35,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
   if (!CUSTOMER_EDITABLE_STATUSES.includes(order.status)) {
     return NextResponse.json(
-      { error: "Заказ уже нельзя изменить: он собран и ждёт оплаты. Напишите менеджеру в чате заказа." },
+      { error: "Заказ уже оформлен — изменить его нельзя. Напишите менеджеру в чате заказа." },
       { status: 400 }
     );
   }

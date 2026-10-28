@@ -9,7 +9,7 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   approved: "Подтверждён",
   assembly: "Сборка",
   consultation: "Консультация",
-  payment: "К оплате",
+  payment: "Заказ оформлен",
   exported: "Выгружен в 1С",
   cancelled: "Отменён",
 };
@@ -20,7 +20,7 @@ export const ORDER_STATUS_LABELS_CUSTOMER: Record<string, string> = {
   approved: "Подтверждён",
   assembly: "Сборка",
   consultation: "На консультации",
-  payment: "К оплате",
+  payment: "Заказ оформлен",
   exported: "Выполнен",
   cancelled: "Отменён",
 };
@@ -50,17 +50,17 @@ export const ORDER_STATUS_ACTIONS: Record<
   ],
   approved: [
     { label: "▶ Передать на сборку", to: "assembly", style: "bg-blue-600 hover:bg-blue-700 text-white" },
-    { label: "✓ К оплате", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
+    { label: "✓ Заказ оформлен", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
   assembly: [
     { label: "💬 На консультацию", to: "consultation", style: "bg-orange-100 hover:bg-orange-200 text-orange-700" },
-    { label: "✓ К оплате", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
+    { label: "✓ Заказ оформлен", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
   consultation: [
     { label: "↩ Вернуть на сборку", to: "assembly", style: "bg-blue-100 hover:bg-blue-200 text-blue-700" },
-    { label: "✓ Подтвердить к оплате", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
+    { label: "✓ Подтвердить: заказ оформлен", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
   payment: [

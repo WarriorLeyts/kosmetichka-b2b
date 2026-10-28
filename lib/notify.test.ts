@@ -46,7 +46,7 @@ describe("order events", () => {
     db.order.findMany.mockResolvedValue([{ id: 42, customerId: 7 }]);
     await notifyOrderStatus(42, "payment");
     expect(db.notification.createMany).toHaveBeenCalledWith({
-      data: [expect.objectContaining({ customerId: 7, kind: "order", title: "Заказ №42 собран", link: "/order/42" })],
+      data: [expect.objectContaining({ customerId: 7, kind: "order", title: "Заказ №42 оформлен", link: "/order/42" })],
     });
   });
 

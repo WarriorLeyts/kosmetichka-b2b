@@ -37,7 +37,7 @@ const STATUS_LABELS: Record<string, string> = {
   approved: "Подтверждён",
   assembly: "Сборка",
   consultation: "На консультации",
-  payment: "К оплате",
+  payment: "Заказ оформлен",
   exported: "Выполнен",
   cancelled: "Отменён",
 };

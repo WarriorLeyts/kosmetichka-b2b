@@ -14,7 +14,7 @@ const ALL_STATUSES = [
   { value: "approved", label: "Подтверждён" },
   { value: "assembly", label: "Сборка" },
   { value: "consultation", label: "Консультация" },
-  { value: "payment", label: "К оплате" },
+  { value: "payment", label: "Заказ оформлен" },
   { value: "exported", label: "Выполнен" },
   { value: "cancelled", label: "Отменён" },
 ];
