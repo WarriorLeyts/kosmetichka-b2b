@@ -43,7 +43,7 @@ export function CartDrawer() {
   const base = resolveCustomerPriceType(customer);
   const activePriceType = effectivePriceType(cart, customer);
   const total = rawCartTotal(cart, activePriceType);
-  // опт — заказ от 5 000 ₽, крупный опт — от 50 000 ₽ (цены сразу по типу клиента)
+  // minimum order: none any more (minOrderFor = 0); «Опт» pays by the order sum (lib/pricing.ts)
   const minOrder = minOrderFor(customer);
   const remainingToMin = amountUntilMinOrder(cart, customer);
 

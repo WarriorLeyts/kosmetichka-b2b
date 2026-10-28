@@ -91,19 +91,27 @@ describe("prices by customer type", () => {
   });
 });
 
-describe("minimum order", () => {
-  it("wholesale below 5 000 is refused", async () => {
+describe("«Опт»: the price by the order sum (no minimum)", () => {
+  type Created = { data: { priceTier?: string; total: number; items: { create: { price: number }[] } } };
+  it.each([
+    [6, "discount", 1005], //   6 × 727 = 4 362 < 5 000 → discount price
+    [7, "wholesale", 727], //   7 × 727 = 5 089
+    [74, "wholesale", 727], // 74 × 671 = 49 654 < 50 000
+    [75, "big_wholesale", 671], // 75 × 671 = 50 325
+  ])("%i pcs → %s (%i per item)", async (qty, tier, price) => {
     db.customer.findUnique.mockResolvedValue(customer("wholesale"));
-    const r = await order({ items: [{ id: 1, quantity: 6 }] }); // 4 362
-    expect(r.status).toBe(400);
-    expect((await r.json()).code).toBe("min_order");
-    expect(db.order.create).not.toHaveBeenCalled();
+    const r = await order({ items: [{ id: 1, quantity: qty }] });
+    expect(r.status).toBe(200);
+    const c = created as unknown as Created;
+    expect(c.data.items.create[0].price).toBe(price);
+    expect(c.data.priceTier).toBe(tier);
+    expect(c.data.total).toBe(price * qty);
   });
 
-  it("big wholesale below 50 000 is refused, from 50 000 accepted", async () => {
+  it("big wholesale set by the manager: big prices at any sum", async () => {
     db.customer.findUnique.mockResolvedValue(customer("big_wholesale"));
-    expect((await order({ items: [{ id: 1, quantity: 74 }] })).status).toBe(400); // 49 654
-    expect((await order({ items: [{ id: 1, quantity: 75 }] })).status).toBe(200); // 50 325
+    expect((await order({ items: [{ id: 1, quantity: 1 }] })).status).toBe(200);
+    expect(created?.data.items.create[0].price).toBe(671);
   });
 
   it("retail has no minimum", async () => {

@@ -106,11 +106,6 @@ describe("customer edits an order", () => {
     expect((await put({ removeIds: [1, 2] })).status).toBe(400);
   });
 
-  it("wholesale minimum: can't go under 5 000 by removing", async () => {
-    const r = await put({ items: [{ id: 1, quantity: 1 }] }); // 3 000 + 500
-    expect(r.status).toBe(400);
-    expect((await r.json()).code).toBe("min_order");
-  });
 });
 
 describe("the customer can't change the order himself", () => {

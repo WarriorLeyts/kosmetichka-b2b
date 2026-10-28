@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { effectivePriceType } from "@/lib/pricing";
+import { cartPriceTier, type PriceType } from "@/lib/pricing";
 
 /** Cart line as the site / apps send it to POST /api/orders. */
 export type OrderItemInput = {
@@ -25,7 +25,7 @@ export type PricedLine = {
 
 /**
  * Prices the cart for a customer exactly like order creation does: price tier by
- * effectivePriceType (with auto-upgrade), retail fallback, MOQ / quantity checks.
+ * cartPriceTier («Опт» — by the order sum), retail fallback, MOQ / quantity checks.
  * Throws Error with a Russian, customer-facing message on invalid input.
  */
 export async function priceOrderItems(
@@ -33,6 +33,15 @@ export async function priceOrderItems(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   items: any[]
 ): Promise<PricedLine[]> {
+  return (await priceOrder(customer, items)).lines;
+}
+
+/** priceOrderItems + the price tier the lines got. */
+export async function priceOrder(
+  customer: { priceType?: string | null },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  items: any[]
+): Promise<{ lines: PricedLine[]; tier: PriceType }> {
   const productIds: number[] = items.map((item) => Number(item.id));
 
   const products = await prisma.product.findMany({
@@ -58,10 +67,10 @@ export async function priceOrderItems(
     };
   });
 
-  // Price type = the customer's type (no thresholds; the minimum order is checked in /api/orders)
-  const appliedPriceType = effectivePriceType(cartForPricing, customer);
+  // «Опт»: the price by the order sum (5 000 / 50 000 ₽); the other types: the customer's own
+  const appliedPriceType = cartPriceTier(cartForPricing, customer);
 
-  return items.map((item) => {
+  const lines = items.map((item) => {
     const product = productById.get(Number(item.id));
 
     if (!product) {
@@ -106,6 +115,7 @@ export async function priceOrderItems(
       sku: product.guid || String(product.id),
     };
   });
+  return { lines, tier: appliedPriceType };
 }
 
 /**
