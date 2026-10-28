@@ -5,8 +5,10 @@ vi.mock("@/lib/auth", () => ({ requireAdmin: vi.fn(async () => ({ id: 1, role: "
 vi.mock("@/lib/mail", () => ({ sendMail: vi.fn() }));
 vi.mock("@/lib/maxmaOrders", () => ({ onOrderStatus: vi.fn() }));
 vi.mock("@/lib/notify", () => ({ notifyOrderStatus: vi.fn() }));
+vi.mock("@/lib/applyPickChecks", () => ({ applyPickChecks: vi.fn(async () => ({ changed: [], emptied: false })) }));
 const db = vi.hoisted(() => ({
   order: { findUnique: vi.fn(), update: vi.fn(async () => ({})) },
+  user: { findUnique: vi.fn(async () => ({ name: "Ольга" })) },
   orderItem: { findMany: vi.fn(async () => []) },
   orderItemCheck: { deleteMany: vi.fn() },
   orderStatusLog: { create: vi.fn(async () => ({})) },
