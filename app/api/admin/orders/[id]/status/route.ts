@@ -5,6 +5,7 @@ import { sendMail } from "@/lib/mail";
 import { onOrderStatus } from "@/lib/maxmaOrders";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
 import { notifyOrderStatus } from "@/lib/notify";
+import { applyPickChecks } from "@/lib/applyPickChecks";
 import { AWAITING_CONFIRMATION, confirmRequest, paymentBlocked } from "@/lib/orderConfirm";
 
 export async function POST(
@@ -32,6 +33,15 @@ export async function POST(
   // «Заказ оформлен» only after the customer confirmed the order — no way around it
   if (toStatus === "payment" && paymentBlocked(order)) {
     return NextResponse.json({ error: AWAITING_CONFIRMATION, code: "awaiting_confirmation" }, { status: 409 });
+  }
+
+  // «Отправить клиенту на проверку» after the assembly checks: what was found becomes the order (logged, chat card)
+  if (order.status === "assembly" && toStatus === "consultation") {
+    const actor = await prisma.user.findUnique({ where: { id: Number(user.id) }, select: { name: true } }).catch(() => null);
+    const applied = await applyPickChecks(order.id, { id: Number(user.id), name: actor?.name ?? null });
+    if (applied.emptied) {
+      return NextResponse.json({ error: "Ни одного товара нет в наличии — замените товары в заказе или отмените его" }, { status: 400 });
+    }
   }
 
   // If moving back to assembly (or reverting from assembly) — delete existing checks so picker re-checks

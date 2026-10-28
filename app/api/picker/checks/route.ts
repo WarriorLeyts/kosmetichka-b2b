@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { confirmRequest } from "@/lib/orderConfirm";
 import { notifyOrderStatus } from "@/lib/notify";
+import { applyPickChecks } from "@/lib/applyPickChecks";
 import { denyIfNotAllowed, getPickerUser, parseId } from "../_access";
 
 export async function POST(request: Request) {
@@ -134,8 +135,18 @@ export async function POST(request: Request) {
     return true;
   });
 
-  // collected → «На проверке»: the customer checks and confirms, then the manager sets «Заказ оформлен»
+  // what was found becomes the order: removed / fewer pieces, logged for the customer, a card in the chat
   void hasIssues;
+  const actor = await prisma.user.findUnique({ where: { id: user.id }, select: { name: true } }).catch(() => null);
+  const applied = await applyPickChecks(orderId, { id: user.id, name: actor?.name ?? null });
+  if (applied.emptied) {
+    return NextResponse.json(
+      { error: "Ни одного товара нет в наличии — замените товары в заказе или отмените его" },
+      { status: 400 }
+    );
+  }
+
+  // collected → «На проверке»: the customer checks and confirms, then the manager sets «Заказ оформлен»
   const newStatus = "consultation";
 
   await prisma.order.update({
@@ -160,5 +171,6 @@ export async function POST(request: Request) {
     checked: totalChecks,
     total: totalItems,
     newStatus,
+    changes: applied.changed.length,
   });
 }
