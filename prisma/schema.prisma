@@ -150,6 +150,7 @@ model Customer {
   wishlistItems WishlistItem[]
   notifications Notification[]
   pushTokens    PushToken[]
+  webPushSubs   WebPushSubscription[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -533,6 +534,21 @@ model PushToken {
   customerId Int
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   platform   String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([customerId])
+}
+
+/// Browser Web Push subscription (site / home-screen web app), one per browser
+model WebPushSubscription {
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
   createdAt  DateTime @default(now())
   lastSeenAt DateTime @default(now())
 

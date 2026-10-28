@@ -124,6 +124,7 @@ export async function DELETE(request: Request) {
   await prisma.$transaction([
     prisma.wishlistItem.deleteMany({ where: { customerId: id } }),
     prisma.pushToken.deleteMany({ where: { customerId: id } }),
+    prisma.webPushSubscription.deleteMany({ where: { customerId: id } }),
     prisma.notification.deleteMany({ where: { customerId: id } }),
     ...(stored?.email ? [prisma.passwordResetToken.deleteMany({ where: { email: stored.email } })] : []),
     prisma.customer.update({
