@@ -36,7 +36,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     /** the customer may still change the order (quantities, remove, add) */
     editable: CUSTOMER_EDITABLE_STATUSES.includes(order.status),
     /** why not (shown instead of «Изменить»), for an active order */
-    editBlockedReason: ["assembly", "consultation", "payment"].includes(order.status) ? customerEditBlockedReason(order.status) : null,
+    editBlockedReason: customerEditBlockedReason(order.status),
     /** the manager changed the order and waits for «Подтвердить» (until then it can't be «Заказ оформлен») */
     needsConfirm: !!order.confirmRequestedAt || (order.status === "consultation" && !order.customerConfirmed),
     confirmRequestedAt: order.confirmRequestedAt ? order.confirmRequestedAt.toISOString() : null,

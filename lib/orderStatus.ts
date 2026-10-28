@@ -69,16 +69,17 @@ export const ORDER_STATUS_ACTIONS: Record<
 };
 
 /**
- * When the customer may change the order himself (quantities, remove, add products): only before the
- * manager starts collecting it («Ожидание», «Подтверждён»). During «Сборка» only the manager changes it,
- * on «На проверке» the customer checks and confirms (or writes to the manager in the chat).
+ * The customer never changes the order himself: he asks for a product with «Добавить товар» in the order
+ * chat (the manager adds it during «Сборка») or writes to the manager; on «На проверке» he confirms.
+ * The customer-edit endpoint stays, switched off by this empty list.
  */
-export const CUSTOMER_EDITABLE_STATUSES = ["pending", "approved"];
+export const CUSTOMER_EDITABLE_STATUSES: string[] = [];
 
-/** Why the customer can't change the order now (shown instead of «Изменить»), or null. */
+/** What the customer sees instead of «Изменить». */
 export function customerEditBlockedReason(status: string): string | null {
   if (CUSTOMER_EDITABLE_STATUSES.includes(status)) return null;
-  if (status === "assembly") return "Менеджер собирает заказ — изменить его сейчас можно только через менеджера в чате заказа.";
+  if (status === "pending" || status === "approved" || status === "assembly")
+    return "Хотите добавить товар — нажмите «Добавить товар» в чате заказа, менеджер добавит его. Изменить количество или убрать товар — напишите менеджеру.";
   if (status === "consultation") return "Заказ собран — проверьте его и подтвердите. Если что-то не так, напишите менеджеру в чате заказа.";
   if (status === "payment" || status === "exported") return "Заказ уже оформлен — изменить его нельзя. Напишите менеджеру в чате заказа.";
   return "Этот заказ изменить нельзя.";
