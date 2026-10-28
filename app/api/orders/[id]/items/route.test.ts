@@ -34,6 +34,12 @@ const db = vi.hoisted(() => {
   };
 });
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
+// customers don't edit orders any more (CUSTOMER_EDITABLE_STATUSES is empty); the edit logic is kept and
+// tested as if «Ожидание» were editable
+vi.mock("@/lib/orderStatus", async (orig) => {
+  const real = await orig<typeof import("@/lib/orderStatus")>();
+  return { ...real, CUSTOMER_EDITABLE_STATUSES: ["pending", "approved"] };
+});
 
 import { PUT } from "./route";
 
@@ -65,7 +71,7 @@ describe("customer edits an order", () => {
     db.order.findUnique.mockResolvedValue(order("assembly"));
     const r = await put({ items: [{ id: 1, quantity: 3 }] });
     expect(r.status).toBe(400);
-    expect((await r.json()).error).toContain("собирает");
+    expect((await r.json()).error).toContain("менеджер");
   });
 
   it("refused «На проверке»: the customer confirms or writes to the manager", async () => {
@@ -104,5 +110,13 @@ describe("customer edits an order", () => {
     const r = await put({ items: [{ id: 1, quantity: 1 }] }); // 3 000 + 500
     expect(r.status).toBe(400);
     expect((await r.json()).code).toBe("min_order");
+  });
+});
+
+describe("the customer can't change the order himself", () => {
+  it("the real rule: no status is editable", async () => {
+    const real = await vi.importActual<typeof import("@/lib/orderStatus")>("@/lib/orderStatus");
+    expect(real.CUSTOMER_EDITABLE_STATUSES).toEqual([]);
+    expect(real.customerEditBlockedReason("pending")).toContain("Добавить товар");
   });
 });
