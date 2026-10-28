@@ -110,6 +110,7 @@ type EditItem = {
   variantName?: string | null;
   variantImageUrl?: string | null;
   imagePath?: string | null; // catalog photo for items added while editing
+  stock?: number | null; // stock of items added while editing
 };
 
 type CatalogProductVariant = {
@@ -209,6 +210,7 @@ export default function AdminOrderClient({
   customerMessages: initialCustomerMessages,
   productImages = {},
   changes: initialChanges = { lines: {}, removed: [] },
+  productStock = {},
   maxmaStuck = null,
 }: {
   order: Order;
@@ -216,6 +218,8 @@ export default function AdminOrderClient({
   customerMessages: CustomerMessage[];
   productImages?: Record<number, string | null>;
   changes?: { lines: Record<number, LineChanges>; removed: RemovedLine[] };
+  /** current stock of the order's products (shown on the lines) */
+  productStock?: Record<number, number | null>;
   maxmaStuck?: MaxmaStuck | null;
 }) {
   const router = useRouter();
@@ -621,6 +625,7 @@ export default function AdminOrderClient({
           variantName: variant?.name ?? null,
           variantImageUrl: variant?.imageUrl ?? null,
           imagePath: p.imagePath,
+          stock: p.stock,
         },
       ];
     });
@@ -1174,9 +1179,9 @@ export default function AdminOrderClient({
             <button
               onClick={selfAssemble}
               disabled={changingStatus}
-              className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition-all disabled:opacity-50"
+              className="order-first rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700 transition-all disabled:opacity-50"
             >
-              {changingStatus ? "..." : "📦 Собрать самому"}
+              {changingStatus ? "..." : order.status === "assembly" ? "📦 Продолжить сборку" : "📦 Собрать заказ"}
             </button>
           )}
           {canRevert && prevStatus && !transitions.some((t) => t.to === prevStatus) && (
@@ -1253,6 +1258,7 @@ export default function AdminOrderClient({
               items={editItems}
               setItems={setEditItems}
               productImages={images}
+              stock={productStock}
               before={order.items.reduce((sum, i) => sum + i.total, 0)}
               saving={saving}
               error={editError}
@@ -1291,6 +1297,7 @@ export default function AdminOrderClient({
                       <div className="text-sm font-medium leading-snug">{item.productName}</div>
                       {item.variantName && <div className="text-xs text-blue-600 mt-0.5">🎨 {item.variantName}</div>}
                       <ChangeBadges ch={changes.lines[item.id]} />
+                      <StockLine stock={productStock[item.productId]} need={item.quantity} />
                       {item.barcode && <div className="text-xs text-slate-400 font-mono mt-0.5">{item.barcode}</div>}
                       {item.photos.length > 0 && (
                         <div className="mt-1 flex gap-1">
@@ -1393,6 +1400,7 @@ export default function AdminOrderClient({
                             </div>
                           )}
                           <ChangeBadges ch={changes.lines[item.id]} />
+                      <StockLine stock={productStock[item.productId]} need={item.quantity} />
                           {item.barcode && <div className="mt-0.5 text-xs text-slate-400 font-mono">{item.barcode}</div>}
                           {item.photos.length > 0 && (
                             <div className="mt-1 flex gap-1">
@@ -2075,12 +2083,13 @@ const NUM_INPUT =
  * Only local state here; saving is the caller's saveEdit (PUT /api/admin/orders/:id/items).
  */
 function OrderItemsEditor({
-  items, setItems, productImages, before, saving, error, discountPct, setDiscountPct,
+  items, setItems, productImages, stock, before, saving, error, discountPct, setDiscountPct,
   onDiscount, onAdd, onVariant, onCancel, onSave,
 }: {
   items: EditItem[];
   setItems: React.Dispatch<React.SetStateAction<EditItem[]>>;
   productImages: Record<number, string | null>;
+  stock: Record<number, number | null>;
   before: number;
   saving: boolean;
   error: string;
@@ -2190,6 +2199,9 @@ function OrderItemsEditor({
                         ) : null}
                         {item.barcode ? <span className="font-mono text-xs text-slate-400">{item.barcode}</span> : null}
                       </div>
+                      {item.stock !== undefined || item.productId in stock ? (
+                        <StockLine stock={item.stock !== undefined ? item.stock : stock[item.productId]} need={item.quantity} />
+                      ) : null}
                     </div>
                     <button
                       onClick={() => patch(idx, { removed: true })}
@@ -2350,6 +2362,18 @@ function RemovedLines({ removed, images }: { removed: RemovedLine[]; images: Rec
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+/** «Остаток в магазине: 12 шт.» for staff; orange when less than the order needs, red when none. */
+function StockLine({ stock, need }: { stock: number | null | undefined; need: number }) {
+  if (stock === undefined) return null;
+  const n = stock ?? 0;
+  const cls = n <= 0 ? "text-red-600" : n < need ? "text-orange-600" : "text-green-700";
+  return (
+    <div className={`mt-0.5 text-xs font-semibold ${cls}`}>
+      {n <= 0 ? "Нет в наличии" : `Остаток в магазине: ${n} шт.${n < need ? ` — меньше, чем в заказе (${need})` : ""}`}
     </div>
   );
 }

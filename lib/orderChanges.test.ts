@@ -52,3 +52,11 @@ describe("summarizeRows", () => {
     expect(summarizeRows(rows)).toBe("Товар 1: 2 → 4 шт.\n− Товар 2\n+ Товар 3 — 2 шт.");
   });
 });
+
+describe("changeLineText", () => {
+  it("texts per kind", async () => {
+    const { changeLineText } = await import("./orderChanges");
+    const rows = diffLines([line(1, 2, 100), line(2, 1, 50)], [line(1, 4, 90), line(3, 2, 20)]);
+    expect(rows.map(changeLineText)).toEqual(["2 → 4 шт., 100 ₽ → 90 ₽", "удалено", "добавлено · 2 шт."]);
+  });
+});

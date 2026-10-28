@@ -432,6 +432,9 @@ export default function AdminProductsClient() {
                         {/* Info */}
                         <div className="p-2 flex-1">
                           <p className="text-xs font-semibold leading-snug line-clamp-2">{p.name}</p>
+                          <p className={`text-xs font-bold mt-0.5 ${(p.stock ?? 0) > 0 ? "text-green-700" : "text-red-500"}`}>
+                            {(p.stock ?? 0) > 0 ? `Остаток: ${p.stock} шт.` : "Нет в наличии"}
+                          </p>
                           {hasV ? (
                             <p className="text-xs text-green-600 font-semibold mt-0.5">✓ Варианты настроены</p>
                           ) : (

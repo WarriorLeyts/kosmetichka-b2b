@@ -74,7 +74,7 @@ export default async function AdminOrderPage({
     }),
     prisma.product.findMany({
       where: { id: { in: productIds } },
-      select: { id: true, barcode: true },
+      select: { id: true, barcode: true, stock: true },
     }),
     maxmaStuckByOrder([order.id]),
   ]);
@@ -85,8 +85,11 @@ export default async function AdminOrderPage({
     }
   }
   const productBarcodeMap: Record<number, string | null> = {};
+  // current stock of every product in the order (shown to staff on the lines)
+  const productStock: Record<number, number | null> = {};
   for (const p of productRows) {
     productBarcodeMap[p.id] = p.barcode ?? null;
+    productStock[p.id] = p.stock ?? null;
   }
 
   const serialized = {
@@ -160,6 +163,7 @@ export default async function AdminOrderPage({
       customerMessages={serialized.customerMessages}
       productImages={productImages}
       changes={changes}
+      productStock={productStock}
       maxmaStuck={maxmaStuck.get(order.id) ?? null}
     />
   );

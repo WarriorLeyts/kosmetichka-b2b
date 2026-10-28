@@ -29,7 +29,9 @@ export function formatFileSize(bytes: number): string {
 /** short human text for notifications / previews */
 export function attachmentPreview(text: string): string | null {
   try {
-    const o = JSON.parse(text) as { _t?: string; name?: string };
+    const o = JSON.parse(text) as { _t?: string; name?: string; title?: string };
+    if (o?._t === "order-change") return `✏️ ${o.title ?? "Заказ изменён"}`;
+    if (o?._t === "product") return `📦 ${o.name ?? "Товар"}`;
     if (o?._t === "img") return "📷 Фото";
     if (o?._t === "video") return "🎬 Видео";
     if (o?._t === "file") return `📎 ${o.name ?? "Файл"}`;

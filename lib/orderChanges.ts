@@ -258,3 +258,43 @@ export function summarizeRows(rows: ChangeRow[], limit = 8): string {
   if (rows.length > limit) parts.push(`и ещё ${rows.length - limit}`);
   return parts.join("\n");
 }
+
+// ── chat card ──────────────────────────────────────────────────────────────────
+
+/** One line of the «order changed» chat card. */
+export type ChangeCardLine = { name: string; imagePath: string | null; kind: ChangeKind; text: string };
+
+/** «3 → 4 шт.», «150 ₽ → 120 ₽», «добавлено, 2 шт.», «удалено» */
+export function changeLineText(r: ChangeRow): string {
+  if (r.kind === "added") return `добавлено · ${qtyWord(r.newQuantity ?? 0)}`;
+  if (r.kind === "removed") return "удалено";
+  const bits: string[] = [];
+  if (r.oldQuantity != null) bits.push(`${r.oldQuantity} → ${qtyWord(r.newQuantity ?? 0)}`);
+  if (r.oldPrice != null) bits.push(`${rub(r.oldPrice)} → ${rub(r.newPrice ?? 0)}`);
+  if (r.oldVariant != null || r.newVariant != null) bits.push(`вариант: ${r.oldVariant ?? "—"} → ${r.newVariant ?? "—"}`);
+  return bits.join(", ");
+}
+
+/**
+ * The order chat message about an edit: a JSON card {"_t":"order-change"} with a photo, the name and
+ * what changed for every line — the customer and the manager see at once which products it is about.
+ * Apps that don't know the card show `text` (a plain summary).
+ */
+export async function changeChatMessage(side: ChangeSide, actorName: string | null, rows: ChangeRow[]): Promise<string> {
+  const need = [...new Set(rows.filter((r) => !r.imageUrl && r.productId).map((r) => r.productId as number))];
+  const first = new Map<number, string>();
+  if (need.length) {
+    const imgs = await prisma.productImage
+      .findMany({ where: { productId: { in: need } }, select: { productId: true, path: true }, orderBy: { id: "asc" } })
+      .catch(() => []);
+    for (const i of imgs) if (!first.has(i.productId)) first.set(i.productId, i.path);
+  }
+  const lines: ChangeCardLine[] = rows.slice(0, 30).map((r) => ({
+    name: r.productName + (r.newVariant || r.oldVariant ? ` (${r.newVariant ?? r.oldVariant})` : ""),
+    imagePath: r.imageUrl ?? (r.productId ? first.get(r.productId) ?? null : null),
+    kind: r.kind,
+    text: changeLineText(r),
+  }));
+  const title = side === "customer" ? "Клиент изменил заказ" : `${actorName && actorName !== "Менеджер" ? `Менеджер (${actorName})` : "Менеджер"} изменил заказ`;
+  return JSON.stringify({ _t: "order-change", by: side, title, lines, text: `${title}:\n${summarizeRows(rows, 12)}` });
+}

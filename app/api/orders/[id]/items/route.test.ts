@@ -14,7 +14,7 @@ vi.mock("@/lib/orderPricing", async (orig) => ({
     items.map((i) => ({ productId: i.id, productName: `Товар ${i.id}`, barcode: null, quantity: i.quantity, price: 100, total: 100 * i.quantity, variantName: i.variantName ?? null, variantImageUrl: null, sku: String(i.id) }))
   ),
 }));
-const log = vi.hoisted(() => ({ logOrderChanges: vi.fn(async () => [{ kind: "added", productName: "Товар 9", newQuantity: 2 }]), summarizeRows: vi.fn(() => "+ Товар 9 — 2 шт.") }));
+const log = vi.hoisted(() => ({ logOrderChanges: vi.fn(async () => [{ kind: "added", productName: "Товар 9", newQuantity: 2 }]), summarizeRows: vi.fn(() => "+ Товар 9 — 2 шт."), changeChatMessage: vi.fn(async () => JSON.stringify({ _t: "order-change", title: "Клиент изменил заказ" })) }));
 vi.mock("@/lib/orderChanges", () => log);
 
 const db = vi.hoisted(() => {

@@ -27,6 +27,7 @@ export default async function AdminProductImagesPage({
       barcode: true,
       article: true,
       guid: true,
+      stock: true,
       images: { select: { id: true, path: true } },
     },
   });

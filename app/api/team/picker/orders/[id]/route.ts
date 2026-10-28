@@ -55,12 +55,15 @@ export async function GET(
     select: {
       id: true,
       barcode: true,
+      stock: true,
       images: { take: 1, select: { path: true } },
     },
   });
   const imageMap = new Map<number, string | null>();
   const barcodeMap = new Map<number, string | null>();
+  const stockMap = new Map<number, number | null>();
   for (const p of products) {
+    stockMap.set(p.id, p.stock ?? null);
     imageMap.set(p.id, productImageUrl(p.images[0]?.path ?? null));
     barcodeMap.set(p.id, p.barcode ?? null);
   }
@@ -90,6 +93,7 @@ export async function GET(
         variantName: item.variantName ?? null,
         variantImageUrl: item.variantImageUrl ?? null,
         imageUrl: imageMap.get(item.productId) ?? null,
+        stock: stockMap.get(item.productId) ?? null,
         customerChange: changes.lines[item.id]?.customer ?? null,
         staffChange: changes.lines[item.id]?.staff ?? null,
         check: item.check
