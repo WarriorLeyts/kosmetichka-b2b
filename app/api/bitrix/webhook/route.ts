@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logOrderChanges, summarizeRows } from "@/lib/orderChanges";
-import { requestConfirmation } from "@/lib/orderConfirm";
+import { confirmRequest, paymentBlocked, requestConfirmation } from "@/lib/orderConfirm";
 import { isMaxmaOrder, loyaltyWarning, promoWarning, recalcOrderLoyalty } from "@/lib/maxmaOrders";
 import { notifyLater, notifyOrderStatus } from "@/lib/notify";
 
@@ -195,12 +195,13 @@ export async function POST(request: NextRequest) {
   // ── Обновить статус и сохранить dealId ────────────────────────────────────
   // Staff changes the customer hasn't confirmed yet: not «Заказ оформлен» but «Консультация» —
   // the customer gets «подтвердите изменения», the order moves on after his confirmation.
-  const fresh = await prisma.order.findUnique({ where: { id: orderId }, select: { confirmRequestedAt: true } });
-  const toStatus = fresh?.confirmRequestedAt ? "consultation" : "payment";
+  const fresh = await prisma.order.findUnique({ where: { id: orderId }, select: { confirmRequestedAt: true, customerConfirmed: true } });
+  const toStatus = !fresh || paymentBlocked(fresh) ? "consultation" : "payment";
   await prisma.order.update({
     where: { id: orderId },
     data: {
       status: toStatus,
+      ...(toStatus === "consultation" && !fresh?.confirmRequestedAt ? confirmRequest() : {}),
       ...(dealId ? { bitrixDealId: dealId } : {}),
     },
   });

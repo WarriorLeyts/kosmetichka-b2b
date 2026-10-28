@@ -19,7 +19,7 @@ describe("confirmation reminders", () => {
     expect(first).toMatchObject({ confirmReminders: 0, confirmRequestedAt: { lte: new Date("2026-10-28T10:00:00Z") } });
     expect(second).toMatchObject({ confirmReminders: 1, confirmRequestedAt: { lte: new Date("2026-10-27T12:00:00Z") } });
     expect(n.notify).toHaveBeenCalledTimes(1);
-    expect(n.notify).toHaveBeenCalledWith(9, expect.objectContaining({ title: "Подтвердите изменения в заказе №5", link: "/order/5" }));
+    expect(n.notify).toHaveBeenCalledWith(9, expect.objectContaining({ title: "Подтвердите заказ №5", link: "/order/5" }));
   });
 
   it("never throws", async () => {

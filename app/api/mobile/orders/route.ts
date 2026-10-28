@@ -109,7 +109,7 @@ export async function GET(request: Request) {
       createdAt: o.createdAt.toISOString(),
       customerConfirmed: o.customerConfirmed,
       /** the manager changed the order and waits for the customer's «Подтвердить» */
-      needsConfirm: !!o.confirmRequestedAt,
+      needsConfirm: !!o.confirmRequestedAt || (o.status === "consultation" && !o.customerConfirmed),
       changesSnapshot: o.changesSnapshot ?? null,
       items: o.items.map((item) => ({
         ...item,

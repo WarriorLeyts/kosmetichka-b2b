@@ -2,19 +2,29 @@ import { prisma } from "@/lib/prisma";
 import { notify } from "@/lib/notify";
 
 /**
- * Staff changed an order → the customer must confirm before it can become «Заказ оформлен» (payment).
- *   requestConfirmation — after a staff change of the items (admin, Team, Bitrix24);
- *   clearConfirmation   — the customer confirmed, or changed the order himself;
- *   isAwaiting          — payment is blocked (status change, bulk change, picker, Bitrix).
+ * The manager collects the order («Сборка», the only status where staff change items), then sends it
+ * to the customer to check («На проверке»): the customer must confirm before «Заказ оформлен» (payment).
+ *   CONFIRM_REQUEST     — the fields set when the order goes «На проверке»;
+ *   clearConfirmation   — the customer confirmed;
+ *   paymentBlocked      — «Заказ оформлен» is not allowed yet (status change, bulk change, Bitrix);
+ *   isAwaiting          — the customer was asked and hasn't answered yet.
  * Reminders: a push 2 h after the request and again after 24 h (startConfirmReminders).
  */
 
 export const AWAITING_CONFIRMATION =
-  "Ждём подтверждения клиента: заказ изменён, клиент ещё не подтвердил изменения. «Заказ оформлен» станет доступен после его подтверждения.";
+  "Ждём подтверждения клиента: «Заказ оформлен» станет доступен после того, как клиент проверит и подтвердит заказ.";
 
 export function isAwaiting(order: { confirmRequestedAt?: Date | null }): boolean {
   return !!order.confirmRequestedAt;
 }
+
+/** «Заказ оформлен» only after the customer confirmed the collected order. */
+export function paymentBlocked(order: { confirmRequestedAt?: Date | null; customerConfirmed?: boolean | null }): boolean {
+  return !!order.confirmRequestedAt || !order.customerConfirmed;
+}
+
+/** Order data for «На проверке»: the customer is asked to confirm (reminders at 2 h and 24 h). */
+export const confirmRequest = () => ({ confirmRequestedAt: new Date(), confirmReminders: 0, customerConfirmed: false });
 
 export async function requestConfirmation(orderId: number): Promise<void> {
   await prisma.order.update({
@@ -51,8 +61,8 @@ export async function sendConfirmReminders(now = new Date()): Promise<number> {
         if (claimed.count === 0) continue;
         await notify(o.customerId, {
           kind: "order",
-          title: `Подтвердите изменения в заказе №${o.id}`,
-          body: "Менеджер изменил заказ и ждёт вашего подтверждения. Без него заказ не будет оформлен.",
+          title: `Подтвердите заказ №${o.id}`,
+          body: "Заказ собран и ждёт вашей проверки. Без подтверждения заказ не будет оформлен.",
           link: `/order/${o.id}`,
         });
         sent++;
