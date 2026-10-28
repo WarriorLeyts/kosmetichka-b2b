@@ -7,6 +7,7 @@ import { normalizePhone, toSmsAeroPhone } from "@/lib/phone";
 import { getClientIp } from "@/lib/rateLimit";
 import { isWholesaleRole } from "@/lib/roles";
 import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
+import { ADDRESS_REQUIRED, cleanAddress, needsShopAddress } from "@/lib/shopAddress";
 
 async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
   const serverKey = process.env.SMARTCAPTCHA_SERVER_KEY;
@@ -36,7 +37,7 @@ async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
 const AUTO_APPROVE_TYPES = new Set(["retail"]);
 
 export async function POST(request: Request) {
-  const { name, companyName, phone, email, password, captchaToken, smsCode, priceType: rawPriceType, source } = await request.json();
+  const { name, companyName, phone, email, password, captchaToken, smsCode, priceType: rawPriceType, source, address: rawAddress } = await request.json();
 
   // the website registers wholesale customers only for now (retail signs up in the app)
   if (source === "site" && !SITE_RETAIL_ENABLED && rawPriceType !== "wholesale" && rawPriceType !== "big_wholesale") {
@@ -46,6 +47,12 @@ export async function POST(request: Request) {
   const priceType = ["retail", "wholesale", "big_wholesale"].includes(rawPriceType)
     ? rawPriceType
     : "wholesale";
+
+  // wholesale (опт, крупный опт): the shop's address is required — staff send the orders there
+  const address = cleanAddress(rawAddress);
+  if (needsShopAddress(priceType) && !address) {
+    return NextResponse.json({ error: ADDRESS_REQUIRED, field: "address" }, { status: 400 });
+  }
 
   // ─── Проверка капчи ───────────────────────────────────────────
   if (!captchaToken) {
@@ -155,6 +162,7 @@ export async function POST(request: Request) {
     data: {
       name,
       companyName: companyName?.trim() || null,
+      address,
       phone: cleanPhone,
       email: cleanEmail,
       password: hashedPassword,

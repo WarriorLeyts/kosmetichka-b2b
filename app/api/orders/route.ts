@@ -20,6 +20,7 @@ import {
 import { adoptReservedBonuses, BONUSES_UNAVAILABLE, BONUSES_UNAVAILABLE_CODE } from "@/lib/maxmaOrders";
 import { enqueueMaxmaTask, runOrderMaxmaTasks } from "@/lib/maxmaQueue";
 import { PROMO_NOT_FOR_ITEMS } from "@/lib/promo";
+import { ADDRESS_REQUIRED, cleanAddress, needsShopAddress } from "@/lib/shopAddress";
 
 /** Escape user-supplied strings before embedding in HTML emails */
 function escHtml(str: string): string {
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { items, comment, promocode, applyBonuses: rawApplyBonuses } = await request.json();
+  const { items, comment, promocode, applyBonuses: rawApplyBonuses, address: rawAddress } = await request.json();
 
   // Bonuses to spend: whole number ≥ 0 (1 bonus = 1 ₽ discount)
   const applyBonuses = Number(rawApplyBonuses ?? 0);
@@ -79,6 +80,14 @@ export async function POST(request: Request) {
 
   if (!customer) {
     return NextResponse.json({ error: "Ошибка авторизации" }, { status: 401 });
+  }
+
+  // wholesale accounts made before the address was asked at registration: they give it now (saved to the profile)
+  if (needsShopAddress(customer.priceType) && !cleanAddress(customer.address)) {
+    const address = cleanAddress(rawAddress);
+    if (!address) return NextResponse.json({ error: ADDRESS_REQUIRED, code: "address_required" }, { status: 400 });
+    await prisma.customer.update({ where: { id: customer.id }, data: { address } });
+    customer.address = address;
   }
 
   if (applyBonuses > 0 && !canSpendBonuses(customer)) {
