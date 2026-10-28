@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
   // ── Обновить статус и сохранить dealId ────────────────────────────────────
   // Staff changes the customer hasn't confirmed yet: not «Заказ оформлен» but «Консультация» —
   // the customer gets «подтвердите изменения», the order moves on after his confirmation.
-  const fresh = await prisma.order.findUnique({ where: { id: orderId }, select: { confirmRequestedAt: true, customerConfirmed: true } });
+  const fresh = await prisma.order.findUnique({ where: { id: orderId }, select: { confirmRequestedAt: true, staffChangedAt: true } });
   const toStatus = !fresh || paymentBlocked(fresh) ? "consultation" : "payment";
   await prisma.order.update({
     where: { id: orderId },

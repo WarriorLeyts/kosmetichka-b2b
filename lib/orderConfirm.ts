@@ -2,12 +2,12 @@ import { prisma } from "@/lib/prisma";
 import { notify } from "@/lib/notify";
 
 /**
- * The manager collects the order («Сборка», the only status where staff change items), then sends it
- * to the customer to check («На проверке»): the customer must confirm before «Заказ оформлен» (payment).
- *   CONFIRM_REQUEST     — the fields set when the order goes «На проверке»;
- *   clearConfirmation   — the customer confirmed;
- *   paymentBlocked      — «Заказ оформлен» is not allowed yet (status change, bulk change, Bitrix);
- *   isAwaiting          — the customer was asked and hasn't answered yet.
+ * The manager collects the order («Сборка», the only status where staff change items).
+ *   No changes      → «Заказ оформлен» straight away.
+ *   Items changed   → staffChangedAt; the order is sent to the customer «На проверке» (confirmRequest),
+ *                     «Заказ оформлен» only after the customer's «Подтвердить заказ» (clears both).
+ *   paymentBlocked  — «Заказ оформлен» is not allowed yet (status change, bulk change, picker, Bitrix);
+ *   isAwaiting      — the customer was asked and hasn't answered yet.
  * Reminders: a push 2 h after the request and again after 24 h (startConfirmReminders).
  */
 
@@ -18,9 +18,9 @@ export function isAwaiting(order: { confirmRequestedAt?: Date | null }): boolean
   return !!order.confirmRequestedAt;
 }
 
-/** «Заказ оформлен» only after the customer confirmed the collected order. */
-export function paymentBlocked(order: { confirmRequestedAt?: Date | null; customerConfirmed?: boolean | null }): boolean {
-  return !!order.confirmRequestedAt || !order.customerConfirmed;
+/** «Заказ оформлен» waits while the customer is asked, or while the manager's changes aren't confirmed. */
+export function paymentBlocked(order: { confirmRequestedAt?: Date | null; staffChangedAt?: Date | null }): boolean {
+  return !!order.confirmRequestedAt || !!order.staffChangedAt;
 }
 
 /** Order data for «На проверке»: the customer is asked to confirm (reminders at 2 h and 24 h). */
@@ -29,12 +29,12 @@ export const confirmRequest = () => ({ confirmRequestedAt: new Date(), confirmRe
 export async function requestConfirmation(orderId: number): Promise<void> {
   await prisma.order.update({
     where: { id: orderId },
-    data: { confirmRequestedAt: new Date(), confirmReminders: 0, customerConfirmed: false },
+    data: { confirmRequestedAt: new Date(), confirmReminders: 0, customerConfirmed: false, staffChangedAt: new Date() },
   });
 }
 
 export async function clearConfirmation(orderId: number): Promise<void> {
-  await prisma.order.update({ where: { id: orderId }, data: { confirmRequestedAt: null, customerConfirmed: true } });
+  await prisma.order.update({ where: { id: orderId }, data: { confirmRequestedAt: null, customerConfirmed: true, staffChangedAt: null } });
 }
 
 const HOUR = 3600e3;

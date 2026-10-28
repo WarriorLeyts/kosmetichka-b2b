@@ -44,7 +44,7 @@ export async function POST(
 
   await prisma.order.update({
     where: { id: orderId },
-    data: { customerConfirmed: true, confirmRequestedAt: null },
+    data: { customerConfirmed: true, confirmRequestedAt: null, staffChangedAt: null },
   });
   // staff see it at once in the order chat (admin, Team, Bitrix); «Заказ оформлен» is now available
   await prisma.orderMessage

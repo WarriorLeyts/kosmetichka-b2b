@@ -134,13 +134,14 @@ export async function POST(request: Request) {
     return true;
   });
 
-  // collected → «На проверке»: the customer checks and confirms, then the manager sets «Заказ оформлен»
-  void hasIssues;
-  const newStatus = "consultation";
+  // collected: the manager changed something (or there are problems) → «На проверке», the customer
+  // confirms; nothing changed → «Заказ оформлен» at once
+  const cur = await prisma.order.findUnique({ where: { id: orderId }, select: { staffChangedAt: true } });
+  const newStatus = hasIssues || cur?.staffChangedAt ? "consultation" : "payment";
 
   await prisma.order.update({
     where: { id: orderId },
-    data: { status: newStatus, ...confirmRequest() },
+    data: { status: newStatus, ...(newStatus === "consultation" ? confirmRequest() : {}) },
   });
   void notifyOrderStatus(orderId, newStatus);
 

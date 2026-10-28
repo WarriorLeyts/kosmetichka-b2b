@@ -1,4 +1,4 @@
-/** «Заказ оформлен» (payment) only after the customer confirmed the order sent «На проверке». */
+/** «Заказ оформлен» (payment): straight away without staff changes; after changes — only once the customer confirmed. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/auth", () => ({ requireAdmin: vi.fn(async () => ({ id: 1, role: "manager" })) }));
@@ -31,18 +31,20 @@ describe("status → payment", () => {
   });
 
   it("allowed once confirmed", async () => {
-    db.order.findUnique.mockResolvedValue({ id: 3, status: "consultation", confirmRequestedAt: null, customerConfirmed: true });
+    db.order.findUnique.mockResolvedValue({ id: 3, status: "consultation", confirmRequestedAt: null, staffChangedAt: null, customerConfirmed: true });
     expect((await call("payment")).status).toBe(200);
   });
 
-  it("blocked when the customer hasn't confirmed the order yet", async () => {
-    db.order.findUnique.mockResolvedValue({ id: 3, status: "consultation", confirmRequestedAt: null, customerConfirmed: false });
-    expect((await call("payment")).status).toBe(409);
+  it("straight from «Сборка» when the manager changed nothing", async () => {
+    db.order.findUnique.mockResolvedValue({ id: 3, status: "assembly", confirmRequestedAt: null, staffChangedAt: null });
+    expect((await call("payment")).status).toBe(200);
   });
 
-  it("not straight from «Сборка»: first «На проверке»", async () => {
-    db.order.findUnique.mockResolvedValue({ id: 3, status: "assembly", confirmRequestedAt: null, customerConfirmed: true });
-    expect((await call("payment")).status).toBe(400);
+  it("the manager changed the items → first «На проверке», «Заказ оформлен» is refused", async () => {
+    db.order.findUnique.mockResolvedValue({ id: 3, status: "assembly", confirmRequestedAt: null, staffChangedAt: new Date() });
+    const r = await call("payment");
+    expect(r.status).toBe(409);
+    expect((await r.json()).code).toBe("awaiting_confirmation");
   });
 
   it("«На проверке» asks the customer to confirm", async () => {

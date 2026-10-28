@@ -207,7 +207,8 @@ export async function PUT(request: NextRequest, { params }: Props) {
       ...(loyaltyOrder ? {} : { total: sums.total }),
       customerConfirmed: false,
       changesSnapshot: snapshot,
-      // the customer confirms the whole order when it is sent to him «На проверку»
+      // changed → the order must go to the customer «На проверку» before «Заказ оформлен»
+      ...(changed.length > 0 ? { staffChangedAt: new Date() } : {}),
     },
   });
   const loyalty = loyaltyOrder ? await recalcOrderLoyalty(orderId) : null;

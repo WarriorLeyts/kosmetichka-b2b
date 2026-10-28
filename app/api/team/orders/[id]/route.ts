@@ -136,6 +136,8 @@ export async function GET(
       changesSnapshot: order.changesSnapshot ?? null,
       /** staff changed the order; waiting for the customer's «Подтвердить» since then — «Заказ оформлен» is blocked */
       awaitingConfirmationSince: order.confirmRequestedAt ? order.confirmRequestedAt.toISOString() : null,
+      // the manager changed the items and the customer hasn't confirmed: «На проверку», not «Заказ оформлен»
+      changedByStaff: !!order.staffChangedAt,
       confirmReminders: order.confirmReminders,
       oneCExportedAt: order.oneCExportedAt ? order.oneCExportedAt.toISOString() : null,
       bitrixDealId: order.bitrixDealId ?? null,

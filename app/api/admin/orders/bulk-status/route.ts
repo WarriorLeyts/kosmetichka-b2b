@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
   const orders = await prisma.order.findMany({
     where: { id: { in: orderIds } },
-    select: { id: true, status: true, confirmRequestedAt: true, customerConfirmed: true },
+    select: { id: true, status: true, confirmRequestedAt: true, staffChangedAt: true },
   });
 
   const updated: number[] = [];

@@ -32,8 +32,8 @@ export const ORDER_STATUS_LABELS_CUSTOMER: Record<string, string> = {
 export const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   pending: ["assembly", "cancelled"],
   approved: ["assembly", "cancelled"], // legacy status
-  // «Заказ оформлен» only from «На проверке», after the customer confirmed the order
-  assembly: ["pending", "consultation", "cancelled"],
+  // «Заказ оформлен» straight from «Сборка» when the manager changed nothing; after changes — via «На проверке»
+  assembly: ["pending", "consultation", "payment", "cancelled"],
   consultation: ["assembly", "payment", "cancelled"],
   payment: ["assembly", "consultation", "exported", "cancelled"],
   exported: [],
@@ -52,8 +52,10 @@ export const ORDER_STATUS_ACTIONS: Record<
   approved: [
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],
-  // the manager collects the order himself and changes it only here; then sends it to the customer to check
+  // the manager collects the order himself and changes it only here. No changes → «Заказ оформлен»;
+  // changes → «Отправить клиенту на проверку» (the order screens show the one that fits)
   assembly: [
+    { label: "✓ Заказ оформлен", to: "payment", style: "bg-green-600 hover:bg-green-700 text-white" },
     { label: "📨 Отправить клиенту на проверку", to: "consultation", style: "bg-orange-100 hover:bg-orange-200 text-orange-700" },
     { label: "✕ Отменить", to: "cancelled", style: "bg-red-100 hover:bg-red-200 text-red-700" },
   ],

@@ -206,6 +206,9 @@ model Order {
   confirmRequestedAt DateTime?
   /// Reminders already sent about that confirmation (push after 2 h and after 24 h)
   confirmReminders   Int       @default(0)
+  /// The manager changed the items (added / changed / removed) and the customer hasn't confirmed yet:
+  /// the order goes «На проверке» before «Заказ оформлен». Null — no changes, «Заказ оформлен» at once.
+  staffChangedAt     DateTime?
 
   pickerId Int?
   picker   User? @relation("OrderPicker", fields: [pickerId], references: [id])
