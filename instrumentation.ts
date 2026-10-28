@@ -12,4 +12,9 @@ export async function register() {
     const { startConfirmReminders } = await import("./lib/orderConfirm");
     startConfirmReminders();
   }
+  // «Ходовые позиции» first in the catalogue: sales of the last 90 days, recounted hourly
+  if (process.env.NEXT_RUNTIME === "nodejs" && process.env.SALES_RECOUNT !== "off") {
+    const { startSalesRecount } = await import("./lib/productSales");
+    startSalesRecount();
+  }
 }

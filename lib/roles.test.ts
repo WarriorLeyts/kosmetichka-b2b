@@ -36,6 +36,6 @@ describe("price type switching", () => {
       ["wholesale", "pending"],
       ["big_wholesale", "request"],
     ]);
-    expect(roleOptions({ priceType: "discount" })[0]).toMatchObject({ value: "discount", state: "current", label: "Скидка" });
+    expect(roleOptions({ priceType: "discount" })[0]).toMatchObject({ value: "discount", state: "current", label: "Скидка по карте" });
   });
 });

@@ -10,7 +10,7 @@
 
 export const ROLE_LABELS: Record<string, string> = {
   retail: "Розница",
-  discount: "Скидка",
+  discount: "Скидка по карте",
   wholesale: "Опт",
   big_wholesale: "Крупный опт",
 };
