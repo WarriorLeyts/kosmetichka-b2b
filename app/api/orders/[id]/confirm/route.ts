@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
+import { notifyStaffLater } from "@/lib/staffNotify";
 
 export async function POST(
   _request: Request,
@@ -50,6 +51,7 @@ export async function POST(
   await prisma.orderMessage
     .create({ data: { orderId, source: "customer", text: "✅ Клиент подтвердил изменения в заказе" } })
     .catch(() => {});
+  notifyStaffLater({ kind: "confirmed", orderId });
 
   return NextResponse.json({ success: true });
 }

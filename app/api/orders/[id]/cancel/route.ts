@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { onOrderStatus } from "@/lib/maxmaOrders";
+import { notifyStaffLater } from "@/lib/staffNotify";
 
 async function bitrixCall(webhookUrl: string, method: string, body: object): Promise<any> {
   const res = await fetch(`${webhookUrl}${method}.json`, {
@@ -103,6 +104,8 @@ export async function POST(request: Request, { params }: Props) {
     console.error("[cancel] update error:", err);
     return NextResponse.json({ error: "Не удалось отменить заказ" }, { status: 500 });
   }
+
+  notifyStaffLater({ kind: "cancelled", orderId: order.id });
 
   // MAXMA: cancel via the queue (one attempt now; retried by the worker; never fails the request)
   await onOrderStatus(order.id, "cancelled");

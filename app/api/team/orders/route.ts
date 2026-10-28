@@ -5,6 +5,7 @@ import { parseCheckStatuses } from "@/lib/checkStatus";
 import { ORDER_STATUS_LABELS } from "@/lib/orderStatus";
 import { ADMIN_MANAGER, requireStaff } from "../_auth";
 import { parsePage } from "../_shared";
+import { customerChatMarks, EMPTY_MARKS } from "@/lib/customerChatMarks";
 
 const PAGE_SIZE = 50;
 
@@ -94,6 +95,9 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
+  // «Новое сообщение» marks in the list
+  const marks = await customerChatMarks(orders.map((o) => o.id));
+
   const countMap: Record<string, number> = {};
   for (const c of todayCounts) countMap[c.status] = c._count.id;
   const todayTotal = Object.values(countMap).reduce((a, b) => a + b, 0);
@@ -113,6 +117,7 @@ export async function GET(request: NextRequest) {
       /** waiting for the customer to confirm staff changes */
       awaitingConfirmation: !!o.confirmRequestedAt,
       customer: o.customer,
+      ...(marks.get(o.id) ?? EMPTY_MARKS),
       itemsCount: o._count.items,
       checkedCount: o.items.filter((i) => i.check).length,
       hasIssues: o.items.some((i) => {

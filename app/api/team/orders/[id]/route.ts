@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { orderChanges } from "@/lib/orderChanges";
 import { paymentBlocked } from "@/lib/orderConfirm";
+import { customerChatMarks, EMPTY_MARKS } from "@/lib/customerChatMarks";
 import { parseCheckStatuses } from "@/lib/checkStatus";
 import {
   ORDER_STATUS_ACTIONS,
@@ -113,6 +114,9 @@ export async function GET(
       to: a.to,
     }));
 
+  // unread mark on «Чат с клиентом»
+  const chat = (await customerChatMarks([order.id])).get(order.id) ?? EMPTY_MARKS;
+
   return NextResponse.json({
     order: {
       id: order.id,
@@ -138,6 +142,7 @@ export async function GET(
       /** staff changed the order; waiting for the customer's «Подтвердить» since then — «Заказ оформлен» is blocked */
       awaitingConfirmationSince: order.confirmRequestedAt ? order.confirmRequestedAt.toISOString() : null,
       confirmReminders: order.confirmReminders,
+      ...chat,
       oneCExportedAt: order.oneCExportedAt ? order.oneCExportedAt.toISOString() : null,
       bitrixDealId: order.bitrixDealId ?? null,
       createdAt: order.createdAt.toISOString(),

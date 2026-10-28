@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
 import { messageLimiter } from "@/lib/rateLimit";
+import { notifyStaffLater } from "@/lib/staffNotify";
 import { buildProductRequest, PRODUCT_REQUEST_STATUSES } from "@/lib/productRequest";
 
 async function getCustomer() {
@@ -103,6 +104,7 @@ export async function POST(
       // userId stays null — this is a customer message, not staff
     },
   });
+  notifyStaffLater({ kind: "chat", orderId, text: msg.text });
 
   return NextResponse.json({
     message: {

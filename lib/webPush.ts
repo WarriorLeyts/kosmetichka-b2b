@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
  */
 
 export type VapidConfig = { publicKey: Buffer; privateKey: crypto.KeyObject; subject: string };
-export type WebPushPayload = { title: string; body: string; link: string | null; kind: string; tag?: string };
+export type WebPushPayload = { title: string; body: string; link: string | null; kind: string; tag?: string; /** in-app path for the staff app (its base URL is added by the service worker) */ path?: string };
 type Sub = { id: number; endpoint: string; p256dh: string; auth: string };
 
 const b64u = (b: Buffer | Uint8Array) => Buffer.from(b).toString("base64url");
@@ -129,7 +129,29 @@ export async function sendWebPush(sub: Sub, payload: WebPushPayload, cfg: VapidC
   }
 }
 
-/** Pushes to every browser of these customers (10 at a time); gone subscriptions are deleted. Returns delivered count. */
+/** Sends to these subscriptions (10 at a time). Returns delivered count and the ids the push service says are gone (404/410). */
+export async function sendToSubscriptions(
+  subs: Sub[],
+  payload: WebPushPayload,
+  cfg: VapidConfig,
+  urgency: "high" | "normal" = "high"
+): Promise<{ ok: number; gone: number[] }> {
+  let ok = 0;
+  const gone: number[] = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < subs.length) {
+      const s = subs[next++];
+      const status = await sendWebPush(s, payload, cfg, urgency);
+      if (status >= 200 && status < 300) ok++;
+      else if (status === 404 || status === 410) gone.push(s.id);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(10, subs.length) }, worker));
+  return { ok, gone };
+}
+
+/** Pushes to every browser of these customers; gone subscriptions are deleted. Returns delivered count. */
 export async function sendWebPushToCustomers(customerIds: number[], payload: WebPushPayload, urgency: "high" | "normal" = "high"): Promise<number> {
   const cfg = getVapidConfig();
   if (!cfg || customerIds.length === 0) return 0;
@@ -138,22 +160,28 @@ export async function sendWebPushToCustomers(customerIds: number[], payload: Web
       where: { customerId: { in: customerIds } },
       select: { id: true, endpoint: true, p256dh: true, auth: true },
     });
-    let ok = 0;
-    const gone: number[] = [];
-    let next = 0;
-    const worker = async () => {
-      while (next < subs.length) {
-        const s = subs[next++];
-        const status = await sendWebPush(s, payload, cfg, urgency);
-        if (status >= 200 && status < 300) ok++;
-        else if (status === 404 || status === 410) gone.push(s.id);
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(10, subs.length) }, worker));
+    const { ok, gone } = await sendToSubscriptions(subs, payload, cfg, urgency);
     if (gone.length) await prisma.webPushSubscription.deleteMany({ where: { id: { in: gone } } });
     return ok;
   } catch (e) {
     console.error("[web-push] failed:", e instanceof Error ? e.message : e);
     return 0;
   }
+}
+
+export type SubscriptionInput = { endpoint: string; p256dh: string; auth: string };
+
+/** Validates a PushSubscription.toJSON() body from the browser: https endpoint (≤1000 chars) + P-256 / 16-byte keys. */
+export function parseSubscription(body: unknown): SubscriptionInput | null {
+  const b = (body ?? {}) as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } };
+  const endpoint = typeof b.endpoint === "string" ? b.endpoint : "";
+  const p256dh = typeof b.keys?.p256dh === "string" ? b.keys.p256dh : "";
+  const auth = typeof b.keys?.auth === "string" ? b.keys.auth : "";
+  let okUrl = false;
+  try {
+    const u = new URL(endpoint);
+    okUrl = endpoint.length <= 1000 && u.protocol === "https:" && !u.username && !u.password;
+  } catch {}
+  if (!okUrl || !validSubscriptionKeys(p256dh, auth)) return null;
+  return { endpoint, p256dh, auth };
 }
