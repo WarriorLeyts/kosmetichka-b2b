@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getStaff, gradeAttempt, HR_ROLE, productImages, readStart, TIME_GRACE_MS, type AnswerMap } from "@/lib/academy";
 
-/** Сдать тест: проверка на сервере, сохранение попытки, результат с разбором (если включён). */
+/** Сдать тест: проверка на сервере, сохранение попытки. Сотрудник получает только итог, без разбора. */
 export async function POST(request: Request) {
   const staff = await getStaff();
   if (!staff) return NextResponse.json({ error: "Войдите заново" }, { status: 401 });
@@ -58,7 +58,8 @@ export async function POST(request: Request) {
     passScore: test.passScore,
     late,
     elapsedMs: elapsed,
-    // Разбор ошибок — только если тест это разрешает
-    details: test.showAnswers ? result.details : null,
+    // Сотруднику разбор не отдаётся НИКОГДА (какие вопросы с ошибкой и какие ответы верные) —
+    // независимо от настройки теста. Разбор видят только HR и админы в «Результатах сотрудников».
+    details: null,
   });
 }

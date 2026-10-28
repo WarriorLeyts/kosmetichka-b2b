@@ -316,7 +316,6 @@ function ResultView({ result, title }: { result: Result; title: string }) {
         </div>
       </section>
 
-      {result.details && <Review details={result.details} />}
     </div>
   );
 }
