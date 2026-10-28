@@ -98,6 +98,42 @@ export function renderMsgContent(text: string): React.ReactNode {
       );
     }
 
+    // «Order changed» card: photo + name + what changed, per line (customer's or manager's edit)
+    if (obj._t === "order-change" && Array.isArray(obj.lines)) {
+      const KIND: Record<string, string> = {
+        added: "bg-green-50 text-green-700 border-green-200",
+        removed: "bg-red-50 text-red-700 border-red-200",
+        changed: "bg-orange-50 text-orange-700 border-orange-200",
+      };
+      const lines = (obj.lines as { name?: unknown; imagePath?: unknown; kind?: unknown; text?: unknown }[]).slice(0, 30);
+      return (
+        <div className="w-72 max-w-full overflow-hidden rounded-xl border bg-white text-slate-800 shadow-sm">
+          <div className="border-b bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">
+            {obj.by === "customer" ? "🛒 " : "✏️ "}
+            {String(obj.title ?? "Заказ изменён")}
+          </div>
+          <ul className="divide-y">
+            {lines.map((l, i) => {
+              const img = getProductImageUrl(typeof l.imagePath === "string" ? l.imagePath : null, 160);
+              const kind = String(l.kind ?? "changed");
+              return (
+                <li key={i} className="flex items-center gap-2 px-2.5 py-2">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-white">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {img ? <img src={img} alt="" className={`h-full w-full object-contain p-0.5 ${kind === "removed" ? "opacity-50 grayscale" : ""}`} /> : <span className="text-slate-300">📦</span>}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-xs font-semibold leading-snug line-clamp-2 ${kind === "removed" ? "line-through text-slate-400" : ""}`}>{String(l.name ?? "")}</p>
+                    <span className={`mt-0.5 inline-block rounded-md border px-1.5 py-0.5 text-[11px] font-bold ${KIND[kind] ?? KIND.changed}`}>{String(l.text ?? "")}</span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      );
+    }
+
     // Problem product card (from picker)
     if (obj._t === "product-problem" && typeof obj.name === "string") {
       const imgUrl = getProductImageUrl((obj.imagePath as string | null) ?? null, 160);

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { orderSums, priceOrderItems, type PricedLine } from "@/lib/orderPricing";
 import { minOrderFor } from "@/lib/pricing";
 import { isMaxmaOrder, loyaltyResponse, recalcOrderLoyalty } from "@/lib/maxmaOrders";
-import { logOrderChanges, summarizeRows } from "@/lib/orderChanges";
+import { changeChatMessage, logOrderChanges } from "@/lib/orderChanges";
 import { CUSTOMER_EDITABLE_STATUSES, customerEditBlockedReason } from "@/lib/orderStatus";
 
 /**
@@ -141,7 +141,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (rows.length > 0) {
     // staff see it at once: in the order chat (admin site, Team app, Bitrix) as a message from the customer
     await prisma.orderMessage
-      .create({ data: { orderId, source: "customer", text: `🛒 Клиент изменил заказ:\n${summarizeRows(rows, 12)}` } })
+      .create({ data: { orderId, source: "customer", text: await changeChatMessage("customer", null, rows) } })
       .catch((e) => console.error("[order-changes] chat:", e instanceof Error ? e.message : e));
   }
 
