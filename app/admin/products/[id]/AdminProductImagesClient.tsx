@@ -9,6 +9,7 @@ type Product = {
   barcode: string | null;
   article: string | null;
   guid: string | null;
+  stock?: number | null;
   images: { id: number; path: string }[];
 };
 
@@ -86,6 +87,9 @@ export function AdminProductImagesClient({ product: initialProduct }: { product:
         ID: {product.id}
         {product.barcode && <> · Штрихкод: {product.barcode}</>}
         {product.article && <> · Артикул: {product.article}</>}
+      </p>
+      <p className={`-mt-4 mb-6 text-base font-bold ${(product.stock ?? 0) > 0 ? "text-green-700" : "text-red-600"}`}>
+        {(product.stock ?? 0) > 0 ? `Остаток в магазине: ${product.stock} шт.` : "Нет в наличии"}
       </p>
 
       <div className="mb-6">

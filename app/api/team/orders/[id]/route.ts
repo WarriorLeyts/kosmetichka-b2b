@@ -82,7 +82,7 @@ export async function GET(
     }),
     prisma.product.findMany({
       where: { id: { in: productIds } },
-      select: { id: true, barcode: true },
+      select: { id: true, barcode: true, stock: true },
     }),
     maxmaStuckByOrder([order.id]),
   ]);
@@ -92,7 +92,11 @@ export async function GET(
     if (!productImages.has(img.productId)) productImages.set(img.productId, img.path);
   }
   const productBarcodes = new Map<number, string | null>();
-  for (const p of productRows) productBarcodes.set(p.id, p.barcode ?? null);
+  const productStock = new Map<number, number | null>();
+  for (const p of productRows) {
+    productBarcodes.set(p.id, p.barcode ?? null);
+    productStock.set(p.id, p.stock ?? null);
+  }
 
   // who changed which line (customer / staff) and what was removed
   const changes = await orderChanges(order.id, order.items);
@@ -167,6 +171,8 @@ export async function GET(
           variantImageUrl: item.variantImageUrl ?? null,
           imagePath,
           imageUrl: productImageUrl(imagePath),
+          /** current stock in the shop */
+          stock: productStock.get(item.productId) ?? null,
           /** what the customer / staff did to this line: { kind: "added"|"changed", oldQuantity, oldPrice, oldVariant, actorName, at } */
           customerChange: changes.lines[item.id]?.customer ?? null,
           staffChange: changes.lines[item.id]?.staff ?? null,
