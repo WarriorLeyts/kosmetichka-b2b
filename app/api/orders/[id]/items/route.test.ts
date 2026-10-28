@@ -26,7 +26,7 @@ const db = vi.hoisted(() => {
   };
   return {
     tx,
-    order: { findUnique: vi.fn() },
+    order: { findUnique: vi.fn(), update: vi.fn(async () => ({})) },
     customer: { findUnique: vi.fn(async () => ({ id: 1, priceType: "wholesale" })) },
     orderItem: { findMany: vi.fn(async () => []) },
     orderMessage: { create: vi.fn(async () => ({})) },
@@ -70,7 +70,6 @@ describe("customer edits an order", () => {
 
   it("the customer's own change clears the pending confirmation of the manager's changes", async () => {
     db.order.findUnique.mockResolvedValue({ ...order("consultation"), confirmRequestedAt: new Date() });
-    db.order.update = vi.fn(async () => ({}));
     await put({ items: [{ id: 1, quantity: 3 }] });
     expect(db.order.update).toHaveBeenCalledWith({ where: { id: 7 }, data: { confirmRequestedAt: null, customerConfirmed: true } });
   });
