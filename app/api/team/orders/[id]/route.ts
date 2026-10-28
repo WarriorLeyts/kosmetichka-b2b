@@ -37,6 +37,7 @@ export async function GET(
             phone: true,
             email: true,
             city: true,
+            address: true,
             inn: true,
             manager: true,
             priceType: true,
@@ -149,6 +150,8 @@ export async function GET(
         phone: order.customer.phone,
         email: order.customer.email,
         city: order.customer.city ?? null,
+        // where to send the order (wholesale customers give the shop's address)
+        address: order.customer.address ?? null,
         inn: order.customer.inn ?? null,
         manager: order.customer.manager ?? null,
         // price type of this order (the customer may have switched since)
