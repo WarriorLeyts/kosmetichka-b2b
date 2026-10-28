@@ -47,7 +47,7 @@ export function ExportButton({ orderCount, totalSum }: ExportButtonProps) {
       <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-slate-400">
         <Download size={32} className="mx-auto mb-3 opacity-30" />
         <p className="font-semibold">Нет заказов для выгрузки</p>
-        <p className="mt-1 text-sm">Заказы со статусом «К оплате» или «Подтверждён» появятся здесь</p>
+        <p className="mt-1 text-sm">Заказы со статусом «Заказ оформлен» или «Подтверждён» появятся здесь</p>
       </div>
     );
   }
@@ -90,7 +90,7 @@ export function ExportButton({ orderCount, totalSum }: ExportButtonProps) {
           </div>
           <div>
             <p className="font-black text-slate-800">Готово к выгрузке</p>
-            <p className="text-sm text-slate-500">Статусы: «Подтверждён» и «К оплате»</p>
+            <p className="text-sm text-slate-500">Статусы: «Подтверждён» и «Заказ оформлен»</p>
           </div>
         </div>
 

@@ -227,7 +227,7 @@ export default async function AdminOrdersPage({
             <option value="approved">Подтверждён</option>
             <option value="assembly">Сборка</option>
             <option value="consultation">Консультация</option>
-            <option value="payment">К оплате</option>
+            <option value="payment">Заказ оформлен</option>
             <option value="exported">Выгружен в 1С</option>
             <option value="cancelled">Отменён</option>
           </select>

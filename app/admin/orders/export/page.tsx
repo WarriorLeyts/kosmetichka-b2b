@@ -39,7 +39,7 @@ export default async function ExportPage() {
 
   const STATUS_LABELS: Record<string, string> = {
     approved: "Подтверждён",
-    payment: "К оплате",
+    payment: "Заказ оформлен",
   };
   const STATUS_COLORS: Record<string, string> = {
     approved: "bg-green-100 text-green-700",

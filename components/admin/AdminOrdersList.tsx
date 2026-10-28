@@ -20,7 +20,7 @@ const STATUS_CLASSES: Record<string, string> = {
 const BULK_STATUS_OPTIONS = [
   { value: "assembly", label: "Передать в сборку" },
   { value: "consultation", label: "Отправить на консультацию" },
-  { value: "payment", label: "К оплате" },
+  { value: "payment", label: "Заказ оформлен" },
   { value: "exported", label: "Выгружен в 1С" },
   { value: "cancelled", label: "Отменить" },
 ];
