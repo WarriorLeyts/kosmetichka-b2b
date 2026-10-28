@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/prisma";
+import { sendWebPushToCustomers } from "@/lib/webPush";
 
 /**
  * Customer notifications: a row in «Уведомления» (the app's bell) + a push to every device of
- * the customer (Expo push service → FCM on Android). Never throws: a failed push must not break
+ * the customer (Expo push service → FCM on Android) and to every browser where they turned on
+ * web notifications (Web Push, lib/webPush.ts). Never throws: a failed push must not break
  * an order, a status change or a chat message. Push needs nothing on our side but the Expo
  * project's FCM key; EXPO_ACCESS_TOKEN is optional (only if "enhanced push security" is on).
  */
@@ -68,19 +70,21 @@ export async function notify(customerIds: number | number[], msg: NotifyMessage)
         data: ids.slice(i, i + 1000).map((customerId) => ({ customerId, kind: msg.kind, title, body, link })),
       });
     }
+    const short = body.length > 180 ? body.slice(0, 177) + "…" : body;
+    const web = sendWebPushToCustomers(ids, { title, body: short, link, kind: msg.kind, tag: link ?? undefined }, msg.kind === "promo" ? "normal" : "high");
     const tokens = await prisma.pushToken.findMany({ where: { customerId: { in: ids } }, select: { token: true } });
-    const devices = await sendPush(
+    const expo = await sendPush(
       tokens.map((t) => ({
         to: t.token,
         title,
-        body: body.length > 180 ? body.slice(0, 177) + "…" : body,
+        body: short,
         data: { link, kind: msg.kind },
         sound: "default",
         channelId: msg.kind === "promo" ? "promo" : "default",
         priority: msg.kind === "promo" ? "default" : "high",
       }))
     );
-    return { customers: ids.length, devices };
+    return { customers: ids.length, devices: expo + (await web) };
   } catch (e) {
     console.error("[notify] failed:", e instanceof Error ? e.message : e);
     return { customers: 0, devices: 0 };
