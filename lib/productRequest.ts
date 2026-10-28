@@ -16,6 +16,8 @@ export type ProductRequestCard = {
   imagePath: string | null;
   quantity: number;
   price: number;
+  /** the manager added it to the order («Добавить в заказ» on the card) */
+  added?: boolean;
 };
 
 /** order statuses in which the customer can still ask to add a product */
@@ -61,4 +63,19 @@ export async function buildProductRequest(
     quantity,
     price,
   };
+}
+
+/** The card of message `messageId` (in order `orderId`) → `added: true`. Other messages are left alone. */
+export async function markProductRequestAdded(orderId: number, messageId: number): Promise<boolean> {
+  const m = await prisma.orderMessage.findFirst({ where: { id: messageId, orderId }, select: { id: true, text: true } });
+  if (!m) return false;
+  let card: ProductRequestCard;
+  try {
+    card = JSON.parse(m.text);
+  } catch {
+    return false;
+  }
+  if (!card || card._t !== "product-request" || card.added) return false;
+  await prisma.orderMessage.update({ where: { id: m.id }, data: { text: JSON.stringify({ ...card, added: true }) } });
+  return true;
 }

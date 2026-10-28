@@ -72,7 +72,7 @@ export async function applyPickChecks(orderId: number, actor: { id: number; name
   const changed = await logOrderChanges(orderId, "staff", actor.name ?? "Менеджер", order.items, remaining);
   if (changed.length > 0) {
     await prisma.orderMessage
-      .create({ data: { orderId, source: "customer", userId: actor.id, text: await changeChatMessage("staff", actor.name, changed) } })
+      .create({ data: { orderId, source: "customer", isFromPicker: true, userId: actor.id, text: await changeChatMessage("staff", actor.name, changed) } })
       .catch((e) => console.error("[pick] chat:", e instanceof Error ? e.message : e));
   }
 
