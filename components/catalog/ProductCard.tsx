@@ -195,7 +195,7 @@ function ProductCardBase({ product, addToCart }: Props) {
               Number(product.discountPrice) > 0 &&
               Number(product.discountPrice) !== Number(product.retailPrice) && (
               <div className="price-row price-row-active">
-                <span>Скидка:</span>
+                <span>Скидка по карте:</span>
                 <b>{Number(product.discountPrice).toLocaleString("ru-RU")} ₽</b>
               </div>
             )}
@@ -214,7 +214,7 @@ function ProductCardBase({ product, addToCart }: Props) {
         {base === "wholesale" && (
           <>
             <div className={`price-row ${activePriceType === "discount" ? "price-row-active" : "price-row-muted"}`}>
-              <span>Скидка:</span>
+              <span>Скидка по карте:</span>
               <b>{Number(product.discountPrice ?? product.retailPrice ?? 0).toLocaleString("ru-RU")} ₽</b>
             </div>
             <div className={`price-row ${activePriceType === "wholesale" ? "price-row-active" : "price-row-muted"}`}>

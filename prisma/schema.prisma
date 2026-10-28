@@ -56,6 +56,8 @@ model Product {
 
   stock       Float?
   minOrderQty Int    @default(1)
+  /// Pieces sold in the last 90 days (orders except cancelled), recounted hourly — «ходовые» go first in the catalogue
+  salesCount  Int    @default(0)
   prices      ProductPrice[]
 
   brandGuid String?
@@ -74,6 +76,7 @@ model Product {
 
   @@index([categoryGuid])
   @@index([updatedAt(sort: Desc)])
+  @@index([salesCount(sort: Desc)])
   @@index([createdAt(sort: Desc)])
   @@index([brandGuid])
   @@index([name])

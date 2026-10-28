@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { productSearchWhere } from "@/lib/productSearch";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { withFlatPrices } from "@/lib/utils";
@@ -45,6 +46,28 @@ async function priceIndex(): Promise<PriceIndex> {
       });
   }
   return priceMemoLoading;
+}
+
+/**
+ * Default order of the catalogue: «ходовые» (most sold in 90 days) first, then recently updated.
+ * Whatever the sort, products in stock come first and the ones out of stock at the very end:
+ * the in-stock part is paged first, then the rest.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function pageInStockFirst(where: any, orderBy: any[], page: number, limit: number, include: any, omit: any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const find = (w: any, skip: number, take: number) => (take > 0 ? prisma.product.findMany({ where: w, skip, take, include, omit, orderBy }) : Promise.resolve([]));
+  if (where.stock) {
+    const [products, total] = await Promise.all([find(where, (page - 1) * limit, limit), prisma.product.count({ where })]);
+    return { products, total };
+  }
+  const inWhere = { AND: [where, { stock: { gt: 0 } }] };
+  const outWhere = { AND: [where, { OR: [{ stock: { lte: 0 } }, { stock: null }] }] };
+  const [inCount, outCount] = await Promise.all([prisma.product.count({ where: inWhere }), prisma.product.count({ where: outWhere })]);
+  const offset = (page - 1) * limit;
+  const first = offset < inCount ? await find(inWhere, offset, limit) : [];
+  const rest = await find(outWhere, Math.max(0, offset - inCount), limit - first.length);
+  return { products: [...first, ...rest], total: inCount + outCount };
 }
 
 export async function GET(request: Request) {
@@ -95,15 +118,12 @@ export async function GET(request: Request) {
     ...(quick.includes("gift")
       ? { name: { contains: "Подарок", mode: "insensitive" } }
       : {}),
-    ...(nameAny.length > 0
-      ? { AND: [{ OR: nameAny.map((s) => ({ name: { contains: s, mode: "insensitive" } })) }] }
-      : {}),
-    ...(search
+    // search by words (each word in the name / brand / article / barcode, any order) + product type
+    ...(nameAny.length > 0 || search
       ? {
-          OR: [
-            { name: { contains: search, mode: "insensitive" } },
-            { barcode: { contains: search } },
-            { article: { contains: search } },
+          AND: [
+            ...(nameAny.length > 0 ? [{ OR: nameAny.map((s) => ({ name: { contains: s, mode: "insensitive" } })) }] : []),
+            ...(search ? [productSearchWhere(search)] : []),
           ],
         }
       : {}),
@@ -135,25 +155,16 @@ export async function GET(request: Request) {
     sort === "price_asc" ||
     sort === "price_desc";
 
-  if (!needsPriceJoin) {
-    const orderBy =
-      sort === "name"
-        ? { name: "asc" as const }
-        : quick.includes("new")
-        ? { createdAt: "desc" as const }
-        : { updatedAt: "desc" as const }; // popularity: recently restocked/updated first
+  // sort name / newest / popularity (most sold, then recently updated); in stock always first
+  const dbOrder =
+    sort === "name"
+      ? [{ name: "asc" as const }]
+      : quick.includes("new")
+      ? [{ createdAt: "desc" as const }]
+      : [{ salesCount: "desc" as const }, { updatedAt: "desc" as const }];
 
-    const [products, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        include,
-        omit,
-        orderBy,
-      }),
-      prisma.product.count({ where }),
-    ]);
+  if (!needsPriceJoin) {
+    const { products, total } = await pageInStockFirst(where, dbOrder, page, limit, include, omit);
 
     return NextResponse.json({
       nameAnyApplied: nameAny.length > 0,
@@ -193,24 +204,7 @@ export async function GET(request: Request) {
   const needsPriceSort = sort === "price_asc" || sort === "price_desc";
 
   if (!needsPriceSort) {
-    const orderBy =
-      sort === "name"
-        ? { name: "asc" as const }
-        : quick.includes("new")
-        ? { createdAt: "desc" as const }
-        : { updatedAt: "desc" as const };
-
-    const [products, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        include,
-        omit,
-        orderBy,
-      }),
-      prisma.product.count({ where }),
-    ]);
+    const { products, total } = await pageInStockFirst(where, dbOrder, page, limit, include, omit);
 
     return NextResponse.json({
       nameAnyApplied: nameAny.length > 0,
@@ -235,12 +229,15 @@ export async function GET(request: Request) {
   if (!sortedIds || Date.now() - sortedIds.at > 60_000) {
     const matched = await prisma.product.findMany({
       where,
-      select: { id: true, guid: true },
+      select: { id: true, guid: true, stock: true },
       take: MAX_SORT_CANDIDATES,
     });
     const priceByGuid = prices.wholesale;
-    // products without a price (none or 0 ₽) always go to the end — in both directions
+    // out of stock at the very end; products without a price (none or 0 ₽) after the priced ones
     matched.sort((a, b) => {
+      const sa = (a.stock ?? 0) > 0 ? 1 : 0;
+      const sb = (b.stock ?? 0) > 0 ? 1 : 0;
+      if (sa !== sb) return sb - sa;
       const pa = priceByGuid.get(a.guid) ?? 0;
       const pb = priceByGuid.get(b.guid) ?? 0;
       if (!(pa > 0) || !(pb > 0)) return (pb > 0 ? 1 : 0) - (pa > 0 ? 1 : 0);

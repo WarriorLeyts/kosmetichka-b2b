@@ -309,7 +309,7 @@ export default async function AdminStatsPage({
                     wholesale: "Опт",
                     big_wholesale: "Кр. опт",
                     retail: "Розница",
-                    discount: "Скидка",
+                    discount: "Скидка по карте",
                   };
                   return (
                     <tr key={g.customerId} className="border-b last:border-0 hover:bg-slate-50">

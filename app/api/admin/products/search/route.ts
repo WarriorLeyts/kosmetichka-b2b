@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { productSearchWhere } from "@/lib/productSearch";
 
 function getSecret() {
   return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
@@ -35,11 +36,8 @@ export async function GET(request: NextRequest) {
   const where: Prisma.ProductWhereInput = {};
 
   if (q.length >= 2) {
-    where.OR = [
-      { name: { contains: q, mode: "insensitive" } },
-      { barcode: { contains: q, mode: "insensitive" } },
-      { article: { contains: q, mode: "insensitive" } },
-    ];
+    // by words: «shik тон» → both words in the name / brand / article / barcode
+    Object.assign(where, productSearchWhere(q));
   }
 
   if (categoryGuid) {

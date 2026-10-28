@@ -32,7 +32,7 @@ export function priceTypeLabel(type: PriceType): string {
     case "big_wholesale": return "Крупный опт";
     case "wholesale":     return "Опт";
     case "retail":        return "Розница";
-    case "discount":      return "Скидка";
+    case "discount":      return "Скидка по карте";
     default:              return "Цена";
   }
 }
