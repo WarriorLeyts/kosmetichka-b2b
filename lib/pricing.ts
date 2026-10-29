@@ -51,7 +51,8 @@ export function priceFor(product: any, type: PriceType): number {
   const pick = (...vals: unknown[]) => {
     for (const v of vals) {
       const n = Number(v);
-      if (Number.isFinite(n) && n > 0) return n;
+      // whole roubles, as the order is priced (lib/orderPricing.ts rounds each unit price)
+      if (Number.isFinite(n) && n > 0) return Math.round(n);
     }
     return 0;
   };
