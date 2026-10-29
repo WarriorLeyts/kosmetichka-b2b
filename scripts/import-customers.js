@@ -172,8 +172,10 @@ async function main() {
       updateData.oneCId = oc.oneCId;
     }
 
-    // Обновляем тип цен из 1С (если 1С возвращает тип цен)
-    if (oc.priceType && oc.priceType !== customer.priceType) {
+    // Тип цен из 1С — только «Опт» и только при первой привязке к 1С. «Крупный опт» из 1С не берём:
+    // крупный опт — то, что клиент выбрал при регистрации или поставил менеджер. Клиент с «Крупным оптом»
+    // его сохраняет. Дальше тип меняют на сайте, импорт его не перезаписывает (lib/oneCPriceType.ts).
+    if (!customer.oneCId && oc.priceType === "wholesale" && customer.priceType !== "wholesale" && customer.priceType !== "big_wholesale") {
       updateData.priceType = oc.priceType;
       priceUpdated++;
     }
