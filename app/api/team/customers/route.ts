@@ -14,6 +14,8 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams;
   const q = sp.get("q")?.trim() || "";
   const statusFilter = sp.get("status") || ""; // "" | "approved" | "pending" | "blocked"
+  // price type: "retail" (розница + скидочная карта) | "wholesale" | "big_wholesale" | "" (all)
+  const typeFilter = sp.get("type") || "";
   const page = parsePage(sp.get("page"));
 
   const where: Prisma.CustomerWhereInput = {
@@ -36,6 +38,11 @@ export async function GET(request: NextRequest) {
         ? { isActive: false }
         : statusFilter === "requests"
         ? { roleRequestStatus: "pending" }
+        : {},
+      typeFilter === "retail"
+        ? { priceType: { in: ["retail", "discount"] } }
+        : typeFilter === "wholesale" || typeFilter === "big_wholesale"
+        ? { priceType: typeFilter }
         : {},
     ],
   };
@@ -77,6 +84,6 @@ export async function GET(request: NextRequest) {
     pageSize: PAGE_SIZE,
     totalCount,
     totalPages: Math.ceil(totalCount / PAGE_SIZE),
-    filters: { q, status: statusFilter },
+    filters: { q, status: statusFilter, type: typeFilter },
   });
 }
