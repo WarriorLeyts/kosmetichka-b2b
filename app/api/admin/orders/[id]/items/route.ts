@@ -8,7 +8,8 @@ import { orderTier, repriceOrder } from "@/lib/orderTier";
 import { isMaxmaOrder, loyaltyResponse, recalcOrderLoyalty } from "@/lib/maxmaOrders";
 import { changeChatMessage, logOrderChanges, orderChanges, summarizeRows } from "@/lib/orderChanges";
 import { notifyLater } from "@/lib/notify";
-import { markProductRequestAdded } from "@/lib/productRequest";
+import { markProductRequestAdded, productRequestAdded } from "@/lib/productRequest";
+import { lockedByOrderId } from "@/lib/orderLock";
 
 function getSecret() {
   return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
@@ -30,7 +31,7 @@ async function getUser() {
 
 type Props = { params: Promise<{ id: string }> };
 
-export async function PUT(request: NextRequest, { params }: Props) {
+async function editItems(request: NextRequest, { params }: Props) {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
 
@@ -76,6 +77,21 @@ export async function PUT(request: NextRequest, { params }: Props) {
       return NextResponse.json({ error: `Позиция ${u.id} не принадлежит заказу` }, { status: 400 });
     }
   }
+  // whole pieces, 1…100 000 (a missing / broken number must not reach the database half-way through)
+  const badQty = (q: unknown) => !Number.isInteger(Number(q)) || Number(q) < 1 || Number(q) > 100_000;
+  if (updates.some((u) => !removeIds.includes(u.id) && badQty(u.quantity)) || newItems.some((ni) => badQty(ni.quantity))) {
+    return NextResponse.json({ error: "Укажите количество — целое число от 1" }, { status: 400 });
+  }
+  // an order is never left without lines (to drop it — cancel it)
+  const removing = new Set(removeIds.filter((rid) => orderItemIds.has(rid)));
+  if (order.items.length - removing.size + newItems.length <= 0) {
+    return NextResponse.json({ error: "В заказе должна остаться хотя бы одна позиция. Чтобы отказаться от заказа, отмените его." }, { status: 400 });
+  }
+  // the customer's «Добавить товар» card is added once (two managers / a double tap)
+  const requestMessageId = Number(body.requestMessageId);
+  if (Number.isInteger(requestMessageId) && requestMessageId > 0 && (await productRequestAdded(orderId, requestMessageId))) {
+    return NextResponse.json({ error: "Этот товар из чата уже добавлен в заказ", code: "already_added" }, { status: 409 });
+  }
 
   // Nobody changes prices in an order: existing lines keep their price, added products get the
   // customer's catalogue price (by their price type) — whatever price the screen sent is ignored.
@@ -86,7 +102,7 @@ export async function PUT(request: NextRequest, { params }: Props) {
     const type = orderTier(order);
     const products = await prisma.product.findMany({
       where: { id: { in: newItems.map((ni) => Number(ni.productId)) } },
-      select: { id: true, name: true, prices: { select: { priceType: true, price: true } } },
+      select: { id: true, name: true, barcode: true, prices: { select: { priceType: true, price: true } }, variants: { select: { name: true } } },
     });
     const byId = new Map(products.map((p) => [p.id, p]));
     for (const ni of newItems) {
@@ -98,6 +114,14 @@ export async function PUT(request: NextRequest, { params }: Props) {
       );
       if (!price) return NextResponse.json({ error: `Цена для товара «${p.name}» не найдена` }, { status: 400 });
       ni.price = price;
+      // name and barcode from the catalogue (what reaches invoices and 1C), never from the request
+      ni.productName = p.name;
+      ni.barcode = ni.barcode || p.barcode || null;
+      const variant = typeof ni.variantName === "string" ? ni.variantName.trim() : "";
+      if (variant && !p.variants.some((v) => v.name === variant)) {
+        return NextResponse.json({ error: `У товара «${p.name}» нет варианта «${variant}»` }, { status: 400 });
+      }
+      ni.variantName = variant || null;
     }
   }
 
@@ -135,16 +159,23 @@ export async function PUT(request: NextRequest, { params }: Props) {
   };
   // ──────────────────────────────────────────────────────────────────────────
 
-  if (removeIds.length > 0) {
-    const validRemoveIds = removeIds.filter((rid) => orderItemIds.has(rid));
-    await prisma.orderItemCheck.deleteMany({ where: { orderItemId: { in: validRemoveIds } } });
-    await prisma.orderItemPhoto.deleteMany({ where: { orderItemId: { in: validRemoveIds } } });
-    await prisma.orderItem.deleteMany({ where: { id: { in: validRemoveIds } } });
-  }
+  // removals, updates and new lines in one transaction: all of them or nothing
+  const validRemoveIds = [...removing];
+  const removeOps = validRemoveIds.length
+    ? [
+        prisma.orderItemCheck.deleteMany({ where: { orderItemId: { in: validRemoveIds } } }),
+        prisma.orderItemPhoto.deleteMany({ where: { orderItemId: { in: validRemoveIds } } }),
+        prisma.orderItem.deleteMany({ where: { id: { in: validRemoveIds } } }),
+      ]
+    : [];
+  // the manager set the quantity himself → the assembly mark of that line no longer applies
+  // (otherwise «Просрочен 2 шт.» would be taken out of the new quantity again on «Отправить проверку»)
+  const origQty = new Map(order.items.map((i) => [i.id, i.quantity]));
+  const changedQtyIds = updates.filter((u) => !removing.has(u.id) && origQty.get(u.id) !== Math.round(Number(u.quantity))).map((u) => u.id);
+  const checkOps = changedQtyIds.length ? [prisma.orderItemCheck.deleteMany({ where: { orderItemId: { in: changedQtyIds } } })] : [];
 
-  // Batch all updates and creates into a single transaction — O(1) round trips instead of O(n)
   const updateOps = updates
-    .filter((u) => !removeIds.includes(u.id))
+    .filter((u) => !removing.has(u.id))
     .map((u) => {
       const qty = Math.max(1, Math.round(u.quantity));
       const price = Math.max(0, Math.round(u.price));
@@ -178,9 +209,8 @@ export async function PUT(request: NextRequest, { params }: Props) {
     });
   });
 
-  if (updateOps.length > 0 || createOps.length > 0) {
-    await prisma.$transaction([...updateOps, ...createOps]);
-  }
+  const ops = [...removeOps, ...checkOps, ...updateOps, ...createOps];
+  if (ops.length > 0) await prisma.$transaction(ops);
 
   // «Опт»: the sum moved across 5 000 / 50 000 ₽ → every line at the new price
   const tierChange = await repriceOrder(orderId).catch((e) => {
@@ -192,7 +222,6 @@ export async function PUT(request: NextRequest, { params }: Props) {
 
   // added from the customer's «Добавить товар» card in the chat → the card shows «Добавлено» from now on
   // (so the same request is not added twice, and a product already in the order can be added again)
-  const requestMessageId = Number(body.requestMessageId);
   if (Number.isInteger(requestMessageId) && requestMessageId > 0) {
     await markProductRequestAdded(orderId, requestMessageId).catch((e) => console.error("[order-items] request:", e instanceof Error ? e.message : e));
   }
@@ -271,3 +300,6 @@ export async function PUT(request: NextRequest, { params }: Props) {
   if (!loyalty) return NextResponse.json({ order: updated, productImages, changes });
   return NextResponse.json({ order: updated, productImages, changes, ...loyaltyResponse(loyalty) });
 }
+
+// one change of an order at a time (double taps, the customer and the manager at once)
+export const PUT = lockedByOrderId(editItems);

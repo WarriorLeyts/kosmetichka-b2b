@@ -3,8 +3,9 @@ import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
 import { notifyStaffLater } from "@/lib/staffNotify";
+import { lockedByOrderId } from "@/lib/orderLock";
 
-export async function POST(
+async function confirmOrder(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -55,3 +56,6 @@ export async function POST(
 
   return NextResponse.json({ success: true });
 }
+
+// one change of an order at a time (double taps, the customer and the manager at once)
+export const POST = lockedByOrderId(confirmOrder);

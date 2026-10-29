@@ -4,8 +4,9 @@ import { confirmRequest } from "@/lib/orderConfirm";
 import { notifyOrderStatus } from "@/lib/notify";
 import { applyPickChecks } from "@/lib/applyPickChecks";
 import { denyIfNotAllowed, getPickerUser, parseId } from "../_access";
+import { withOrderLock } from "@/lib/orderLock";
 
-export async function POST(request: Request) {
+async function submitChecks(request: Request) {
   const user = await getPickerUser();
   if (!user) {
     return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
@@ -173,4 +174,10 @@ export async function POST(request: Request) {
     newStatus,
     changes: applied.changed.length,
   });
+}
+
+// one change of an order at a time: a double tap on «Отправить проверку» applies the checks once
+export async function POST(request: Request) {
+  const body = (await request.clone().json().catch(() => ({}))) as { orderId?: unknown };
+  return withOrderLock(Number(body?.orderId), () => submitChecks(request));
 }
