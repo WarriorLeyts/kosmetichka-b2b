@@ -138,6 +138,9 @@ export async function GET(
           }
         : {}),
       comment: order.comment ?? null,
+      // how the customer gets it: «pickup» (Заберу в магазине) | «delivery» (address may be empty) | null (old orders)
+      deliveryType: order.deliveryType ?? null,
+      deliveryAddress: order.deliveryAddress ?? null,
       customerConfirmed: order.customerConfirmed,
       changesSnapshot: order.changesSnapshot ?? null,
       /** staff changed the order; waiting for the customer's «Подтвердить» since then — «Заказ оформлен» is blocked */

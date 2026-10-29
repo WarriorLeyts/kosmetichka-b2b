@@ -120,25 +120,28 @@ describe("«Опт»: the price by the order sum (no minimum)", () => {
   });
 });
 
-describe("shop address (опт, крупный опт)", () => {
-  it("a wholesale account without an address can't order without giving it", async () => {
+describe("delivery: «Заберу в магазине» or an address (not required)", () => {
+  type C = { data: { deliveryType?: string; deliveryAddress?: string | null } };
+  it("a wholesale account without an address orders all the same", async () => {
     db.customer.findUnique.mockResolvedValue(customer("wholesale", { address: null }));
     const r = await order({ items: [{ id: 1, quantity: 7 }] });
-    expect(r.status).toBe(400);
-    expect((await r.json()).code).toBe("address_required");
-    expect(db.order.create).not.toHaveBeenCalled();
-  });
-
-  it("the address given at checkout is saved to the profile and the order goes through", async () => {
-    db.customer.findUnique.mockResolvedValue(customer("wholesale", { address: null }));
-    const r = await order({ items: [{ id: 1, quantity: 7 }], address: "  Махачкала,  ул. Гагарина 5 " });
     expect(r.status).toBe(200);
-    expect(db.customer.update).toHaveBeenCalledWith({ where: { id: 1 }, data: { address: "Махачкала, ул. Гагарина 5" } });
+    expect((created as unknown as C).data).toMatchObject({ deliveryType: "delivery", deliveryAddress: null });
+    expect(db.customer.update).not.toHaveBeenCalled();
   });
 
-  it("retail doesn't need it", async () => {
-    db.customer.findUnique.mockResolvedValue(customer("retail", { address: null }));
-    expect((await order({ items: [{ id: 2, quantity: 1 }] })).status).toBe(200);
+  it("pickup: no address on the order", async () => {
+    db.customer.findUnique.mockResolvedValue(customer("retail"));
+    expect((await order({ items: [{ id: 2, quantity: 1 }], pickup: true, address: "что-то" })).status).toBe(200);
+    expect((created as unknown as C).data).toMatchObject({ deliveryType: "pickup", deliveryAddress: null });
+  });
+
+  it("delivery: the given address, else the profile one", async () => {
+    db.customer.findUnique.mockResolvedValue(customer("retail"));
+    await order({ items: [{ id: 2, quantity: 1 }], address: "  Грозный,  ул. Мира 3 " });
+    expect((created as unknown as C).data.deliveryAddress).toBe("Грозный, ул. Мира 3");
+    await order({ items: [{ id: 2, quantity: 1 }] });
+    expect((created as unknown as C).data.deliveryAddress).toBe("Махачкала, ул. Ленина, 1");
   });
 });
 

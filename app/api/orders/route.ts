@@ -21,7 +21,7 @@ import {
 import { adoptReservedBonuses, BONUSES_UNAVAILABLE, BONUSES_UNAVAILABLE_CODE } from "@/lib/maxmaOrders";
 import { enqueueMaxmaTask, runOrderMaxmaTasks } from "@/lib/maxmaQueue";
 import { PROMO_NOT_FOR_ITEMS } from "@/lib/promo";
-import { ADDRESS_REQUIRED, cleanAddress, needsShopAddress } from "@/lib/shopAddress";
+import { orderDelivery } from "@/lib/delivery";
 
 /** Escape user-supplied strings before embedding in HTML emails */
 function escHtml(str: string): string {
@@ -59,7 +59,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const { items, comment, promocode, applyBonuses: rawApplyBonuses, address: rawAddress } = await request.json();
+  const body = await request.json();
+  const { items, comment, promocode, applyBonuses: rawApplyBonuses } = body;
 
   // Bonuses to spend: whole number ≥ 0 (1 bonus = 1 ₽ discount)
   const applyBonuses = Number(rawApplyBonuses ?? 0);
@@ -83,13 +84,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Ошибка авторизации" }, { status: 401 });
   }
 
-  // wholesale accounts made before the address was asked at registration: they give it now (saved to the profile)
-  if (needsShopAddress(customer.priceType) && !cleanAddress(customer.address)) {
-    const address = cleanAddress(rawAddress);
-    if (!address) return NextResponse.json({ error: ADDRESS_REQUIRED, code: "address_required" }, { status: 400 });
-    await prisma.customer.update({ where: { id: customer.id }, data: { address } });
-    customer.address = address;
-  }
+  // «Заберу в магазине» or delivery; the address is not required (the manager calls about payment and delivery)
+  const delivery = orderDelivery(body ?? {}, customer.address);
 
   if (applyBonuses > 0 && !canSpendBonuses(customer)) {
     return NextResponse.json({ error: BONUS_SPEND_FORBIDDEN }, { status: 400 });
@@ -161,6 +157,7 @@ export async function POST(request: Request) {
     status: "pending",
     priceType: customer.priceType,
     priceTier: tier,
+    ...delivery,
     total: linesTotal - promoDiscount - bonusesApplied,
     comment: comment || null,
     ...(promo ? { promoCode, discount: promo.discount } : {}),
