@@ -8,7 +8,7 @@ import { getClientIp } from "@/lib/rateLimit";
 import { isWholesaleRole } from "@/lib/roles";
 import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
 import { ADDRESS_REQUIRED, cleanAddress, needsShopAddress } from "@/lib/shopAddress";
-import { priceTypeFrom1C } from "@/lib/oneCPriceType";
+import { registrationPriceType } from "@/lib/oneCPriceType";
 
 async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
   const serverKey = process.env.SMARTCAPTCHA_SERVER_KEY;
@@ -152,8 +152,11 @@ export async function POST(request: Request) {
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  // The customer's choice; from 1C only «Опт» is taken («Крупный опт» in 1C is ignored)
-  const effectivePriceType = priceTypeFrom1C(priceType, oneCCustomer?.priceType);
+  // The customer's choice, but «Крупный опт» → «Опт» (a manager sets big wholesale in the admin);
+  // from 1C only «Опт» is taken
+  const effectivePriceType = registrationPriceType(priceType, oneCCustomer?.priceType);
+  // asked for «Крупный опт»: the manager sees it in «Заявки на опт»
+  const wantsBig = priceType === "big_wholesale";
 
   // Auto-approve retail/discount customers; wholesale types need manager confirmation
   // Exception: always auto-approve if linked to 1C record
@@ -178,6 +181,7 @@ export async function POST(request: Request) {
       priceType: effectivePriceType,
       // wholesale level the customer can switch back to after choosing retail (login still needs approval)
       wholesaleAccess: isWholesaleRole(effectivePriceType) ? effectivePriceType : null,
+      ...(wantsBig ? { roleRequest: "big_wholesale", roleRequestStatus: "pending", roleRequestedAt: new Date() } : {}),
     },
   });
 
