@@ -8,6 +8,7 @@ import { getClientIp } from "@/lib/rateLimit";
 import { isWholesaleRole } from "@/lib/roles";
 import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
 import { ADDRESS_REQUIRED, cleanAddress, needsShopAddress } from "@/lib/shopAddress";
+import { priceTypeFrom1C } from "@/lib/oneCPriceType";
 
 async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
   const serverKey = process.env.SMARTCAPTCHA_SERVER_KEY;
@@ -151,8 +152,8 @@ export async function POST(request: Request) {
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  // Determine effective priceType: 1C record overrides user selection if linked
-  const effectivePriceType = oneCCustomer?.priceType || priceType;
+  // The customer's choice; from 1C only «Опт» is taken («Крупный опт» in 1C is ignored)
+  const effectivePriceType = priceTypeFrom1C(priceType, oneCCustomer?.priceType);
 
   // Auto-approve retail/discount customers; wholesale types need manager confirmation
   // Exception: always auto-approve if linked to 1C record
