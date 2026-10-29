@@ -50,7 +50,6 @@ export async function PATCH(request: Request) {
   const companyName = s("companyName");
   const phone = s("phone");
   const email = s("email");
-  const city = s("city");
   const address = s("address");
   const currentPassword = s("currentPassword");
   const password = s("password");
@@ -89,7 +88,7 @@ export async function PATCH(request: Request) {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data: any = { name, companyName, phone, email, city, address };
+  const data: any = { name, companyName, phone, email, address }; // «Город» is no longer asked (the address has it)
 
   if (password.trim()) {
     if (!currentPassword.trim()) return fail("current_password_required");

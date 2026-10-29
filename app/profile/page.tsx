@@ -40,7 +40,6 @@ async function updateProfile(formData: FormData) {
   const companyName = String(formData.get("companyName") || "");
   const phone = String(formData.get("phone") || "");
   const email = String(formData.get("email") || "");
-  const city = String(formData.get("city") || "");
   const address = String(formData.get("address") || "");
   const currentPassword = String(formData.get("currentPassword") || "");
   const password = String(formData.get("password") || "");
@@ -69,7 +68,7 @@ async function updateProfile(formData: FormData) {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const data: any = { name, companyName, phone, email, city, address };
+  const data: any = { name, companyName, phone, email, address }; // «Город» removed — the address has it
 
   if (password.trim()) {
     // Require current password before allowing a change
@@ -259,16 +258,6 @@ export default async function ProfilePage({
                 className="w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
               />
             </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-bold text-slate-700">Город</label>
-            <input
-              name="city"
-              defaultValue={customer.city || ""}
-              placeholder="Москва"
-              className="w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-            />
           </div>
 
           <div>

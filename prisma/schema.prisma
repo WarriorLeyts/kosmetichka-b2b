@@ -190,6 +190,9 @@ model Order {
   /// Prices the order's lines are at: «Опт» customers get them by the order sum (lib/pricing.ts cartPriceTier),
   /// recalculated when the manager changes the order; null — old orders (the customer's type)
   priceTier String?
+  /// «pickup» (Заберу в магазине) | «delivery» (to deliveryAddress, may be empty — the manager asks); null — old orders
+  deliveryType    String?
+  deliveryAddress String? @db.Text
   comment String? @db.Text
 
   // Promo code (validated and calculated by MAXMA); discount in whole roubles, total already reduced by it
