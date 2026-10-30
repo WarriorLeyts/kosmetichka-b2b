@@ -1,6 +1,23 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../_auth";
+import { RateLimiter } from "@/lib/rateLimit";
+import { onLive } from "@/lib/realtime";
+
+// one browser must not be able to load the server: the same list asked again within 2 s gets the
+// last answer from memory (no database), and more than 120 lists a minute get «too often»
+const g = globalThis as unknown as { __ordersListCache?: Map<string, { at: number; body: unknown }> };
+const recent = (g.__ordersListCache ??= new Map());
+const limiter = new RateLimiter({ windowMs: 60_000, max: 120 });
+// an order of the customer changed → his lists are read from the database again
+const gl = globalThis as unknown as { __ordersListCacheHooked?: boolean };
+if (!gl.__ordersListCacheHooked) {
+  gl.__ordersListCacheHooked = true;
+  onLive((e) => {
+    if (e.t !== "order" || !e.customerId) return;
+    for (const k of recent.keys()) if (k.startsWith(`${e.customerId}|`)) recent.delete(k);
+  });
+}
 
 const PAGE_SIZE = 20;
 
@@ -9,7 +26,15 @@ export async function GET(request: Request) {
   const customerId = await currentCustomerId();
   if (!customerId) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
 
-  const sp = new URL(request.url).searchParams;
+  const url = new URL(request.url);
+  const cacheKey = `${customerId}|${url.search}`;
+  const hit = recent.get(cacheKey);
+  if (hit && Date.now() - hit.at < 2000) return NextResponse.json(hit.body);
+  if (!limiter.check(`orders:${customerId}`).ok) {
+    return NextResponse.json({ error: "Слишком часто — подождите немного" }, { status: 429, headers: { "Retry-After": "30" } });
+  }
+
+  const sp = url.searchParams;
   const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
   const statusFilter = sp.get("status") || "";
   const MSK = "+03:00";
@@ -86,7 +111,7 @@ export async function GET(request: Request) {
   const imageByProductId = new Map<number, string>();
   for (const img of images) if (!imageByProductId.has(img.productId)) imageByProductId.set(img.productId, img.path);
 
-  return NextResponse.json({
+  const body = {
     page,
     pageSize: PAGE_SIZE,
     totalCount,
@@ -119,5 +144,8 @@ export async function GET(request: Request) {
         imagePath: imageByProductId.get(item.productId) ?? null,
       })),
     })),
-  });
+  };
+  recent.set(cacheKey, { at: Date.now(), body });
+  if (recent.size > 2000) recent.clear();
+  return NextResponse.json(body);
 }
