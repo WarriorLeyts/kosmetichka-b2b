@@ -8,6 +8,7 @@ import { cmlComment, cmlItemDiscounts, cmlItemSum } from "@/lib/commerceml";
 import { MAXMA_ORDER_WHERE, onOrderStatus } from "@/lib/maxmaOrders";
 import { DATA_ROOT } from "@/lib/dataDir";
 import { notifyOrderStatus } from "@/lib/notify";
+import { orderTier } from "@/lib/orderTier";
 
 // Auth: any login + SYNC_API_KEY as password (set in .env)
 const COOKIE_NAME = "1C_SESS";
@@ -225,7 +226,7 @@ ${itemsXml}
       </ЗначениеРеквизита>
       <ЗначениеРеквизита>
         <Наименование>ВидЦен</Наименование>
-        <Значение>${priceTypeLabel(order.priceType ?? c.priceType)}</Значение>
+        <Значение>${priceTypeLabel(orderTier({ priceTier: order.priceTier, priceType: order.priceType, customer: c }))}</Значение>
       </ЗначениеРеквизита>
     </ЗначенияРеквизитов>
   </Документ>`;
