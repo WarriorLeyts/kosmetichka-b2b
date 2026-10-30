@@ -160,7 +160,11 @@ export async function POST(request: Request) {
 
   // Auto-approve retail/discount customers; wholesale types need manager confirmation
   // Exception: always auto-approve if linked to 1C record
-  const shouldAutoApprove = Boolean(oneCCustomer) || AUTO_APPROVE_TYPES.has(effectivePriceType);
+  // in 1C: approved at once, but wholesale only when 1C has him as wholesale too (a 1C retail customer who
+  // picks «Опт» waits for the manager like anybody else)
+  const shouldAutoApprove =
+    AUTO_APPROVE_TYPES.has(effectivePriceType) ||
+    (Boolean(oneCCustomer) && (!isWholesaleRole(effectivePriceType) || isWholesaleRole(oneCCustomer?.priceType)));
 
   const customer = await prisma.customer.create({
     data: {

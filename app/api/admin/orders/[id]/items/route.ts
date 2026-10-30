@@ -116,7 +116,7 @@ async function editItems(request: NextRequest, { params }: Props) {
       ni.price = price;
       // name and barcode from the catalogue (what reaches invoices and 1C), never from the request
       ni.productName = p.name;
-      ni.barcode = ni.barcode || p.barcode || null;
+      ni.barcode = p.barcode || null;
       const variant = typeof ni.variantName === "string" ? ni.variantName.trim() : "";
       if (variant && !p.variants.some((v) => v.name === variant)) {
         return NextResponse.json({ error: `У товара «${p.name}» нет варианта «${variant}»` }, { status: 400 });
