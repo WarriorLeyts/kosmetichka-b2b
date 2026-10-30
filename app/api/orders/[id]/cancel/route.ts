@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { onOrderStatus } from "@/lib/maxmaOrders";
 import { notifyStaffLater } from "@/lib/staffNotify";
+import { lockedByOrderId } from "@/lib/orderLock";
 
 async function bitrixCall(webhookUrl: string, method: string, body: object): Promise<any> {
   const res = await fetch(`${webhookUrl}${method}.json`, {
@@ -55,7 +56,7 @@ type Props = {
   params: Promise<{ id: string }>;
 };
 
-export async function POST(request: Request, { params }: Props) {
+async function cancelOrder(request: Request, { params }: Props) {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
 
@@ -117,3 +118,6 @@ export async function POST(request: Request, { params }: Props) {
 
   return NextResponse.json({ success: true });
 }
+
+// one change of an order at a time (double taps, the customer and the manager at once)
+export const POST = lockedByOrderId(cancelOrder);

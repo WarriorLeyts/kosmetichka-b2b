@@ -7,8 +7,9 @@ import { ORDER_STATUS_LABELS, ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/
 import { notifyOrderStatus } from "@/lib/notify";
 import { applyPickChecks } from "@/lib/applyPickChecks";
 import { AWAITING_CONFIRMATION, confirmRequest, paymentBlocked } from "@/lib/orderConfirm";
+import { lockedByOrderId } from "@/lib/orderLock";
 
-export async function POST(
+async function changeStatus(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -121,3 +122,6 @@ export async function POST(
 
   return NextResponse.json({ order: updatedOrder });
 }
+
+// one change of an order at a time (double taps, the customer and the manager at once)
+export const POST = lockedByOrderId(changeStatus);

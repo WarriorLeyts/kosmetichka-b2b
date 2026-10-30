@@ -4,7 +4,8 @@ import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
 import { messageLimiter } from "@/lib/rateLimit";
 import { notifyStaffLater } from "@/lib/staffNotify";
-import { buildProductRequest, PRODUCT_REQUEST_STATUSES } from "@/lib/productRequest";
+import { buildProductRequest, isForgedProductRequest, PRODUCT_REQUEST_STATUSES } from "@/lib/productRequest";
+import { orderTier } from "@/lib/orderTier";
 
 async function getCustomer() {
   const cookieStore = await cookies();
@@ -69,11 +70,12 @@ export async function POST(
     if (!PRODUCT_REQUEST_STATUSES.includes(order.status)) {
       return NextResponse.json({ error: "Заказ уже оформлен — добавить товар нельзя. Оформите новый заказ." }, { status: 400 });
     }
+    // the price of the order («Опт»: by its sum — discount / wholesale / big wholesale)
     const who = await prisma.customer.findUnique({ where: { id: customer.id }, select: { priceType: true } });
-    const card = await buildProductRequest(who ?? {}, body.productRequest);
+    const card = await buildProductRequest({ priceType: orderTier({ priceTier: order.priceTier, priceType: order.priceType, customer: who }) }, body.productRequest);
     if ("error" in card) return NextResponse.json({ error: card.error }, { status: 400 });
     text = JSON.stringify(card);
-  } else if (typeof text === "string" && text.trim().startsWith("{") && /"_t"\s*:\s*"product-request"/.test(text)) {
+  } else if (isForgedProductRequest(text)) {
     // only the server writes these cards
     return NextResponse.json({ error: "Неверное сообщение" }, { status: 400 });
   }

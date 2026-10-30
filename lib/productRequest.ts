@@ -79,3 +79,26 @@ export async function markProductRequestAdded(orderId: number, messageId: number
   await prisma.orderMessage.update({ where: { id: m.id }, data: { text: JSON.stringify({ ...card, added: true }) } });
   return true;
 }
+
+/** The card of message `messageId` was already added to the order. */
+export async function productRequestAdded(orderId: number, messageId: number): Promise<boolean> {
+  const m = await prisma.orderMessage.findFirst({ where: { id: messageId, orderId }, select: { text: true } });
+  if (!m) return false;
+  try {
+    const card = JSON.parse(m.text);
+    return card?._t === "product-request" && card.added === true;
+  } catch {
+    return false;
+  }
+}
+
+/** A customer's text that is (after JSON parsing) a «product-request» card — only the server writes those. */
+export function isForgedProductRequest(text: unknown): boolean {
+  if (typeof text !== "string" || !text.trim().startsWith("{")) return false;
+  try {
+    const o = JSON.parse(text);
+    return !!o && typeof o === "object" && o._t === "product-request";
+  } catch {
+    return false;
+  }
+}
