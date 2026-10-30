@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { cmlComment, cmlItemDiscounts, cmlItemSum } from "@/lib/commerceml";
+import { orderTier } from "@/lib/orderTier";
 
 function checkApiKey(request: NextRequest) {
   const key = request.headers.get("x-1c-key");
@@ -120,7 +121,7 @@ ${itemsXml}
       </ЗначениеРеквизита>
       <ЗначениеРеквизита>
         <Наименование>ВидЦен</Наименование>
-        <Значение>${priceTypeLabel(order.priceType ?? customer.priceType)}</Значение>
+        <Значение>${priceTypeLabel(orderTier({ priceTier: order.priceTier, priceType: order.priceType, customer }))}</Значение>
       </ЗначениеРеквизита>
     </ЗначенияРеквизитов>
   </Документ>`;

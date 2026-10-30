@@ -5,6 +5,7 @@ import { cmlComment, cmlHasLoyalty, cmlItemDiscounts, cmlItemSum } from "@/lib/c
 import { ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
 import { onOrderStatus } from "@/lib/maxmaOrders";
 import { notifyOrderStatus } from "@/lib/notify";
+import { orderTier } from "@/lib/orderTier";
 
 function xml(value: any) {
   return String(value ?? "")
@@ -51,7 +52,8 @@ async function buildXml() {
         order.customer.oneCId || `customer-${order.customer.id}`;
 
       const customerManager = order.customer.manager || "";
-      const customerPriceType = order.priceType || order.customer.priceType || "";
+      // the prices the order is actually at («Опт»: by its sum — Скидка / Опт / Крупный опт)
+      const customerPriceType = orderTier({ priceTier: order.priceTier, priceType: order.priceType, customer: order.customer });
 
       const itemsXml = order.items
         .map((item) => {
