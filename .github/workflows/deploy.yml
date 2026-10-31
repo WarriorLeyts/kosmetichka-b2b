@@ -20,7 +20,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Before every release from main: type check + tests. If they fail, nothing goes to the server.
+  # (A manual run with a server command skips this — it is for server work, not for new code.)
+  check:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://u:p@localhost:5432/db
+      JWT_SECRET: ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci || npm install
+      - run: npx prisma generate
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Tests
+        run: npx vitest run
+
   deploy:
+    needs: check
+    if: ${{ !cancelled() && (needs.check.result == 'success' || needs.check.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
