@@ -163,6 +163,9 @@ export async function GET(request: NextRequest) {
       take: 500,
     });
 
+    // remembered for «success»: 1C confirms the download without listing the orders
+    lastSale = { at: Date.now(), ids: orders.map((o) => o.id) };
+
     const allProductIds = orders.flatMap((o) => o.items.map((i) => i.productId));
     const products = await prisma.product.findMany({
       where: { id: { in: allProductIds } },
@@ -243,7 +246,45 @@ ${docs}
     });
   }
 
+  // ── sale: success (1C confirms the orders it has just downloaded) ───────
+  if (type === "sale" && mode === "success") {
+    await ackOrders(lastSaleIds());
+    return txt("success");
+  }
+
   return txt("success");
+}
+
+/**
+ * The orders given to 1C by the last «sale / query». The standard exchange confirms them with
+ * «success» and no list (only some 1C setups send the list): without this they stayed «not exported»
+ * and went to 1C again with every exchange.
+ */
+let lastSale: { at: number; ids: number[] } | null = null;
+function lastSaleIds(): number[] {
+  const ids = lastSale && Date.now() - lastSale.at < 60 * 60 * 1000 ? lastSale.ids : [];
+  lastSale = null;
+  return ids;
+}
+
+/** Orders 1C confirmed: «Выгружен в 1С», customer notified, MAXMA promo / bonus orders confirmed. */
+async function ackOrders(ids: number[]) {
+  if (ids.length === 0) return;
+  const { prisma } = await import("@/lib/prisma");
+  // Promo-code orders this ack moves to "exported" (for the MAXMA confirm below)
+  const toConfirm = await prisma.order.findMany({
+    where: { id: { in: ids }, status: { not: "exported" }, ...MAXMA_ORDER_WHERE },
+    select: { id: true },
+  });
+  const moved = await prisma.order.findMany({ where: { id: { in: ids }, status: { not: "exported" } }, select: { id: true } });
+  await prisma.order.updateMany({
+    where: { id: { in: ids } },
+    data: { oneCExportedAt: new Date(), status: "exported" },
+  });
+  void notifyOrderStatus(moved.map((o) => o.id), "exported");
+  console.log(`[exchange] acknowledged orders: ${ids.join(", ")}`);
+  // MAXMA: confirm promo-code / bonus orders via the queue (tasks saved now, calls in the background)
+  if (toConfirm.length) await onOrderStatus(toConfirm.map((o) => o.id), "exported", { background: true });
 }
 
 export async function POST(request: NextRequest) {
@@ -285,23 +326,8 @@ export async function POST(request: NextRequest) {
       ids.push(parseInt(match[1]));
     }
 
-    if (ids.length > 0) {
-      const { prisma } = await import("@/lib/prisma");
-      // Promo-code orders this ack moves to "exported" (for the MAXMA confirm below)
-      const toConfirm = await prisma.order.findMany({
-        where: { id: { in: ids }, status: { not: "exported" }, ...MAXMA_ORDER_WHERE },
-        select: { id: true },
-      });
-      const moved = await prisma.order.findMany({ where: { id: { in: ids }, status: { not: "exported" } }, select: { id: true } });
-      await prisma.order.updateMany({
-        where: { id: { in: ids } },
-        data: { oneCExportedAt: new Date(), status: "exported" },
-      });
-      void notifyOrderStatus(moved.map((o) => o.id), "exported");
-      console.log(`[exchange] acknowledged orders: ${ids.join(", ")}`);
-      // MAXMA: confirm promo-code / bonus orders via the queue (tasks saved now, calls in the background)
-      if (toConfirm.length) await onOrderStatus(toConfirm.map((o) => o.id), "exported", { background: true });
-    }
+    // no list in the body (the usual case) → the orders of the last query
+    await ackOrders(ids.length > 0 ? ids : lastSaleIds());
 
     return txt("success");
   }

@@ -80,6 +80,8 @@ model Product {
   @@index([createdAt(sort: Desc)])
   @@index([brandGuid])
   @@index([name])
+  @@index([stock])
+  // trigram indexes for the «contains» search (pg_trgm) live in prisma/manual/2026-10-31-search-trigram.sql
 }
 
 model ProductVariant {
