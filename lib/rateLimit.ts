@@ -36,9 +36,17 @@ export class RateLimiter {
     this.max = options.max;
   }
 
+  /** last sweep of keys whose hits are all outside the window (one per window at most) */
+  private sweptAt = 0;
+
   check(key: string): RateLimitResult {
     const now = Date.now();
     const cutoff = now - this.windowMs;
+    // every IP / phone / login ever seen stayed in memory until a restart: drop the idle ones
+    if (now - this.sweptAt > this.windowMs) {
+      this.sweptAt = now;
+      for (const [k, list] of this.store) if (list[list.length - 1] <= cutoff) this.store.delete(k);
+    }
 
     const hits = (this.store.get(key) ?? []).filter((t) => t > cutoff);
     hits.push(now);

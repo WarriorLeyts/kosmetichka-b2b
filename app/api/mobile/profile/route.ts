@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../_auth";
+import { renewCustomerSession } from "@/lib/customerAuth";
 import { normalizePhone } from "@/lib/phone";
 
 const SELECT = {
@@ -98,9 +99,14 @@ export async function PATCH(request: Request) {
     if (password !== passwordConfirm) return fail("password_mismatch");
     if (password.length < 6) return fail("password_too_short");
     data.password = await bcrypt.hash(password, 10);
+    data.passwordChangedAt = new Date(); // other devices are signed out
   }
 
   const customer = await prisma.customer.update({ where: { id }, data, select: SELECT });
+  if (data.passwordChangedAt) {
+    const me = await prisma.customer.findUnique({ where: { id }, select: { id: true, email: true, phone: true, role: true } });
+    if (me) await renewCustomerSession(me); // …but this one stays signed in
+  }
   return NextResponse.json({ success: true, customer });
 }
 

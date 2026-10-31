@@ -70,6 +70,7 @@ async function updateCustomer(formData: FormData) {
 
   if (password.trim()) {
     data.password = await bcrypt.hash(password, 10);
+    data.passwordChangedAt = new Date(); // the customer's old sessions end
   }
 
   await prisma.customer.update({

@@ -101,10 +101,14 @@ async function main() {
     const product = await prisma.product.findUnique({ where: { guid: String(guid) } });
     if (!product) continue;
 
-    await prisma.productImage.deleteMany({ where: { productId: product.id } });
+    // photos a product variant points at stay (deleting them failed the whole import on the foreign key);
+    // the others are replaced by the photos from 1C
+    await prisma.productImage.deleteMany({ where: { productId: product.id, variants: { none: {} } } });
+    const kept = new Set((await prisma.productImage.findMany({ where: { productId: product.id }, select: { path: true } })).map((i) => i.path));
 
     for (const imgPath of validImgs) {
       const rel = String(imgPath).replace(/\\/g, "/");
+      if (kept.has(rel)) continue;
       await compressInPlace(path.join(DATA_1C, rel));
       await prisma.productImage.create({ data: { productId: product.id, path: rel } });
       saved++;

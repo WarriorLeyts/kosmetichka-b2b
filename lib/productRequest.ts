@@ -102,3 +102,25 @@ export function isForgedProductRequest(text: unknown): boolean {
     return false;
   }
 }
+
+/**
+ * What a customer may send to the chat: plain text, or an attachment card ({_t: img | video | file})
+ * pointing at a file uploaded to our own /api/uploads/chat/. Any other card (order changes, product
+ * cards, product requests) is written only by the site and the staff — a customer's forged one would
+ * show up in the staff chat as if it were real.
+ */
+export function customerChatTextAllowed(text: string): boolean {
+  const t = text.trim();
+  if (!t.startsWith("{")) return true;
+  let o: unknown;
+  try {
+    o = JSON.parse(t);
+  } catch {
+    return true; // not JSON — plain text that starts with «{»
+  }
+  if (!o || typeof o !== "object" || Array.isArray(o)) return true;
+  const card = o as { _t?: unknown; url?: unknown };
+  if (card._t === undefined) return true;
+  if (card._t !== "img" && card._t !== "video" && card._t !== "file") return false;
+  return typeof card.url === "string" && /^\/api\/uploads\/chat\/[\w.-]+$/.test(card.url);
+}

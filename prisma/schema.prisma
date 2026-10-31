@@ -114,6 +114,8 @@ model Customer {
   id Int @id @default(autoincrement())
 
   name        String?
+  /// when the password was last changed: login tokens issued before it no longer work (lib/customerAuth.ts)
+  passwordChangedAt DateTime?
   companyName String?
   phone       String? @unique
   email       String?

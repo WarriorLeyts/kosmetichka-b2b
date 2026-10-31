@@ -53,6 +53,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (password) {
     if (password.length < 6) return NextResponse.json({ error: "Пароль — не короче 6 символов" }, { status: 400 });
     data.password = await bcrypt.hash(password, 10);
+    data.passwordChangedAt = new Date(); // the customer's old sessions end
   }
 
   try {

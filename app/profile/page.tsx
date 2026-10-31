@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { verifyCustomerToken } from "@/lib/customerAuth";
+import { renewCustomerSession, verifyCustomerToken } from "@/lib/customerAuth";
 import { normalizePhone } from "@/lib/phone";
 import bcrypt from "bcryptjs";
 import PasswordInput from "@/components/PasswordInput";
@@ -90,9 +90,14 @@ async function updateProfile(formData: FormData) {
       redirect("/profile?error=password_too_short");
     }
     data.password = await bcrypt.hash(password, 10);
+    data.passwordChangedAt = new Date(); // other devices are signed out
   }
 
   await prisma.customer.update({ where: { id }, data });
+  if (data.passwordChangedAt) {
+    const me = await prisma.customer.findUnique({ where: { id }, select: { id: true, email: true, phone: true, role: true } });
+    if (me) await renewCustomerSession(me); // …but this one stays signed in
+  }
   redirect("/profile?saved=1");
 }
 

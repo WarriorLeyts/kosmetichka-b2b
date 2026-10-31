@@ -21,7 +21,7 @@ function maskGuestPrices(product: any) {
  * Price sort / price range / sale used to send IN-lists of ~12k guids to the DB
  * on every page; one cached pass over ProductPrice is far cheaper.
  */
-type PriceIndex = { at: number; wholesale: Map<string, number>; sale: Set<string> };
+type PriceIndex = { at: number; wholesale: Map<string, number>; retail: Map<string, number>; sale: Set<string> };
 let priceMemo: PriceIndex | null = null;
 /** Price-sorted product ids per filter set (see the price sort below), max 100 entries, 1 min. */
 const sortedMemo = new Map<string, { at: number; ids: number[] }>();
@@ -30,15 +30,17 @@ async function priceIndex(): Promise<PriceIndex> {
   if (priceMemo && Date.now() - priceMemo.at < 120_000) return priceMemo;
   if (!priceMemoLoading) {
     priceMemoLoading = prisma.productPrice
-      .findMany({ where: { priceType: { in: ["wholesale", "discount"] } }, select: { productGuid: true, priceType: true, price: true } })
+      .findMany({ where: { priceType: { in: ["wholesale", "discount", "retail"] } }, select: { productGuid: true, priceType: true, price: true } })
       .then((rows) => {
         const wholesale = new Map<string, number>();
+        const retail = new Map<string, number>();
         const sale = new Set<string>();
         for (const r of rows) {
           if (r.priceType === "wholesale") wholesale.set(r.productGuid, r.price);
+          else if (r.priceType === "retail") retail.set(r.productGuid, r.price);
           else sale.add(r.productGuid);
         }
-        const next: PriceIndex = { at: Date.now(), wholesale, sale };
+        const next: PriceIndex = { at: Date.now(), wholesale, retail, sale };
         priceMemo = next;
         return next;
       })
@@ -147,6 +149,15 @@ export async function GET(request: Request) {
     return isAuthenticated ? flat : maskGuestPrices(flat);
   };
 
+  // ?ids=1,2,3 (the cart, up to 120): these products as they are now, in one request instead of one
+  // request per cart line. Products no longer in the catalogue are simply missing from the answer.
+  const idsParam = searchParams.get("ids");
+  if (idsParam !== null) {
+    const ids = [...new Set(idsParam.split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 120);
+    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids } }, include, omit }) : [];
+    return NextResponse.json({ products: found.map(applyPrices), total: found.length, page: 1, hasMore: false });
+  }
+
   // Prices live in a separate ProductPrice relation, so they can only be
   // filtered/sorted by loading them into memory — that's expensive on a
   // big catalog. Only pay that cost when the request actually needs it
@@ -189,9 +200,12 @@ export async function GET(request: Request) {
 
   // ── Steps 1–3: price range / sale → guid constraint (from the cached index) ──
   const prices = await priceIndex();
+  // guests see retail prices: they filter and sort by them too — by wholesale prices a guest could
+  // narrow the range down and work out the hidden wholesale price of any product
+  const priceList = isAuthenticated ? prices.wholesale : prices.retail;
   if (priceMin !== null || priceMax !== null || quick.includes("sale")) {
     const merged: string[] = [];
-    for (const [guid, price] of prices.wholesale) {
+    for (const [guid, price] of priceList) {
       if (priceMin !== null && price < priceMin) continue;
       if (priceMax !== null && price > priceMax) continue;
       if (quick.includes("sale") && !prices.sale.has(guid)) continue;
@@ -199,7 +213,7 @@ export async function GET(request: Request) {
     }
     // sale without a price range: products with a discount but no wholesale price count too
     if (quick.includes("sale") && priceMin === null && priceMax === null) {
-      for (const guid of prices.sale) if (!prices.wholesale.has(guid)) merged.push(guid);
+      for (const guid of prices.sale) if (!priceList.has(guid)) merged.push(guid);
     }
     where.guid = { in: merged };
   }
@@ -228,7 +242,7 @@ export async function GET(request: Request) {
   // The sorted id list for these filters is cached for a minute: scrolling pages 2, 3, … and
   // other customers with the same filters reuse it instead of loading ~12k rows each time
   // (under load the price sort used to take seconds).
-  const sortKey = createHash("sha1").update(JSON.stringify([where, sort, prices.at])).digest("hex");
+  const sortKey = createHash("sha1").update(JSON.stringify([where, sort, prices.at, isAuthenticated])).digest("hex");
   let sortedIds = sortedMemo.get(sortKey);
   if (!sortedIds || Date.now() - sortedIds.at > 60_000) {
     const matched = await prisma.product.findMany({
@@ -236,7 +250,7 @@ export async function GET(request: Request) {
       select: { id: true, guid: true, stock: true },
       take: MAX_SORT_CANDIDATES,
     });
-    const priceByGuid = prices.wholesale;
+    const priceByGuid = priceList;
     // out of stock at the very end; products without a price (none or 0 ₽) after the priced ones
     matched.sort((a, b) => {
       const sa = (a.stock ?? 0) > 0 ? 1 : 0;
