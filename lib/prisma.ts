@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { customerNotified, orderChanged, setOwnerLookup, touchedOrders } from "@/lib/realtime";
+import { emitForOperation, setOwnerLookup } from "@/lib/realtime";
 
 /**
  * Every write to an order, its items / chat / change log / status log, or a new customer notification
@@ -13,13 +13,7 @@ function createClient() {
       async $allOperations({ model, operation, args, query }) {
         const result = await query(args);
         try {
-          const t = touchedOrders(model, operation, args, result);
-          if (model === "Order") {
-            const rows = (Array.isArray(result) ? result : [result]) as { id?: number; customerId?: number }[];
-            for (const r of rows) if (r && typeof r.id === "number") orderChanged(r.id, typeof r.customerId === "number" ? r.customerId : null);
-          }
-          for (const id of t.orderIds) orderChanged(id);
-          for (const c of t.customerIds) customerNotified(c);
+          emitForOperation(model, operation, args, result);
         } catch {
           /* live updates never break a write */
         }

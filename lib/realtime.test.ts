@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { onLive, orderChanged, setOwnerLookup, touchedOrders } from "./realtime";
+import { emitForOperation, onLive, orderChanged, setOwnerLookup, touchedOrders } from "./realtime";
 
 describe("which writes are order changes", () => {
   it("order update / child rows / many-writes", () => {
@@ -29,5 +29,24 @@ describe("events", () => {
     off();
     vi.useRealTimers();
     expect(got).toEqual([{ t: "order", id: 11, customerId: 42 }]);
+  });
+});
+
+describe("reads never emit (no reload loop)", () => {
+  it("findMany / findUnique of orders → nothing; an update → an event", async () => {
+    vi.useFakeTimers();
+    setOwnerLookup(async () => 7);
+    const got: unknown[] = [];
+    const off = onLive((e) => got.push(e));
+    emitForOperation("Order", "findMany", {}, [{ id: 1, customerId: 7 }, { id: 2, customerId: 7 }]);
+    emitForOperation("Order", "findUnique", { where: { id: 3 } }, { id: 3, customerId: 7 });
+    emitForOperation("OrderMessage", "findMany", { where: { orderId: 3 } }, [{ id: 9, orderId: 3 }]);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(got).toEqual([]);
+    emitForOperation("Order", "update", { where: { id: 3 } }, { id: 3, customerId: 7 });
+    await vi.advanceTimersByTimeAsync(100);
+    off();
+    vi.useRealTimers();
+    expect(got).toEqual([{ t: "order", id: 3, customerId: 7 }]);
   });
 });
