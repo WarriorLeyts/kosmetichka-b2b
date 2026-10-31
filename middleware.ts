@@ -121,7 +121,10 @@ export async function middleware(request: NextRequest) {
     (r) => pathname === r || pathname.startsWith(r + "/")
   );
 
-  if (isCustomerRoute) {
+  // the phone app's invoice link carries its own 10-minute pass (?t=, checked by the page itself)
+  const invoiceLink = /^\/orders\/\d+\/invoice$/.test(pathname) && request.nextUrl.searchParams.has("t");
+
+  if (isCustomerRoute && !invoiceLink) {
     const token = request.cookies.get("auth_token")?.value;
     if (!token) {
       return NextResponse.redirect(new URL("/login", request.url));

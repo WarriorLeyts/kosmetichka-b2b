@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
+import { verifyInvoiceToken } from "@/lib/auth";
 import PrintButton from "@/components/admin/PrintButton";
 
 export const dynamic = "force-dynamic";
@@ -10,16 +11,24 @@ import { ORDER_STATUS_LABELS_CUSTOMER as STATUS_LABELS } from "@/lib/orderStatus
 
 export default async function CustomerInvoicePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ t?: string | string[] }>;
 }) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-  if (!token) redirect("/login");
-  const payload = await verifyCustomerToken(token);
-  if (!payload?.id) redirect("/login");
-
   const { id } = await params;
+  // the phone app opens the invoice with a 10-minute link (/api/orders/N/invoice-link): its
+  // in-app browser has no login cookie. Otherwise — the signed-in customer, as before.
+  const { t } = await searchParams;
+  let customerId = typeof t === "string" ? await verifyInvoiceToken(t, Number(id)) : null;
+  if (customerId === null) {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) redirect("/login");
+    const payload = await verifyCustomerToken(token);
+    if (!payload?.id) redirect("/login");
+    customerId = Number(payload.id);
+  }
 
   const order = await prisma.order.findUnique({
     where: { id: Number(id) },
@@ -30,7 +39,7 @@ export default async function CustomerInvoicePage({
   });
 
   // Security: customer can only see their own orders
-  if (!order || order.customerId !== Number(payload.id)) notFound();
+  if (!order || order.customerId !== customerId) notFound();
 
   const issueDate = new Date(order.createdAt).toLocaleDateString("ru-RU", {
     day: "2-digit",

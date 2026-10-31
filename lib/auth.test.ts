@@ -40,3 +40,16 @@ describe("staff tokens are checked against the account", () => {
     expect(db.user.findUnique).not.toHaveBeenCalled();
   });
 });
+
+describe("invoice links", () => {
+  it("open only their order and never work as a login", async () => {
+    const { createInvoiceToken, verifyInvoiceToken } = await import("./auth");
+    const t = await createInvoiceToken(55, 7);
+    expect(await verifyInvoiceToken(t, 55)).toBe(7);
+    expect(await verifyInvoiceToken(t, 56)).toBeNull();
+    db.user.findUnique.mockResolvedValue(null);
+    expect(await verifyToken(t)).toBeNull();
+    const login = await createToken({ id: 7, email: "c@x.ru", role: "customer" });
+    expect(await verifyInvoiceToken(login, 55)).toBeNull();
+  });
+});

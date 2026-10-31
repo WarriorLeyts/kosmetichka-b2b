@@ -1,4 +1,4 @@
-name: Check (types, lint)
+name: Check (types, tests, lint)
 
 on:
   push:
@@ -20,5 +20,7 @@ jobs:
       - run: npx prisma generate
       - name: Type check
         run: npx tsc --noEmit
+      - name: Tests
+        run: npx vitest run
       - name: Lint changed files
         run: npx eslint app/api/team lib/chatAttachments.ts lib/renderMsgContent.tsx components/orders/OrderChat.tsx app/api/uploads/chat || true

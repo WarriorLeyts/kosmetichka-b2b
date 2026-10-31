@@ -96,3 +96,27 @@ export async function requireAdminRole() {
   if (!payload || payload.role !== "admin") return null;
   return payload;
 }
+
+/**
+ * A 10-minute link to one order's invoice for the phone app: the in-app browser that opens it has
+ * no access to the app's login cookie, so the link itself proves who may see the invoice. It is
+ * useless as a login — `verifyToken` rejects it (role "invoice", no staff account 0).
+ */
+export async function createInvoiceToken(orderId: number, customerId: number) {
+  return await new SignJWT({ id: 0, role: "invoice", inv: orderId, cid: customerId })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("10m")
+    .sign(secret);
+}
+
+/** The customer id the invoice link `token` was made for, if it is valid for order `orderId`. */
+export async function verifyInvoiceToken(token: string, orderId: number): Promise<number | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret);
+    if (payload.role !== "invoice" || payload.inv !== orderId) return null;
+    return typeof payload.cid === "number" ? payload.cid : null;
+  } catch {
+    return null;
+  }
+}
