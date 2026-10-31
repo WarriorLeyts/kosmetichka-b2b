@@ -67,7 +67,8 @@ export function customerNotified(customerId: number): void {
 // ── which writes mean «order N changed» (used by the Prisma extension in lib/prisma.ts) ──────────
 
 const ORDER_CHILDREN = new Set(["OrderItem", "OrderMessage", "OrderItemChange", "OrderStatusLog"]);
-const WRITES = new Set(["create", "createMany", "createManyAndReturn", "update", "updateMany", "updateManyAndReturn", "upsert", "delete", "deleteMany"]);
+export const WRITE_OPS = new Set(["create", "createMany", "createManyAndReturn", "update", "updateMany", "updateManyAndReturn", "upsert", "delete", "deleteMany"]);
+const WRITES = WRITE_OPS;
 
 function idsOf(v: unknown): number[] {
   if (typeof v === "number") return [v];
@@ -96,4 +97,19 @@ export function touchedOrders(model: string | undefined, operation: string, args
   out.orderIds = [...new Set(out.orderIds)];
   out.customerIds = [...new Set(out.customerIds)];
   return out;
+}
+
+/**
+ * After any database operation (lib/prisma.ts): the live events it means — only for writes. A read must
+ * never emit «order changed»: the screens would read again on it, and so on in a loop.
+ */
+export function emitForOperation(model: string | undefined, operation: string, args: unknown, result: unknown): void {
+  if (!WRITE_OPS.has(operation)) return;
+  const t = touchedOrders(model, operation, args, result);
+  if (model === "Order") {
+    const rows = (Array.isArray(result) ? result : [result]) as { id?: number; customerId?: number }[];
+    for (const r of rows) if (r && typeof r.id === "number") orderChanged(r.id, typeof r.customerId === "number" ? r.customerId : null);
+  }
+  for (const id of t.orderIds) orderChanged(id);
+  for (const c of t.customerIds) customerNotified(c);
 }
