@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { prisma } from "@/lib/prisma";
 
 function resolveJwtSecret(): string {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
@@ -42,12 +43,25 @@ export async function createToken(payload: {
 }
 
 export async function verifyToken(token: string) {
+  let payload;
   try {
-    const { payload } = await jwtVerify(token, secret);
-    return payload;
+    ({ payload } = await jwtVerify(token, secret));
   } catch {
     return null;
   }
+  // Staff tokens (everything but "customer") live 7 days. The signature alone would keep a deleted
+  // employee — or one whose role was lowered — in the admin until then, so the account is checked
+  // on every use: it must still exist and still have the role written in the token.
+  if (payload.role !== "customer" && !(await staffStillValid(payload.id, payload.role))) return null;
+  return payload;
+}
+
+/** The staff account `id` still exists and has role `role`. */
+export async function staffStillValid(id: unknown, role: unknown): Promise<boolean> {
+  const n = Number(id);
+  if (!Number.isInteger(n) || n <= 0 || typeof role !== "string") return false;
+  const user = await prisma.user.findUnique({ where: { id: n }, select: { role: true } });
+  return user?.role === role;
 }
 
 /**
