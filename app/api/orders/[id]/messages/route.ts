@@ -4,7 +4,7 @@ import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
 import { messageLimiter } from "@/lib/rateLimit";
 import { notifyStaffLater } from "@/lib/staffNotify";
-import { buildProductRequest, isForgedProductRequest, PRODUCT_REQUEST_STATUSES } from "@/lib/productRequest";
+import { buildProductRequest, customerChatTextAllowed, isForgedProductRequest, PRODUCT_REQUEST_STATUSES } from "@/lib/productRequest";
 import { orderTier } from "@/lib/orderTier";
 
 async function getCustomer() {
@@ -75,7 +75,7 @@ export async function POST(
     const card = await buildProductRequest({ priceType: orderTier({ priceTier: order.priceTier, priceType: order.priceType, customer: who }) }, body.productRequest);
     if ("error" in card) return NextResponse.json({ error: card.error }, { status: 400 });
     text = JSON.stringify(card);
-  } else if (isForgedProductRequest(text)) {
+  } else if (isForgedProductRequest(text) || (typeof text === "string" && !customerChatTextAllowed(text))) {
     // only the server writes these cards
     return NextResponse.json({ error: "Неверное сообщение" }, { status: 400 });
   }

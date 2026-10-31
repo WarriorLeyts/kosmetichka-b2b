@@ -14,6 +14,17 @@ const nextConfig: NextConfig = {
   // картинки оформления (/app/*) меняются только с релизом — пусть браузер держит их неделю
   async headers() {
     return [
+      // basic protection for every answer of the site: no MIME sniffing, the site can't be put inside
+      // another site's frame (clickjacking), HTTPS remembered by the browser, no full URLs to other sites
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Strict-Transport-Security", value: "max-age=31536000" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
       {
         source: "/app/:path*",
         headers: [{ key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=86400" }],
