@@ -84,8 +84,9 @@ if (thumbWidth) {
       "Content-Type": mimeType(resolvedPath),
       "Content-Length": String(stat.size),
       "Last-Modified": lastModified,
-      // Product images from 1C don't change path once uploaded — cache aggressively
-      "Cache-Control": "public, max-age=31536000, immutable",
+      // 1C re-uploads a changed photo under the same name (the exchange drops its thumbnails then):
+      // a day in the browser, then a cheap re-check (304 by Last-Modified) — not «immutable» for a year
+      "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
     },
   });
 }

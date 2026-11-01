@@ -19,5 +19,5 @@ export async function GET(request: Request) {
     if (e.t === "order" && e.customerId === customerId) return { t: "order", id: e.id };
     if (e.t === "notify" && e.customerId === customerId) return { t: "notify" };
     return null;
-  });
+  }, { key: `c${customerId}`, max: 5 });
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { insideDir, syncKeyOk } from "@/lib/syncKey";
 import { runSync } from "@/lib/syncRunner";
 import fs from "fs";
 import path from "path";
@@ -70,7 +71,7 @@ function checkAuth(request: NextRequest): boolean {
     const decoded = Buffer.from(auth.slice(6), "base64").toString("utf8");
     const colonIdx = decoded.indexOf(":");
     const password = decoded.slice(colonIdx + 1);
-    return password === process.env.SYNC_API_KEY;
+    return syncKeyOk(password);
   }
   return false;
 }
@@ -303,7 +304,7 @@ export async function POST(request: NextRequest) {
     // Prevent path traversal
     const safeName = filename.replace(/\\/g, "/").replace(/^\/+/, "");
     const dest = path.join(DATA_DIR, safeName);
-    if (!dest.startsWith(DATA_DIR)) return txt("failure\nInvalid path");
+    if (!insideDir(DATA_DIR, dest)) return txt("failure\nInvalid path");
 
     fs.mkdirSync(path.dirname(dest), { recursive: true });
 

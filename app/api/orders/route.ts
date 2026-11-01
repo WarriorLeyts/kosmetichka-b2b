@@ -236,16 +236,15 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: BONUSES_UNAVAILABLE, code: BONUSES_UNAVAILABLE_CODE }, { status: 409 });
       }
       console.error(error);
-      const message = error instanceof Error ? error.message : "Не удалось создать заказ";
-      return NextResponse.json({ error: message }, { status: 400 });
+      // a database / MAXMA error: its text is for the log, not for the customer
+      return NextResponse.json({ error: "Не удалось создать заказ. Попробуйте ещё раз через минуту." }, { status: 500 });
     }
   } else {
     try {
       order = await prisma.order.create({ data: orderData });
     } catch (error) {
       console.error(error);
-      const message = error instanceof Error ? error.message : "Не удалось создать заказ";
-      return NextResponse.json({ error: message }, { status: 400 });
+      return NextResponse.json({ error: "Не удалось создать заказ. Попробуйте ещё раз через минуту." }, { status: 500 });
     }
     // Promo code / accrual only: registered in MAXMA through the queue (one attempt now, retried later)
     if (promo || bonusesCollected > 0) await enqueueMaxmaTask(order.id, "set", maxmaQuery);

@@ -1,24 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
-
-function resolveJwtSecret(): string {
-  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
-
-  const isDeployed =
-    process.env.NODE_ENV === "production" || !!process.env.NEXT_PUBLIC_SITE_URL;
-
-  if (isDeployed) {
-    throw new Error(
-      "JWT_SECRET is not set. Add JWT_SECRET to your environment variables before deploying."
-    );
-  }
-
-  console.warn(
-    "[middleware] JWT_SECRET is not set in .env — using a dev-only fallback. Set JWT_SECRET before deploying to production."
-  );
-
-  return "dev-secret-kosmetichka-change-in-production";
-}
+import { resolveJwtSecret } from "@/lib/jwtSecret";
 
 const secret = new TextEncoder().encode(resolveJwtSecret());
 

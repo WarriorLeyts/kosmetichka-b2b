@@ -119,12 +119,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // Помечаем код как использованный (только после успешной валидации полей)
-  await prisma.smsCode.update({
-    where: { id: smsRecord.id },
-    data: { used: true },
-  });
+  // the app asks for 6+ characters; the server checks it too (a direct request skipped it)
+  if (String(password).length < 6) {
+    return NextResponse.json({ error: "Пароль — не короче 6 символов" }, { status: 400 });
+  }
 
+  // an account that already exists: answered before the SMS code is spent — otherwise a customer
+  // who just used the wrong email had to wait for a new SMS
   const exists = await prisma.customer.findFirst({
     where: {
       OR: [
@@ -140,6 +141,12 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+
+  // Помечаем код как использованный (только после всех проверок)
+  await prisma.smsCode.update({
+    where: { id: smsRecord.id },
+    data: { used: true },
+  });
 
   const oneCCustomer = await prisma.oneCCustomer.findFirst({
     where: {

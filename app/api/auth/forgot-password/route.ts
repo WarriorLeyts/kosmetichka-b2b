@@ -58,7 +58,12 @@ export async function POST(request: Request) {
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://kosmetichka-opt.ru";
     const resetUrl = `${baseUrl}/reset-password?token=${token}`;
-    const displayName = customer.companyName || customer.name || normalizedEmail;
+    // the name is typed by the customer: escaped, so «<a href=…>» in it can't become a link in the letter
+    const displayName = (customer.companyName || customer.name || normalizedEmail)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
 
     await sendMail({
       to: customer.email,

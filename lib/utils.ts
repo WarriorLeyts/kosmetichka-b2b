@@ -44,3 +44,14 @@ export function getStockLabel(stock: number | null | undefined) {
 
   return { text: "Осталось мало", className: "stock-low" };
 }
+
+/**
+ * Stock as a guest sees it: the exact number told competitors how much the shop has. The apps
+ * only show «Нет в наличии / Осталось мало / Больше 10 шт.», and these values give the same labels;
+ * 10 for «мало» never limits a guest's cart below the real stock (which is at most 10 there).
+ */
+export function guestStock(stock: number | null | undefined): number {
+  const v = Number(stock ?? 0);
+  if (!(v > 0)) return 0;
+  return v > 10 ? 9999 : 10;
+}

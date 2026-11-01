@@ -1,10 +1,12 @@
+import { randomInt } from "crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { toSmsAeroPhone } from "@/lib/phone";
 import { getClientIp } from "@/lib/rateLimit";
 
 function generateCode(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  // crypto, not Math.random: Math.random is predictable from its earlier outputs
+  return String(randomInt(100000, 1000000));
 }
 
 async function sendSmsAero(phone: string, text: string): Promise<boolean> {

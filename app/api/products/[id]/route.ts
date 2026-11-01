@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withFlatPrices } from "@/lib/utils";
+import { guestStock, withFlatPrices } from "@/lib/utils";
 import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { verifyToken } from "@/lib/auth";
@@ -13,7 +13,7 @@ export async function GET(
   const productId = Number(id);
 
   if (isNaN(productId)) {
-    return NextResponse.json({ error: "Bad id" }, { status: 400 });
+    return NextResponse.json({ error: "Товар не найден" }, { status: 400 });
   }
 
   const product = await prisma.product.findUnique({
@@ -31,7 +31,7 @@ export async function GET(
   });
 
   if (!product) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: "Товар не найден — возможно, его убрали из каталога" }, { status: 404 });
   }
 
   // wholesale prices only for signed-in customers and staff (as /api/catalog/products)
@@ -44,5 +44,5 @@ export async function GET(
   const flat = withFlatPrices(product);
   if (signedIn) return NextResponse.json(flat);
   const { wholesalePrice: _w, bigWholesalePrice: _b, prices: _p, ...guest } = flat; // eslint-disable-line @typescript-eslint/no-unused-vars
-  return NextResponse.json({ ...guest, prices: [] });
+  return NextResponse.json({ ...guest, prices: [], stock: guestStock(flat.stock) });
 }
