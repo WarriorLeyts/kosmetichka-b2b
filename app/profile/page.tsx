@@ -57,6 +57,9 @@ async function updateProfile(formData: FormData) {
   // Another customer's phone can't be taken over (phone is used as a login)
   if (phone.trim()) {
     const current = await prisma.customer.findUnique({ where: { id }, select: { phone: true } });
+    // a new phone (a new login) is confirmed with an SMS code — that is done in the app / on the
+    // website's «Мои данные»; this old form can't send codes, so it doesn't change the phone
+    if (normalizePhone(phone) !== normalizePhone(current?.phone)) redirect("/profile?error=phone_change_app");
     if (phone !== current?.phone) {
       const variants = Array.from(new Set([phone, phone.trim(), normalizePhone(phone)].filter(Boolean)));
       const phoneTaken = await prisma.customer.findFirst({
@@ -106,6 +109,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   password_too_short: "Пароль должен быть не короче 6 символов",
   email_taken: "Этот email уже используется другим аккаунтом",
   phone_taken: "Этот телефон уже используется другим аккаунтом",
+  phone_change_app: "Новый телефон подтверждается кодом из SMS — измените его в приложении или на сайте в разделе «Мои данные»",
   current_password_required: "Введите текущий пароль для смены пароля",
   current_password_wrong: "Текущий пароль введён неверно",
 };

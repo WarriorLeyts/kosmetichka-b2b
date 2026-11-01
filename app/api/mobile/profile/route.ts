@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../_auth";
 import { renewCustomerSession } from "@/lib/customerAuth";
 import { normalizePhone } from "@/lib/phone";
+import { findSmsCode, spendSmsCode } from "@/lib/smsVerify";
 
 const SELECT = {
   id: true,
@@ -37,6 +38,8 @@ const ERRORS: Record<string, string> = {
   email_taken: "Этот email уже используется другим аккаунтом",
   current_password_required: "Введите текущий пароль для смены пароля",
   current_password_wrong: "Текущий пароль введён неверно",
+  phone_code_required: "Подтвердите новый телефон: нажмите «Получить код» и введите код из SMS",
+  phone_code_wrong: "Неверный или истёкший код из SMS",
 };
 const fail = (code: string) => NextResponse.json({ error: ERRORS[code], code }, { status: 400 });
 
@@ -82,6 +85,18 @@ export async function PATCH(request: Request) {
     }
   }
 
+  // A new phone is a new login: it must belong to the customer — confirmed with the code sent to it
+  // (/api/auth/sms/send). Otherwise anyone with a session could move the account to any number.
+  let smsCodeId: number | null = null;
+  if (phone.trim()) {
+    const current = await prisma.customer.findUnique({ where: { id }, select: { phone: true } });
+    if (normalizePhone(phone) !== normalizePhone(current?.phone)) {
+      if (!s("smsCode").trim()) return fail("phone_code_required");
+      smsCodeId = await findSmsCode(phone, s("smsCode"));
+      if (!smsCodeId) return fail("phone_code_wrong");
+    }
+  }
+
   // «Акции и новости» toggle alone: { pushPromo: true|false } without the rest of the form
   if (typeof body?.pushPromo === "boolean" && Object.keys(body).length === 1) {
     const customer = await prisma.customer.update({ where: { id }, data: { pushPromo: body.pushPromo }, select: SELECT });
@@ -102,6 +117,7 @@ export async function PATCH(request: Request) {
     data.passwordChangedAt = new Date(); // other devices are signed out
   }
 
+  if (smsCodeId) await spendSmsCode(smsCodeId); // spent only now: every other check has passed
   const customer = await prisma.customer.update({ where: { id }, data, select: SELECT });
   if (data.passwordChangedAt) {
     const me = await prisma.customer.findUnique({ where: { id }, select: { id: true, email: true, phone: true, role: true } });
