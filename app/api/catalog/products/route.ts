@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { productSearchWhere } from "@/lib/productSearch";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { withFlatPrices } from "@/lib/utils";
+import { guestStock, withFlatPrices } from "@/lib/utils";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { verifyToken } from "@/lib/auth";
 import { createHash } from "crypto";
@@ -13,7 +13,7 @@ type Sort = (typeof SORTS)[number];
 /** Скрывает оптовые цены от незарегистрированных пользователей */
 function maskGuestPrices(product: any) {
   const { wholesalePrice, bigWholesalePrice, prices, ...rest } = product;
-  return { ...rest, prices: [] };
+  return { ...rest, prices: [], stock: guestStock(product.stock) };
 }
 
 /**
@@ -85,7 +85,9 @@ export async function GET(request: Request) {
   const staff = staffToken ? await verifyToken(staffToken) : null;
   const isAuthenticated = Boolean(payload?.id) || ["admin", "manager", "picker"].includes(String(staff?.role ?? ""));
 
-  const page = Number(searchParams.get("page") || 1);
+  // ?page=abc / 0 / -5 → page 1 (it was a 500 from the database)
+  const pageRaw = Math.floor(Number(searchParams.get("page") || 1));
+  const page = Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.min(pageRaw, 1000) : 1;
   const limit = 40;
 
   const categoryGuids = searchParams.getAll("categoryGuid").filter(Boolean);

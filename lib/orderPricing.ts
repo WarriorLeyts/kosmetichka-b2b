@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { cartPriceTier, type PriceType } from "@/lib/pricing";
 
+/** the most pieces of one product in an order line */
+export const MAX_LINE_QTY = 9999;
+
 /** Cart line as the site / apps send it to POST /api/orders. */
 export type OrderItemInput = {
   id: number | string;
@@ -94,6 +97,10 @@ export async function priceOrder(
     // Explicit non-positive guard (Number(-1) || 0 returns -1, so must check explicitly)
     if (!Number.isFinite(quantity) || quantity <= 0) {
       throw new Error(`Некорректное количество для «${product.name}»`);
+    }
+    // a typo like 1000000 must not reach the order, 1C and the invoice
+    if (quantity > MAX_LINE_QTY) {
+      throw new Error(`Слишком большое количество для «${product.name}»: не больше ${MAX_LINE_QTY} шт. в одной позиции`);
     }
 
     // MOQ check

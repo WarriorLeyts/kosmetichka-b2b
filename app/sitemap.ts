@@ -1,6 +1,9 @@
 import { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 
+// rebuilt once an hour (it was built once per deploy: new products from 1C reached search engines late)
+export const revalidate = 3600;
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://kosmetichka-opt.ru";
 
@@ -42,7 +45,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const products = await prisma.product.findMany({
       select: { id: true, updatedAt: true },
-      where: {},
+      // products that can be bought now; the ones out of stock come back with the next stock
+      where: { stock: { gt: 0 } },
     });
 
     const productPages: MetadataRoute.Sitemap = products.map((p) => ({

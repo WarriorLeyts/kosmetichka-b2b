@@ -84,7 +84,8 @@ export async function thumbResponse(baseDir: string, resolvedPath: string, width
     headers: {
       "Content-Type": "image/webp",
       "Content-Length": String(buf.length),
-      "Cache-Control": "public, max-age=2592000, immutable",
+      // same as the original photo: a replaced photo shows up within a day
+      "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
     },
   });
 }

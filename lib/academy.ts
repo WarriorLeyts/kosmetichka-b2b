@@ -9,6 +9,7 @@ import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { resolveImageUrl } from "@/lib/image";
+import { resolveJwtSecret } from "@/lib/jwtSecret";
 
 /** Первая картинка каждого товара (уменьшенная копия). Нет товара или фото — нет и ключа. */
 export async function productImages(ids: (number | null | undefined)[]): Promise<Map<number, string>> {
@@ -31,7 +32,7 @@ export async function productImages(ids: (number | null | undefined)[]): Promise
 // ── Подписанный момент начала (время прохождения нельзя подделать с клиента) ──
 
 function startSecret() {
-  return `academy-start:${process.env.JWT_SECRET ?? "dev-secret-kosmetichka-change-in-production"}`;
+  return `academy-start:${resolveJwtSecret()}`;
 }
 
 export function signStart(testId: number, userId: number, startedAt: number) {

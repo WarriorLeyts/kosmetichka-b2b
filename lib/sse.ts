@@ -7,7 +7,21 @@ import { onLive, type LiveEvent } from "@/lib/realtime";
 const PAD = ":" + " ".repeat(2048) + "\n\n"; // Safari / iOS start delivering a stream after ~1 KB
 const encoder = new TextEncoder();
 
-export function liveStream(request: Request, pick: (e: LiveEvent) => Record<string, unknown> | null): Response {
+/** open streams per viewer (`key`) */
+const open = new Map<string, number>();
+
+export function liveStream(
+  request: Request,
+  pick: (e: LiveEvent) => Record<string, unknown> | null,
+  limit?: { key: string; max: number }
+): Response {
+  // one customer can't keep dozens of connections open (each holds server memory). The extra one
+  // gets 429: its client backs off and retries later (closing the oldest instead made the tabs
+  // knock each other out every 2 s); a screen without the stream still refreshes by its timer.
+  if (limit && (open.get(limit.key) ?? 0) >= limit.max) {
+    return new Response("too many live connections", { status: 429, headers: { "Retry-After": "60" } });
+  }
+  if (limit) open.set(limit.key, (open.get(limit.key) ?? 0) + 1);
   let close = () => {};
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -27,10 +41,18 @@ export function liveStream(request: Request, pick: (e: LiveEvent) => Record<stri
       const ping = setInterval(() => send(": ping\n\n"), 20_000);
       // a stream lives at most 10 min; the client reconnects (fresh auth, no forgotten sockets)
       const max = setTimeout(() => close(), 10 * 60_000);
+      let closed = false;
       close = () => {
+        if (closed) return;
+        closed = true;
         off();
         clearInterval(ping);
         clearTimeout(max);
+        if (limit) {
+          const n = (open.get(limit.key) ?? 1) - 1;
+          if (n > 0) open.set(limit.key, n);
+          else open.delete(limit.key);
+        }
         try {
           controller.close();
         } catch {

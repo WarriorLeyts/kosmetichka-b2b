@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { syncKeyOk } from "@/lib/syncKey";
 import fs from "fs";
 import path from "path";
 import { DATA_ROOT } from "@/lib/dataDir";
@@ -7,7 +8,7 @@ const ALLOWED_FILES = ["import.xml", "offers.xml", "customers.xml"];
 
 function checkApiKey(request: NextRequest) {
   const key = request.headers.get("x-1c-key");
-  return key === process.env.SYNC_API_KEY;
+  return syncKeyOk(key);
 }
 
 export async function POST(request: NextRequest) {

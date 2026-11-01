@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { syncKeyOk } from "@/lib/syncKey";
 import { prisma } from "@/lib/prisma";
 import { cmlComment, cmlItemDiscounts, cmlItemSum } from "@/lib/commerceml";
 import { orderTier } from "@/lib/orderTier";
 
 function checkApiKey(request: NextRequest) {
   const key = request.headers.get("x-1c-key");
-  return key === process.env.SYNC_API_KEY;
+  return syncKeyOk(key);
 }
 
 const PRICE_TYPE_LABELS: Record<string, string> = {

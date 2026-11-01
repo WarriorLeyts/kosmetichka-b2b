@@ -35,7 +35,8 @@ export async function GET(request: Request) {
   }
 
   const sp = url.searchParams;
-  const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
+  const pageRaw = parseInt(sp.get("page") || "1", 10);
+  const page = Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.min(pageRaw, 1000) : 1; // ?page=abc was a 500
   const statusFilter = sp.get("status") || "";
   const MSK = "+03:00";
   const dateFrom = sp.get("dateFrom") ? new Date(sp.get("dateFrom") + "T00:00:00" + MSK) : null;

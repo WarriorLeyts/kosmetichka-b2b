@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { syncKeyOk } from "@/lib/syncKey";
 import { prisma } from "@/lib/prisma";
 import { MAXMA_ORDER_WHERE, onOrderStatus } from "@/lib/maxmaOrders";
 import { notifyOrderStatus } from "@/lib/notify";
 
 function checkApiKey(request: NextRequest) {
   const key = request.headers.get("x-1c-key");
-  return key === process.env.SYNC_API_KEY;
+  return syncKeyOk(key);
 }
 
 // POST /api/1c/orders/ack
