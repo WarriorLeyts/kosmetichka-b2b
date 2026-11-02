@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { XMLParser } from "fast-xml-parser";
 import fs from "fs";
 import nodePath from "path";
+import { hideMissing, isDeletedIn1C } from "./onec-helpers.js";
 // 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
 const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
 
@@ -111,7 +112,11 @@ async function main() {
 
   console.log("Товаров найдено:", products.length);
 
+  const full = String(catalog?.СодержитТолькоИзменения ?? "").toLowerCase() === "false";
+  const deleted = [];
+
   for (const product of products) {
+    if (isDeletedIn1C(product)) deleted.push(String(product.Ид));
     const categoryGuid =
       product.Категория ||
       product.Группы?.Ид ||
@@ -183,6 +188,15 @@ async function main() {
         console.error("Пропущен товар:", product.Ид, err.message);
       }
     }
+  }
+
+  // deleted in 1C → can't be ordered (stock 0); the product itself and its history stay
+  if (deleted.length) {
+    await prisma.product.updateMany({ where: { guid: { in: deleted } }, data: { stock: 0 } });
+    console.log("Удалены в 1С, остаток обнулён:", deleted.length);
+  }
+  if (full) {
+    await hideMissing(prisma, products.filter((p) => !isDeletedIn1C(p)).map((p) => String(p.Ид)), "каталог");
   }
 
   console.log("Импорт категорий, брендов и товаров завершен");
