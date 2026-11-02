@@ -142,6 +142,11 @@ export async function sendToSubscriptions(
   const worker = async () => {
     while (next < subs.length) {
       const s = subs[next++];
+      // saved before the allow-list (P2-04) and pointing elsewhere: never called, deleted
+      if (!isPushEndpoint(s.endpoint)) {
+        gone.push(s.id);
+        continue;
+      }
       const status = await sendWebPush(s, payload, cfg, urgency);
       if (status >= 200 && status < 300) ok++;
       else if (status === 404 || status === 410) gone.push(s.id);
@@ -172,16 +177,30 @@ export async function sendWebPushToCustomers(customerIds: number[], payload: Web
 export type SubscriptionInput = { endpoint: string; p256dh: string; auth: string };
 
 /** Validates a PushSubscription.toJSON() body from the browser: https endpoint (≤1000 chars) + P-256 / 16-byte keys. */
+/**
+ * Push services browsers subscribe with (audit P2-04): Chrome / Android / Edge-on-Chromium (FCM),
+ * Firefox (Mozilla autopush), Safari / iPhone (Apple), Edge (Windows WNS). The server only ever
+ * calls these — a subscription pointing anywhere else is refused, so it can't be made to call it.
+ */
+const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /^android\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/,
+  /^(web\.push|[a-z0-9-]+\.push)\.apple\.com$/, /^[a-z0-9-]+\.notify\.windows\.com$/];
+
+/** https on a known push service, standard port, no user / password, ≤1000 chars */
+export function isPushEndpoint(endpoint: string): boolean {
+  try {
+    const u = new URL(endpoint);
+    return endpoint.length <= 1000 && u.protocol === "https:" && !u.username && !u.password && !u.port
+      && PUSH_HOSTS.some((r) => r.test(u.hostname));
+  } catch {
+    return false;
+  }
+}
+
 export function parseSubscription(body: unknown): SubscriptionInput | null {
   const b = (body ?? {}) as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } };
   const endpoint = typeof b.endpoint === "string" ? b.endpoint : "";
   const p256dh = typeof b.keys?.p256dh === "string" ? b.keys.p256dh : "";
   const auth = typeof b.keys?.auth === "string" ? b.keys.auth : "";
-  let okUrl = false;
-  try {
-    const u = new URL(endpoint);
-    okUrl = endpoint.length <= 1000 && u.protocol === "https:" && !u.username && !u.password;
-  } catch {}
-  if (!okUrl || !validSubscriptionKeys(p256dh, auth)) return null;
+  if (!isPushEndpoint(endpoint) || !validSubscriptionKeys(p256dh, auth)) return null;
   return { endpoint, p256dh, auth };
 }

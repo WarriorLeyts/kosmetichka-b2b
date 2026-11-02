@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { currentCustomerId } from "@/app/api/mobile/_auth";
 import { prisma } from "@/lib/prisma";
 import { RateLimiter } from "@/lib/rateLimit";
-import { getVapidConfig, validSubscriptionKeys } from "@/lib/webPush";
+import { getVapidConfig, validSubscriptionKeys, isPushEndpoint } from "@/lib/webPush";
 
 const limiter = new RateLimiter({ windowMs: 10 * 60 * 1000, max: 30 });
 const MAX_PER_CUSTOMER = 10;
@@ -21,11 +21,7 @@ export async function POST(request: Request) {
   const endpoint = String(body?.endpoint ?? "");
   const p256dh = String(body?.keys?.p256dh ?? "");
   const auth = String(body?.keys?.auth ?? "");
-  let okUrl = false;
-  try {
-    okUrl = endpoint.length <= 1000 && new URL(endpoint).protocol === "https:";
-  } catch {}
-  if (!okUrl || !validSubscriptionKeys(p256dh, auth)) return NextResponse.json({ error: "Неверная подписка" }, { status: 400 });
+  if (!isPushEndpoint(endpoint) || !validSubscriptionKeys(p256dh, auth)) return NextResponse.json({ error: "Неверная подписка" }, { status: 400 });
 
   const userAgent = (request.headers.get("user-agent") ?? "").slice(0, 300) || null;
   await prisma.webPushSubscription.upsert({
