@@ -14,18 +14,22 @@ export type NotifyMessage = { kind: NotifyKind; title: string; body: string; lin
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 
-type ExpoMessage = {
+export type ExpoMessage = {
   to: string;
   title: string;
   body: string;
-  data: { link: string | null; kind: NotifyKind };
+  data: { link: string | null; kind: NotifyKind | string; path?: string };
   sound: "default";
   channelId: string;
   priority: "high" | "default";
 };
 
 /** Sends push messages in chunks of 100; tokens Expo reports as gone are deleted. Returns delivered count. */
-export async function sendPush(messages: ExpoMessage[]): Promise<number> {
+export async function sendPush(
+  messages: ExpoMessage[],
+  /** tokens Expo says are no longer registered; default — the customers' table */
+  dropGone: (tokens: string[]) => Promise<unknown> = (gone) => prisma.pushToken.deleteMany({ where: { token: { in: gone } } })
+): Promise<number> {
   let ok = 0;
   for (let i = 0; i < messages.length; i += 100) {
     const chunk = messages.slice(i, i + 100);
@@ -49,7 +53,7 @@ export async function sendPush(messages: ExpoMessage[]): Promise<number> {
         else console.error("[push] ticket error:", t.details?.error ?? t);
       });
       if (!res.ok) console.error("[push] expo responded", res.status, JSON.stringify(data?.errors ?? "").slice(0, 300));
-      if (gone.length) await prisma.pushToken.deleteMany({ where: { token: { in: gone } } });
+      if (gone.length) await dropGone(gone);
     } catch (e) {
       console.error("[push] send failed:", e instanceof Error ? e.message : e);
     }

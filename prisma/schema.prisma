@@ -180,6 +180,7 @@ model User {
   assignedOrders Order[]          @relation("OrderPicker")
   academyAttempts AcademyAttempt[]
   webPushSubs     StaffWebPushSubscription[]
+  pushTokens      StaffPushToken[]
 }
 
 model Order {
@@ -592,4 +593,17 @@ model PushBroadcast {
   devices    Int      @default(0)
   userId     Int?
   createdAt  DateTime @default(now())
+}
+
+/// Expo push tokens of the staff app «Косметичка Team» on phones (lib/staffNotify.ts)
+model StaffPushToken {
+  id         Int      @id @default(autoincrement())
+  token      String   @unique
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform   String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
 }
