@@ -8,7 +8,7 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
-import { encryptPayload, getVapidConfig, validSubscriptionKeys, vapidJwt } from "./webPush";
+import { encryptPayload, getVapidConfig, isPushEndpoint, sendToSubscriptions, validSubscriptionKeys, vapidJwt } from "./webPush";
 import { notify } from "./notify";
 
 // server VAPID keys
@@ -157,7 +157,7 @@ describe("notify → web push", () => {
 
   it("a failing push service never breaks notify()", async () => {
     const ua = makeBrowser();
-    db.webPushSubscription.findMany.mockResolvedValue([{ id: 1, endpoint: "https://x.example/1", p256dh: ua.p256dh, auth: ua.auth }]);
+    db.webPushSubscription.findMany.mockResolvedValue([{ id: 1, endpoint: "https://fcm.googleapis.com/fcm/send/1", p256dh: ua.p256dh, auth: ua.auth }]);
     fetchMock.mockRejectedValue(new Error("network"));
     await expect(notify(1, { kind: "promo", title: "A", body: "B" })).resolves.toEqual({ customers: 1, devices: 0 });
     expect(db.notification.createMany).toHaveBeenCalled();
@@ -167,5 +167,38 @@ describe("notify → web push", () => {
     db.webPushSubscription.findMany.mockRejectedValue(new Error("db"));
     fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ data: [] }) });
     await expect(notify(1, { kind: "order", title: "A", body: "B" })).resolves.toEqual({ customers: 1, devices: 0 });
+  });
+});
+
+describe("push service allow-list (P2-04)", () => {
+  it("accepts the real browser push services", () => {
+    for (const u of [
+      "https://fcm.googleapis.com/fcm/send/abc",
+      "https://updates.push.services.mozilla.com/wpush/v2/abc",
+      "https://web.push.apple.com/QK1abc",
+      "https://wns2-par02p.notify.windows.com/w/?token=abc",
+    ]) expect(isPushEndpoint(u), u).toBe(true);
+  });
+
+  it("refuses anything else: other hosts, http, ports, credentials, look-alikes", () => {
+    for (const u of [
+      "https://example.com/push",
+      "http://fcm.googleapis.com/fcm/send/abc",
+      "https://fcm.googleapis.com:8443/x",
+      "https://u:p@fcm.googleapis.com/x",
+      "https://fcm.googleapis.com.evil.ru/x",
+      "https://127.0.0.1/x",
+      "https://localhost/x",
+      "not a url",
+    ]) expect(isPushEndpoint(u), u).toBe(false);
+  });
+
+  it("an old subscription to a foreign address is never called and is dropped", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const cfg = getVapidConfig()!;
+    const r = await sendToSubscriptions([{ id: 9, endpoint: "https://intranet.local/x", p256dh: "a", auth: "b" }], { title: "A", body: "B", link: null, kind: "x" }, cfg);
+    expect(r).toEqual({ ok: 0, gone: [9] });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

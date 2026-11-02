@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { toSmsAeroPhone } from "@/lib/phone";
 import { getClientIp } from "@/lib/rateLimit";
+import { sendMail } from "@/lib/mail";
 
 function generateCode(): string {
   // crypto, not Math.random: Math.random is predictable from its earlier outputs
@@ -47,6 +48,44 @@ async function sendSmsAero(phone: string, text: string): Promise<boolean> {
   }
 }
 
+/** SMS a day: per phone number, per IP, for the whole site (audit P2-05) */
+const SMS_PHONE_DAY = 5;
+const SMS_IP_DAY = 20;
+const SMS_SITE_DAY = 300;
+
+/** Counts one more request under `key` (LoginAttempt row); false once `max` is used up in the window. */
+async function bump(key: string, max: number, windowMs: number): Promise<boolean> {
+  const now = new Date();
+  const row = await prisma.loginAttempt.findUnique({ where: { ip: key } });
+  if (row && row.resetAt > now) {
+    if (row.count >= max) return false;
+    await prisma.loginAttempt.update({ where: { ip: key }, data: { count: { increment: 1 } } });
+    return true;
+  }
+  await prisma.loginAttempt.upsert({
+    where: { ip: key },
+    update: { count: 1, resetAt: new Date(now.getTime() + windowMs) },
+    create: { ip: key, count: 1, resetAt: new Date(now.getTime() + windowMs) },
+  });
+  return true;
+}
+
+/** One e-mail a day to ADMIN_EMAIL when the site-wide SMS limit stops sending. */
+async function alertAdminOnce() {
+  try {
+    const to = process.env.ADMIN_EMAIL;
+    if (!to || !(await bump("sms_alert", 1, 24 * 60 * 60 * 1000))) return;
+    await sendMail({
+      to,
+      subject: "Подозрительно много SMS — отправка кодов приостановлена",
+      html: `<p>За последние сутки сайт отправил ${SMS_SITE_DAY} SMS с кодами — это суточный предел.
+        Новые коды не отправляются, пока число за сутки не станет меньше. Возможно, бот перебирает номера.</p>`,
+    });
+  } catch (e) {
+    console.error("[sms] alert", e);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const { phone } = await request.json();
@@ -60,33 +99,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Неверный формат номера телефона" }, { status: 400 });
     }
 
-    // Rate limit: не более 10 SMS в час с одного IP
     const ip = getClientIp(request);
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const dayAgo = new Date(Date.now() - DAY_MS);
 
-    const SMS_IP_MAX = 10;
-    const SMS_IP_WINDOW_MS = 60 * 60 * 1000; // 1 час
-    const smsIpKey = `sms_${ip}`;
-    const now = new Date();
-
-    const ipAttempt = await prisma.loginAttempt.findUnique({ where: { ip: smsIpKey } });
-
-    if (ipAttempt && ipAttempt.resetAt > now) {
-      if (ipAttempt.count >= SMS_IP_MAX) {
-        return NextResponse.json(
-          { error: "Слишком много запросов. Попробуйте через час." },
-          { status: 429 }
-        );
-      }
-      await prisma.loginAttempt.update({
-        where: { ip: smsIpKey },
-        data: { count: { increment: 1 } },
-      });
-    } else {
-      await prisma.loginAttempt.upsert({
-        where: { ip: smsIpKey },
-        update: { count: 1, resetAt: new Date(now.getTime() + SMS_IP_WINDOW_MS) },
-        create: { ip: smsIpKey, count: 1, resetAt: new Date(now.getTime() + SMS_IP_WINDOW_MS) },
-      });
+    // Daily limits (audit P2-05): a bot with many IPs must not burn the SMS balance.
+    // Codes live in SmsCode for ~24 h (cleaned below), so they count the last day.
+    if ((await prisma.smsCode.count({ where: { phone: smsPhone, createdAt: { gte: dayAgo } } })) >= SMS_PHONE_DAY) {
+      return NextResponse.json(
+        { error: "Слишком много запросов кода. Попробуйте завтра или напишите нам." },
+        { status: 429 }
+      );
+    }
+    if ((await prisma.smsCode.count({ where: { createdAt: { gte: dayAgo } } })) >= SMS_SITE_DAY) {
+      console.error(`[sms] site daily limit ${SMS_SITE_DAY} reached — sending paused`);
+      void alertAdminOnce();
+      return NextResponse.json(
+        { error: "Отправка кодов временно недоступна. Попробуйте позже или напишите нам." },
+        { status: 429 }
+      );
+    }
+    // per IP: 10 an hour and 20 a day
+    if (!(await bump(`sms_${ip}`, 10, 60 * 60 * 1000)) || !(await bump(`sms_day_${ip}`, SMS_IP_DAY, DAY_MS))) {
+      return NextResponse.json(
+        { error: "Слишком много запросов. Попробуйте позже." },
+        { status: 429 }
+      );
     }
 
     // Rate limit: не чаще 1 раза в 60 секунд на номер
