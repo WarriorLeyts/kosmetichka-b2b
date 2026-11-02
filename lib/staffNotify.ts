@@ -12,7 +12,9 @@ export type StaffEvent =
   | { kind: "new-order"; orderId: number }
   | { kind: "chat"; orderId: number; text: string }
   | { kind: "confirmed"; orderId: number }
-  | { kind: "cancelled"; orderId: number };
+  | { kind: "cancelled"; orderId: number }
+  /** a customer waits for a decision: registration to approve, or a higher price type */
+  | { kind: "customer-request"; customerId: number; request: "register" | "wholesale" | "big_wholesale" };
 
 /** who gets staff notifications (current role of the account) */
 export const STAFF_PUSH_ROLES = ["admin", "manager"];
@@ -46,8 +48,32 @@ export function chatPreview(text: string): string {
 
 const rub = (n: number) => `${n.toLocaleString("ru-RU").replace(/ /g, " ")} ₽`;
 
+const REQUEST_TITLES = {
+  register: "Заявка на регистрацию",
+  wholesale: "Запрос оптовых цен",
+  big_wholesale: "Запрос цен крупного опта",
+} as const;
+
+async function customerPayload(ev: Extract<StaffEvent, { kind: "customer-request" }>): Promise<WebPushPayload | null> {
+  const c = await prisma.customer.findUnique({
+    where: { id: ev.customerId },
+    select: { name: true, companyName: true, phone: true },
+  });
+  if (!c) return null;
+  const path = `/customer/${ev.customerId}`;
+  return {
+    link: `/admin${path}`,
+    path,
+    kind: "staff-customer",
+    tag: `c${ev.customerId}-${ev.request}`,
+    title: REQUEST_TITLES[ev.request],
+    body: [clientLabel(c, ev.customerId), c.phone && c.phone !== clientLabel(c) ? c.phone : null].filter(Boolean).join(" · "),
+  };
+}
+
 /** Builds the notification for an event (null when the order is gone). */
 export async function staffPayload(ev: StaffEvent): Promise<WebPushPayload | null> {
+  if (ev.kind === "customer-request") return customerPayload(ev);
   const o = await prisma.order.findUnique({
     where: { id: ev.orderId },
     select: { id: true, total: true, customerId: true, customer: { select: { name: true, companyName: true, phone: true } } },

@@ -9,6 +9,7 @@ import { isWholesaleRole } from "@/lib/roles";
 import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
 import { ADDRESS_REQUIRED, cleanAddress, needsShopAddress } from "@/lib/shopAddress";
 import { registrationPriceType } from "@/lib/oneCPriceType";
+import { notifyStaffLater } from "@/lib/staffNotify";
 
 async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
   const serverKey = process.env.SMARTCAPTCHA_SERVER_KEY;
@@ -195,6 +196,10 @@ export async function POST(request: Request) {
       ...(wantsBig ? { roleRequest: "big_wholesale", roleRequestStatus: "pending", roleRequestedAt: new Date() } : {}),
     },
   });
+
+  // staff decide: approve the account, or the big-wholesale price type asked for at sign-up
+  if (!shouldAutoApprove) notifyStaffLater({ kind: "customer-request", customerId: customer.id, request: "register" });
+  else if (wantsBig) notifyStaffLater({ kind: "customer-request", customerId: customer.id, request: "big_wholesale" });
 
   if (shouldAutoApprove) {
     const token = await createToken({
