@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
         createdAt: true,
         pickerId: true,
         confirmRequestedAt: true,
+        customerConfirmed: true,
         customer: { select: { name: true, companyName: true, phone: true } },
         _count: { select: { items: true } },
         items: {
@@ -116,6 +117,8 @@ export async function GET(request: NextRequest) {
       pickerId: o.pickerId,
       /** waiting for the customer to confirm staff changes */
       awaitingConfirmation: !!o.confirmRequestedAt,
+      /** the customer confirmed the checked order («На проверке» → can go on) */
+      customerConfirmed: o.customerConfirmed,
       customer: o.customer,
       ...(marks.get(o.id) ?? EMPTY_MARKS),
       itemsCount: o._count.items,
