@@ -4,7 +4,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 const db = vi.hoisted(() => ({
   order: { findUnique: vi.fn() },
   staffWebPushSubscription: { findMany: vi.fn(), deleteMany: vi.fn(async () => ({})) },
-  staffPushToken: { findMany: vi.fn(async () => []), deleteMany: vi.fn(async () => ({})) },
+  staffPushToken: { findMany: vi.fn(async (): Promise<{ token: string }[]> => []), deleteMany: vi.fn(async () => ({})) },
   pushToken: { deleteMany: vi.fn(async () => ({})) },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
