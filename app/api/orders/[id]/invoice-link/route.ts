@@ -5,8 +5,8 @@ import { verifyCustomerToken } from "@/lib/customerAuth";
 import { createInvoiceToken } from "@/lib/auth";
 
 /**
- * POST — a 10-minute link to this order's invoice for the phone app (its in-app browser does not
- * carry the login cookie, so /orders/N/invoice alone sent the customer to the login page).
+ * POST — a 7-day link to this order's invoice for the phone app (its in-app browser does not carry the
+ * login cookie) and for sharing: `url` — the invoice page, `pdf` — the same invoice as a PDF file.
  */
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const token = (await cookies()).get("auth_token")?.value;
@@ -20,5 +20,6 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (!order || order.customerId !== customerId) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
   const t = await createInvoiceToken(id, customerId);
-  return NextResponse.json({ url: `/orders/${id}/invoice?t=${encodeURIComponent(t)}` });
+  const q = `t=${encodeURIComponent(t)}`;
+  return NextResponse.json({ url: `/orders/${id}/invoice?${q}`, pdf: `/api/orders/${id}/invoice-pdf?${q}`, filename: `Счёт №${id}.pdf` });
 }

@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import PrintButton from "@/components/admin/PrintButton";
+import InvoiceActions from "@/components/InvoiceActions";
+import { deliveryLine } from "@/lib/invoice";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,7 @@ export default async function InvoicePage({
 
   if (!order) notFound();
 
+  const delivery = deliveryLine(order.deliveryType, order.deliveryAddress);
   const issueDate = new Date(order.createdAt).toLocaleDateString("ru-RU", {
     day: "2-digit",
     month: "long",
@@ -60,6 +63,7 @@ export default async function InvoicePage({
           ← Назад к заказу
         </a>
         <PrintButton />
+        <InvoiceActions orderId={order.id} linkEndpoint={`/api/team/orders/${order.id}/invoice-link`} dark />
         <span className="ml-auto text-sm text-slate-400">
           Счёт №{order.id} от {issueDate}
         </span>
@@ -116,6 +120,17 @@ export default async function InvoicePage({
             )}
           </div>
         </div>
+
+        {/* how the order is received (chosen in the cart) */}
+        {delivery ? (
+          <div className="mb-8 rounded-xl border border-slate-200 px-4 py-3">
+            <p className="mb-0.5 text-xs font-bold uppercase tracking-wide text-slate-400">Способ получения</p>
+            <p className="font-semibold text-slate-800">
+              {delivery.title}
+              {delivery.text ? `: ${delivery.text}` : ""}
+            </p>
+          </div>
+        ) : null}
 
         {/* Items table */}
         <table className="mb-6 w-full text-sm">
