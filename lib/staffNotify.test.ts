@@ -4,6 +4,8 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 const db = vi.hoisted(() => ({
   order: { findUnique: vi.fn() },
   staffWebPushSubscription: { findMany: vi.fn(), deleteMany: vi.fn(async () => ({})) },
+  staffPushToken: { findMany: vi.fn(async (): Promise<{ token: string }[]> => []), deleteMany: vi.fn(async () => ({})) },
+  pushToken: { deleteMany: vi.fn(async () => ({})) },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
@@ -89,5 +91,20 @@ describe("notifyStaff", () => {
     expect(await notifyStaff({ kind: "new-order", orderId: 42 })).toBe(0);
     expect(db.staffWebPushSubscription.findMany).not.toHaveBeenCalled();
     process.env.WEB_PUSH_PUBLIC_KEY = pub;
+  });
+});
+
+describe("Team phones", () => {
+  it("an event goes to the phones of admins / managers; tapping opens the order; gone tokens removed", async () => {
+    db.staffWebPushSubscription.findMany.mockResolvedValue([]);
+    db.staffPushToken.findMany.mockResolvedValue([{ token: "ExponentPushToken[aaaaaaaaaaaa]" }, { token: "ExponentPushToken[bbbbbbbbbbbb]" }]);
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ data: [{ status: "ok" }, { status: "error", details: { error: "DeviceNotRegistered" } }] }) });
+    const n = await notifyStaff({ kind: "new-order", orderId: 42 }, { exceptUserId: 3 });
+    expect(n).toBe(1);
+    expect(db.staffPushToken.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ userId: { not: 3 } }) }));
+    const sent = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(sent[0]).toMatchObject({ to: "ExponentPushToken[aaaaaaaaaaaa]", title: "Новый заказ №42", channelId: "staff", data: { path: "/order/42" } });
+    expect(db.staffPushToken.deleteMany).toHaveBeenCalledWith({ where: { token: { in: ["ExponentPushToken[bbbbbbbbbbbb]"] } } });
+    expect(db.pushToken.deleteMany).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getVapidConfig, sendToSubscriptions, type WebPushPayload } from "@/lib/webPush";
+import { sendPush } from "@/lib/notify";
 
 /**
  * Web Push for staff (admin / manager) on the admin website (/admin, the Team web app):
@@ -67,8 +68,47 @@ export async function staffPayload(ev: StaffEvent): Promise<WebPushPayload | nul
   }
 }
 
-/** Pushes an event to every admin / manager browser (except `exceptUserId`). Returns delivered count. */
+/** Pushes an event to every admin / manager browser and Team phone (except `exceptUserId`). Returns delivered count. */
 export async function notifyStaff(ev: StaffEvent, opts: { exceptUserId?: number | null } = {}): Promise<number> {
+  const [web, phones] = await Promise.all([notifyStaffBrowsers(ev, opts), notifyStaffPhones(ev, opts)]);
+  return web + phones;
+}
+
+/**
+ * The staff app «Косметичка Team» on phones: Expo push (FCM on Android) to the tokens it registered
+ * (/api/team/push-token). Tapping the notification opens the order.
+ */
+async function notifyStaffPhones(ev: StaffEvent, opts: { exceptUserId?: number | null }): Promise<number> {
+  try {
+    const tokens = await prisma.staffPushToken.findMany({
+      where: {
+        user: { role: { in: STAFF_PUSH_ROLES } },
+        ...(opts.exceptUserId ? { userId: { not: opts.exceptUserId } } : {}),
+      },
+      select: { token: true },
+    });
+    if (tokens.length === 0) return 0;
+    const payload = await staffPayload(ev);
+    if (!payload) return 0;
+    return await sendPush(
+      tokens.map((t) => ({
+        to: t.token,
+        title: payload.title,
+        body: payload.body,
+        data: { link: payload.path ?? null, path: payload.path, kind: payload.kind ?? "staff" },
+        sound: "default",
+        channelId: "staff",
+        priority: "high",
+      })),
+      (gone) => prisma.staffPushToken.deleteMany({ where: { token: { in: gone } } })
+    );
+  } catch (e) {
+    console.error("[staff-push] phones", e instanceof Error ? e.message : e);
+    return 0;
+  }
+}
+
+async function notifyStaffBrowsers(ev: StaffEvent, opts: { exceptUserId?: number | null }): Promise<number> {
   const cfg = getVapidConfig();
   if (!cfg) return 0;
   try {
