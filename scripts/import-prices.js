@@ -3,6 +3,7 @@ import { XMLParser } from "fast-xml-parser";
 import nodemailer from "nodemailer";
 import fs from "fs";
 import nodePath from "path";
+import { hideMissing, toKopecks } from "./onec-helpers.js";
 // 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
 const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
 
@@ -191,46 +192,43 @@ async function main() {
 
   // Обрабатываем предложения
   const cameIntoStock = [];
+  const full = String(packageData?.СодержитТолькоИзменения ?? "").toLowerCase() === "false";
+  const present = [];
+  let changedPrices = 0;
+  let changedStock = 0;
 
   for (const offer of offers) {
     const productGuid = offer.Ид;
 
     const product = await prisma.product.findUnique({
       where: { guid: productGuid },
+      select: { id: true, stock: true, prices: { select: { priceType: true, price: true } } },
     });
 
     if (!product) continue;
+    present.push(productGuid);
 
-    const prices = toArray(offer.Цены?.Цена);
-
-    for (const item of prices) {
+    // only what changed is written (audit P2-09): same price / stock → no query
+    const had = new Map(product.prices.map((x) => [x.priceType, x.price]));
+    for (const item of toArray(offer.Цены?.Цена)) {
       const priceType = priceTypeMap.get(item.ИдТипаЦены);
       if (!priceType) continue;
-
+      const price = toKopecks(item.ЦенаЗаЕдиницу);
+      // an old value with a float tail (145.94999…) is rewritten once, rounded
+      if (had.get(priceType) === price) continue;
       await prisma.productPrice.upsert({
-        where: {
-          productGuid_priceType: {
-            productGuid,
-            priceType,
-          },
-        },
-        update: {
-          price: Number(item.ЦенаЗаЕдиницу || 0),
-        },
-        create: {
-          productGuid,
-          priceType,
-          price: Number(item.ЦенаЗаЕдиницу || 0),
-        },
+        where: { productGuid_priceType: { productGuid, priceType } },
+        update: { price },
+        create: { productGuid, priceType, price },
       });
+      changedPrices++;
     }
 
     const newStock = Number(offer.Количество || 0);
-
-    await prisma.product.update({
-      where: { guid: productGuid },
-      data: { stock: newStock },
-    });
+    if (product.stock !== newStock) {
+      await prisma.product.update({ where: { guid: productGuid }, data: { stock: newStock } });
+      changedStock++;
+    }
 
     // Проверяем появился ли товар в наличии
     if (watchedIds.has(product.id)) {
@@ -240,6 +238,10 @@ async function main() {
       }
     }
   }
+
+  console.log(`Изменено цен: ${changedPrices}, остатков: ${changedStock}`);
+  // full price list: products 1C no longer offers can't be ordered (see hideMissing)
+  if (full) await hideMissing(prisma, present, "остатки");
 
   console.log("Импорт цен и остатков завершен");
 
