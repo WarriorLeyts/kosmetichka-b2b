@@ -41,3 +41,4 @@ next-env.d.ts
 
 # 1C sync data (large XML/binary files, generated on server)
 /data
+test-output/

@@ -73,16 +73,28 @@ export async function requireAdminRole() {
 }
 
 /**
- * A 10-minute link to one order's invoice for the phone app: the in-app browser that opens it has
- * no access to the app's login cookie, so the link itself proves who may see the invoice. It is
- * useless as a login — `verifyToken` rejects it (role "invoice", no staff account 0).
+ * A link to one order's invoice (page or PDF) that works without signing in: the phone app's in-app
+ * browser has no login cookie, and the invoice is shared with others (messengers, e-mail). Valid
+ * 7 days and only for that order; useless as a login — `verifyToken` rejects it (role "invoice",
+ * no staff account 0). `aud` — whose status names the invoice shows.
  */
-export async function createInvoiceToken(orderId: number, customerId: number) {
-  return await new SignJWT({ id: 0, role: "invoice", inv: orderId, cid: customerId })
+export async function createInvoiceToken(orderId: number, customerId: number, aud: "customer" | "staff" = "customer") {
+  return await new SignJWT({ id: 0, role: "invoice", inv: orderId, cid: customerId, aud })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("10m")
+    .setExpirationTime("7d")
     .sign(secret);
+}
+
+/** Like verifyInvoiceToken, plus who the link was made for («staff» links show staff status names). */
+export async function verifyInvoiceLink(token: string, orderId: number): Promise<{ customerId: number; aud: "customer" | "staff" } | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret);
+    if (payload.role !== "invoice" || payload.inv !== orderId || typeof payload.cid !== "number") return null;
+    return { customerId: payload.cid, aud: payload.aud === "staff" ? "staff" : "customer" };
+  } catch {
+    return null;
+  }
 }
 
 /** The customer id the invoice link `token` was made for, if it is valid for order `orderId`. */

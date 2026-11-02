@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { verifyInvoiceToken } from "@/lib/auth";
 import PrintButton from "@/components/admin/PrintButton";
+import InvoiceActions from "@/components/InvoiceActions";
+import { deliveryLine } from "@/lib/invoice";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ export default async function CustomerInvoicePage({
   searchParams: Promise<{ t?: string | string[] }>;
 }) {
   const { id } = await params;
-  // the phone app opens the invoice with a 10-minute link (/api/orders/N/invoice-link): its
+  // the phone app (and anyone it was shared with) opens the invoice with a 7-day link (/api/orders/N/invoice-link): its
   // in-app browser has no login cookie. Otherwise — the signed-in customer, as before.
   const { t } = await searchParams;
   let customerId = typeof t === "string" ? await verifyInvoiceToken(t, Number(id)) : null;
@@ -41,6 +43,7 @@ export default async function CustomerInvoicePage({
   // Security: customer can only see their own orders
   if (!order || order.customerId !== customerId) notFound();
 
+  const delivery = deliveryLine(order.deliveryType, order.deliveryAddress);
   const issueDate = new Date(order.createdAt).toLocaleDateString("ru-RU", {
     day: "2-digit",
     month: "long",
@@ -66,6 +69,7 @@ export default async function CustomerInvoicePage({
           ← Мои заказы
         </a>
         <PrintButton />
+        <InvoiceActions orderId={order.id} linkEndpoint={`/api/orders/${order.id}/invoice-link`} token={typeof t === "string" ? t : undefined} />
         <span className="ml-auto text-sm text-slate-400">
           Счёт №{order.id} от {issueDate}
         </span>
@@ -140,6 +144,17 @@ export default async function CustomerInvoicePage({
             )}
           </div>
         </div>
+
+        {/* how the order is received (chosen in the cart) */}
+        {delivery ? (
+          <div className="mb-8 rounded-xl border border-slate-200 px-4 py-3">
+            <p className="mb-0.5 text-xs font-bold uppercase tracking-wide text-slate-400">Способ получения</p>
+            <p className="font-semibold text-slate-800">
+              {delivery.title}
+              {delivery.text ? `: ${delivery.text}` : ""}
+            </p>
+          </div>
+        ) : null}
 
         {/* Items table */}
         <table className="mb-6 w-full text-sm">

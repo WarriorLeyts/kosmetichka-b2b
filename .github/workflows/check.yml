@@ -22,5 +22,14 @@ jobs:
         run: npx tsc --noEmit
       - name: Tests
         run: npx vitest run
+        env:
+          INVOICE_PDF_OUT: test-output
+      - name: Keep sample invoice PDFs
+        if: always() && hashFiles('test-output/*.pdf') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: invoice-pdf
+          path: test-output
+          retention-days: 3
       - name: Lint changed files
         run: npx eslint app/api/team lib/chatAttachments.ts lib/renderMsgContent.tsx components/orders/OrderChat.tsx app/api/uploads/chat || true

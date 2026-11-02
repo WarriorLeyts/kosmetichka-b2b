@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
   // data/ (файлы обмена с 1С) живёт вне сборки: /root/kosmetichka-data, в сборку подключается ссылкой
   // (см. deploy.sh). Без этого Next копировал бы в .next/standalone старую локальную папку data/1c.
   outputFileTracingExcludes: { "*": ["./data/**"] },
+  // invoice PDF: pdfkit runs as a plain Node package (it reads its own data files), the Inter fonts
+  // it embeds are copied into the standalone build with the route
+  serverExternalPackages: ["pdfkit"],
+  outputFileTracingIncludes: { "/api/orders/*/invoice-pdf": ["./assets/fonts/**", "./node_modules/pdfkit/js/data/**"] },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: process.env.IMAGES_HOSTNAME ?? "" },
