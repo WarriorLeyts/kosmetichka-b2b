@@ -13,8 +13,8 @@ export type StaffEvent =
   | { kind: "chat"; orderId: number; text: string }
   | { kind: "confirmed"; orderId: number }
   | { kind: "cancelled"; orderId: number }
-  /** a customer waits for a decision: registration to approve, or a higher price type */
-  | { kind: "customer-request"; customerId: number; request: "register" | "wholesale" | "big_wholesale" };
+  /** a customer waits for a decision on a wholesale price type: at sign-up, or a retail customer moving up */
+  | { kind: "customer-request"; customerId: number; request: "wholesale" | "big_wholesale"; signup: boolean };
 
 /** who gets staff notifications (current role of the account) */
 export const STAFF_PUSH_ROLES = ["admin", "manager"];
@@ -48,11 +48,7 @@ export function chatPreview(text: string): string {
 
 const rub = (n: number) => `${n.toLocaleString("ru-RU").replace(/ /g, " ")} ₽`;
 
-const REQUEST_TITLES = {
-  register: "Заявка на регистрацию",
-  wholesale: "Запрос оптовых цен",
-  big_wholesale: "Запрос цен крупного опта",
-} as const;
+const LEVEL = { wholesale: "опт", big_wholesale: "крупный опт" } as const;
 
 async function customerPayload(ev: Extract<StaffEvent, { kind: "customer-request" }>): Promise<WebPushPayload | null> {
   const c = await prisma.customer.findUnique({
@@ -66,7 +62,7 @@ async function customerPayload(ev: Extract<StaffEvent, { kind: "customer-request
     path,
     kind: "staff-customer",
     tag: `c${ev.customerId}-${ev.request}`,
-    title: REQUEST_TITLES[ev.request],
+    title: ev.signup ? `Заявка на регистрацию: ${LEVEL[ev.request]}` : `Переход на ${LEVEL[ev.request]}`,
     body: [clientLabel(c, ev.customerId), c.phone && c.phone !== clientLabel(c) ? c.phone : null].filter(Boolean).join(" · "),
   };
 }

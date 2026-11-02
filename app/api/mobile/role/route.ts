@@ -98,7 +98,7 @@ export async function POST(request: Request) {
     select: SELECT,
   });
   console.log(`[role] customer ${id}: request ${c.priceType} → ${target}`);
-  if (target !== "retail") notifyStaffLater({ kind: "customer-request", customerId: id, request: target });
+  if (target !== "retail") notifyStaffLater({ kind: "customer-request", customerId: id, request: target, signup: false });
 
   const adminEmail = process.env.ADMIN_EMAIL;
   if (adminEmail) {
