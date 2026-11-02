@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireAdminRole } from "@/lib/auth";
 
 type Props = {
   params: Promise<{
@@ -9,9 +9,9 @@ type Props = {
 };
 
 export async function POST(request: Request, { params }: Props) {
-  if (!(await requireAdmin())) {
-    return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
-  }
+  if (!(await requireAdmin())) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+  // managers only view customers: approving and editing is for the admin
+  if (!(await requireAdminRole())) return NextResponse.json({ error: "Только администратор может подтверждать и изменять клиентов" }, { status: 403 });
 
   const { id } = await params;
 

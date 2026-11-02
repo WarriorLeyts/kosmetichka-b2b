@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, requireAdminRole } from "@/lib/auth";
 import { isWholesaleRole, maxAccess } from "@/lib/roles";
 
 const PRICE_TYPES = ["retail", "discount", "wholesale", "big_wholesale"];
@@ -15,6 +15,8 @@ const TEXT_FIELDS = ["name", "companyName", "phone", "email", "inn", "city", "ad
  */
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await requireAdmin())) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+  // managers only view customers: approving and editing is for the admin
+  if (!(await requireAdminRole())) return NextResponse.json({ error: "Только администратор может подтверждать и изменять клиентов" }, { status: 403 });
 
   const id = Number((await params).id);
   if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ error: "Неверный id" }, { status: 400 });
