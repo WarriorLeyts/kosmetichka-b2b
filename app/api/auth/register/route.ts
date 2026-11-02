@@ -197,9 +197,10 @@ export async function POST(request: Request) {
     },
   });
 
-  // staff decide: approve the account, or the big-wholesale price type asked for at sign-up
-  if (!shouldAutoApprove) notifyStaffLater({ kind: "customer-request", customerId: customer.id, request: "register" });
-  else if (wantsBig) notifyStaffLater({ kind: "customer-request", customerId: customer.id, request: "big_wholesale" });
+  // staff decide on wholesale sign-ups (retail is approved at once): approve the account and / or «Крупный опт»
+  if (!shouldAutoApprove || wantsBig) {
+    notifyStaffLater({ kind: "customer-request", customerId: customer.id, request: wantsBig ? "big_wholesale" : "wholesale", signup: true });
+  }
 
   if (shouldAutoApprove) {
     const token = await createToken({

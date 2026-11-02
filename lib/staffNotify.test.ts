@@ -38,14 +38,15 @@ beforeEach(() => {
 describe("staff payloads", () => {
   it("customer requests: registration and price type open the customer card", async () => {
     db.customer.findUnique.mockResolvedValue({ name: "Анна", companyName: "ИП Анна", phone: "+79990001122" });
-    expect(await staffPayload({ kind: "customer-request", customerId: 7, request: "register" })).toMatchObject({
-      title: "Заявка на регистрацию", body: "ИП Анна · +79990001122", link: "/admin/customer/7", path: "/customer/7",
+    expect(await staffPayload({ kind: "customer-request", customerId: 7, request: "wholesale", signup: true })).toMatchObject({
+      title: "Заявка на регистрацию: опт", body: "ИП Анна · +79990001122", link: "/admin/customer/7", path: "/customer/7",
     });
-    expect((await staffPayload({ kind: "customer-request", customerId: 7, request: "wholesale" }))?.title).toBe("Запрос оптовых цен");
+    expect((await staffPayload({ kind: "customer-request", customerId: 7, request: "big_wholesale", signup: true }))?.title).toBe("Заявка на регистрацию: крупный опт");
+    expect((await staffPayload({ kind: "customer-request", customerId: 7, request: "wholesale", signup: false }))?.title).toBe("Переход на опт");
     db.customer.findUnique.mockResolvedValue({ name: null, companyName: null, phone: "+79990001122" });
-    expect((await staffPayload({ kind: "customer-request", customerId: 7, request: "big_wholesale" }))?.body).toBe("+79990001122");
+    expect((await staffPayload({ kind: "customer-request", customerId: 7, request: "big_wholesale", signup: false }))?.body).toBe("+79990001122");
     db.customer.findUnique.mockResolvedValue(null);
-    expect(await staffPayload({ kind: "customer-request", customerId: 7, request: "register" })).toBeNull();
+    expect(await staffPayload({ kind: "customer-request", customerId: 7, request: "wholesale", signup: true })).toBeNull();
   });
 
   it("new order: number, client, sum, admin link", async () => {
