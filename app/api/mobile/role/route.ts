@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../_auth";
 import { sendMail } from "@/lib/mail";
+import { notifyStaffLater } from "@/lib/staffNotify";
 import { roleChangeLimiter } from "@/lib/rateLimit";
 import { ROLE_LABELS, isSwitchTarget, roleInfo, switchDecision } from "@/lib/roles";
 
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
     select: SELECT,
   });
   console.log(`[role] customer ${id}: request ${c.priceType} → ${target}`);
+  if (target !== "retail") notifyStaffLater({ kind: "customer-request", customerId: id, request: target });
 
   const adminEmail = process.env.ADMIN_EMAIL;
   if (adminEmail) {

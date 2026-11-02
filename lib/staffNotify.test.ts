@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
   order: { findUnique: vi.fn() },
+  customer: { findUnique: vi.fn() },
   staffWebPushSubscription: { findMany: vi.fn(), deleteMany: vi.fn(async () => ({})) },
   staffPushToken: { findMany: vi.fn(async (): Promise<{ token: string }[]> => []), deleteMany: vi.fn(async () => ({})) },
   pushToken: { deleteMany: vi.fn(async () => ({})) },
@@ -35,6 +36,18 @@ beforeEach(() => {
 });
 
 describe("staff payloads", () => {
+  it("customer requests: registration and price type open the customer card", async () => {
+    db.customer.findUnique.mockResolvedValue({ name: "Анна", companyName: "ИП Анна", phone: "+79990001122" });
+    expect(await staffPayload({ kind: "customer-request", customerId: 7, request: "register" })).toMatchObject({
+      title: "Заявка на регистрацию", body: "ИП Анна · +79990001122", link: "/admin/customer/7", path: "/customer/7",
+    });
+    expect((await staffPayload({ kind: "customer-request", customerId: 7, request: "wholesale" }))?.title).toBe("Запрос оптовых цен");
+    db.customer.findUnique.mockResolvedValue({ name: null, companyName: null, phone: "+79990001122" });
+    expect((await staffPayload({ kind: "customer-request", customerId: 7, request: "big_wholesale" }))?.body).toBe("+79990001122");
+    db.customer.findUnique.mockResolvedValue(null);
+    expect(await staffPayload({ kind: "customer-request", customerId: 7, request: "register" })).toBeNull();
+  });
+
   it("new order: number, client, sum, admin link", async () => {
     const p = await staffPayload({ kind: "new-order", orderId: 42 });
     expect(p).toMatchObject({ title: "Новый заказ №42", body: "ИП Анна · 12 345 ₽", link: "/admin/order/42", path: "/order/42" });
