@@ -7,12 +7,13 @@ import PasswordInput from "@/components/PasswordInput";
 import { ROLE_LABELS, isWholesaleRole, maxAccess } from "@/lib/roles";
 import { decideRoleRequest } from "@/lib/roleRequest";
 
-async function guard() {
+/** viewing: admin / manager; `adminOnly` — approving and editing (managers only view customers) */
+async function guard(adminOnly = false) {
   const cookieStore = await cookies();
   const token = cookieStore.get("admin_token")?.value;
   if (!token) redirect("/admin");
   const payload = await verifyToken(token);
-  if (!payload?.id || !["admin", "manager"].includes(payload.role as string)) {
+  if (!payload?.id || !(adminOnly ? ["admin"] : ["admin", "manager"]).includes(payload.role as string)) {
     redirect("/admin");
   }
 }
@@ -20,7 +21,7 @@ async function guard() {
 /** Approve / reject the customer's request for a wholesale price type. */
 async function decideRoleRequestAction(formData: FormData) {
   "use server";
-  await guard();
+  await guard(true);
   const id = Number(formData.get("id"));
   const action = String(formData.get("action") || "");
   if (action === "approve" || action === "reject") await decideRoleRequest(id, action);
@@ -31,7 +32,7 @@ async function updateCustomer(formData: FormData) {
   "use server";
 
   // Auth guard inside server action
-  await guard();
+  await guard(true);
 
   const id = Number(formData.get("id"));
 
