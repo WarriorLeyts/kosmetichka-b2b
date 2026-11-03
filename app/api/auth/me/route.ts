@@ -30,8 +30,11 @@ export async function GET() {
       wholesaleAccess: true,
       roleRequest: true,
       roleRequestStatus: true,
+      loyaltyCard: true,
     },
   });
-
-  return NextResponse.json({ customer });
+  if (!customer) return NextResponse.json({ customer: null });
+  // hasCard instead of the number: the site / app only need to know a card is linked
+  const { loyaltyCard, ...rest } = customer;
+  return NextResponse.json({ customer: { ...rest, hasCard: Boolean(loyaltyCard?.trim()) } });
 }
