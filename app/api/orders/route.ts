@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { fromSite, pricingCustomer } from "@/lib/siteMode";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyStaffLater } from "@/lib/staffNotify";
@@ -90,6 +91,10 @@ export async function POST(request: Request) {
   if (applyBonuses > 0 && !canSpendBonuses(customer)) {
     return NextResponse.json({ error: BONUS_SPEND_FORBIDDEN }, { status: 400 });
   }
+  // website: bonuses are collected, never spent (owner's decision) — spending is only in the phone apps
+  if (applyBonuses > 0 && fromSite(request)) {
+    return NextResponse.json({ error: "На сайте бонусы не списываются — их можно списать в приложении" }, { status: 400 });
+  }
 
   let order;
   let lines: PricedLine[];
@@ -97,7 +102,7 @@ export async function POST(request: Request) {
   let promo: PromoResult | null = null;
 
   try {
-    ({ lines, tier } = await priceOrder(customer, items));
+    ({ lines, tier } = await priceOrder(pricingCustomer(customer, request), items));
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Не удалось создать заказ";

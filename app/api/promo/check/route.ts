@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { pricingCustomer } from "@/lib/siteMode";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyCustomerToken } from "@/lib/customerAuth";
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
 
   let lines;
   try {
-    lines = await priceOrderItems(customer, items);
+    lines = await priceOrderItems(pricingCustomer(customer, request), items);
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "Не удалось рассчитать корзину" },
