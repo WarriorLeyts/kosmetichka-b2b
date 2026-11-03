@@ -27,9 +27,11 @@ const SELECT = {
 export async function GET() {
   const id = await currentCustomerId();
   if (!id) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
-  const customer = await prisma.customer.findUnique({ where: { id }, select: SELECT });
-  if (!customer) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
-  return NextResponse.json({ customer });
+  const row = await prisma.customer.findUnique({ where: { id }, select: { ...SELECT, loyaltyCard: true } });
+  if (!row) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
+  // hasCard: a MAXMA card is linked (on the website a retail customer with a card buys at the discount price)
+  const { loyaltyCard, ...customer } = row;
+  return NextResponse.json({ customer: { ...customer, hasCard: Boolean(loyaltyCard?.trim()) } });
 }
 
 const ERRORS: Record<string, string> = {

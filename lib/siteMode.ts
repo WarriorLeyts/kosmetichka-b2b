@@ -6,9 +6,10 @@
 export const SITE_RETAIL_ENABLED = false;
 
 /**
- * On the website a retail customer («Розница») pays the discount price («Скидка по карте») — in the
- * catalogue, the cart and the order — and can add a MAXMA loyalty card. The phone apps keep retail
- * prices. Turn off: set to false (and SITE_RETAIL_DISCOUNT in the app's src/siteMode.ts).
+ * On the website a retail customer («Розница») with a MAXMA loyalty card linked pays the discount
+ * price («Скидка по карте») — in the catalogue, the cart and the order; without the card — retail.
+ * The phone apps keep retail prices. Turn off: set to false (and SITE_RETAIL_DISCOUNT in the app's
+ * src/siteMode.ts).
  */
 export const SITE_RETAIL_DISCOUNT = true;
 
@@ -17,7 +18,8 @@ export function fromSite(request: Request): boolean {
   return request.headers.get("x-kosmetichka-client") === "web";
 }
 
-/** The customer as the prices see him: on the website «Розница» → «Скидка по карте». */
-export function pricingCustomer<T extends { priceType?: string | null }>(customer: T, request: Request): T {
-  return SITE_RETAIL_DISCOUNT && customer.priceType === "retail" && fromSite(request) ? { ...customer, priceType: "discount" } : customer;
+/** The customer as the prices see him: on the website «Розница» with a linked card → «Скидка по карте». */
+export function pricingCustomer<T extends { priceType?: string | null; loyaltyCard?: string | null }>(customer: T, request: Request): T {
+  const card = Boolean(customer.loyaltyCard?.trim());
+  return SITE_RETAIL_DISCOUNT && customer.priceType === "retail" && card && fromSite(request) ? { ...customer, priceType: "discount" } : customer;
 }
