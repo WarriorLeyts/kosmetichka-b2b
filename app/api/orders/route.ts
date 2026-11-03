@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { fromSite, pricingCustomer } from "@/lib/siteMode";
+import { bonusSpendOff, pricingCustomer } from "@/lib/siteMode";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyStaffLater } from "@/lib/staffNotify";
@@ -91,9 +91,9 @@ export async function POST(request: Request) {
   if (applyBonuses > 0 && !canSpendBonuses(customer)) {
     return NextResponse.json({ error: BONUS_SPEND_FORBIDDEN }, { status: 400 });
   }
-  // website: bonuses are collected, never spent (owner's decision) — spending is only in the phone apps
-  if (applyBonuses > 0 && fromSite(request)) {
-    return NextResponse.json({ error: "На сайте бонусы не списываются — их можно списать в приложении" }, { status: 400 });
+  // bonuses are collected, never spent (owner's decision): the website, and the apps too
+  if (applyBonuses > 0 && bonusSpendOff(request)) {
+    return NextResponse.json({ error: "Списание бонусов отключено" }, { status: 400 });
   }
 
   let order;
