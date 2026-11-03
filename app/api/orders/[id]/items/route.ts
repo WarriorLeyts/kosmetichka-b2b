@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { pricingCustomer } from "@/lib/siteMode";
 import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
@@ -64,7 +65,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (added.length > 0) {
     try {
       priced = await priceOrderItems(
-        customer,
+        // products added later get the prices the order was placed with: an order placed on the
+        // website by a retail customer is at «Скидка по карте» even when he edits it in the app
+        order.priceTier === "discount" && customer.priceType === "retail" ? { ...customer, priceType: "discount" } : pricingCustomer(customer, request),
         added.map((a) => ({ id: Number(a.id), quantity: Number(a.quantity), variantName: a.variantName ?? null, variantImageUrl: a.variantImageUrl ?? null }))
       );
     } catch (e) {
