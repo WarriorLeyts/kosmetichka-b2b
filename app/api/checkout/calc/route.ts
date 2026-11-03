@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { fromSite, pricingCustomer } from "@/lib/siteMode";
+import { bonusSpendOff, pricingCustomer } from "@/lib/siteMode";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyCustomerToken } from "@/lib/customerAuth";
@@ -44,8 +44,8 @@ export async function POST(request: Request) {
   const customer = await prisma.customer.findUnique({ where: { id: Number(payload.id) } });
   if (!customer) return NextResponse.json({ error: "Ошибка авторизации" }, { status: 401 });
 
-  // website: bonuses are collected, never spent (only in the phone apps)
-  const canSpend = canSpendBonuses(customer) && !fromSite(request);
+  // bonuses are collected, never spent: the website, and the apps too
+  const canSpend = canSpendBonuses(customer) && !bonusSpendOff(request);
   if (applyBonuses > 0 && !canSpend) return NextResponse.json({ error: BONUS_SPEND_FORBIDDEN }, { status: 400 });
 
   let lines;

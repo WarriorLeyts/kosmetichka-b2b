@@ -29,6 +29,9 @@ vi.mock("@/lib/maxma", async (orig) => ({ ...(await orig<typeof import("@/lib/ma
 
 const queue = vi.hoisted(() => ({ enqueueMaxmaTask: vi.fn(async () => {}), runOrderMaxmaTasks: vi.fn(async () => ({})) }));
 vi.mock("@/lib/maxmaQueue", () => queue);
+// bonus spending is switched off for now (lib/siteMode.ts); the spending path itself stays tested
+const flags = vi.hoisted(() => ({ bonusOff: false }));
+vi.mock("@/lib/siteMode", async (orig) => ({ ...(await orig<typeof import("@/lib/siteMode")>()), bonusSpendOff: () => flags.bonusOff }));
 
 import { POST } from "./route";
 import { orderCreationLimiter } from "@/lib/rateLimit";
@@ -161,7 +164,29 @@ describe("MAXMA bonuses", () => {
     expect(r.status).toBe(200);
     expect(maxma.setLoyaltyOrderQuery).toHaveBeenCalledTimes(1);
     expect(created?.data.bonusesApplied).toBe(100);
-    expect((await r.json()).total).toBe((type === "retail" ? 1120 : 1005) - 100);
+    // «Розница» with a linked card is priced at «Скидка по карте» (lib/siteMode.ts pricingCustomer)
+    expect((await r.json()).total).toBe(1005 - 100);
+  });
+
+  it("bonus spending switched off → 400, nothing reserved; retail with a card still at the discount price", async () => {
+    flags.bonusOff = true;
+    try {
+      db.customer.findUnique.mockResolvedValue(customer("retail", { loyaltyCard: "2000123" }));
+      const r = await order({ items: [{ id: 1, quantity: 1 }], applyBonuses: 100 });
+      expect(r.status).toBe(400);
+      expect((await r.json()).error).toBe("Списание бонусов отключено");
+      expect(maxma.setLoyaltyOrderQuery).not.toHaveBeenCalled();
+      const ok = await order({ items: [{ id: 1, quantity: 1 }] });
+      expect((await ok.json()).total).toBe(1005);
+    } finally {
+      flags.bonusOff = false;
+    }
+  });
+
+  it("retail without a card → retail price", async () => {
+    db.customer.findUnique.mockResolvedValue(customer("retail"));
+    const r = await order({ items: [{ id: 1, quantity: 1 }] });
+    expect((await r.json()).total).toBe(1120);
   });
 
   it("MAXMA not answering on reservation → 409, order not saved, cancel queued", async () => {
