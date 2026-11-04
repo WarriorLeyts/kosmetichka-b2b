@@ -21,6 +21,8 @@ export async function GET() {
         select: {
           id: true,
           status: true,
+          confirmRequestedAt: true,
+          customerConfirmed: true,
           messages: {
             where: { isFromPicker: true, source: "customer" },
             orderBy: { createdAt: "desc" },
@@ -39,7 +41,12 @@ export async function GET() {
 
     const pending = orders.filter((o) => o.status === "pending").length;
 
-    const statuses = orders.map((o) => ({ id: o.id, status: o.status }));
+    // needsConfirm: the manager waits for the customer to check and confirm the order (same rule as the order screen)
+    const statuses = orders.map((o) => ({
+      id: o.id,
+      status: o.status,
+      needsConfirm: !!o.confirmRequestedAt || (o.status === "consultation" && !o.customerConfirmed),
+    }));
 
     // Orders that have at least one manager message — include latest timestamp
     const managerMessages = orders
