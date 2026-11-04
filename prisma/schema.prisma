@@ -125,6 +125,10 @@ model Customer {
   inn     String?
   city    String?
   address String?
+  /** wholesale request: where the customer resells — "offline" | "online" | "both" */
+  shopType String?
+  /** wholesale request: link to the online shop (site, Instagram, marketplace) */
+  shopLink String?
 
   password String
 
@@ -154,6 +158,8 @@ model Customer {
   wishlistItems WishlistItem[]
   notifications Notification[]
   pushTokens    PushToken[]
+  /** wholesale: proof of reselling (photos / videos of the shop or online orders) */
+  proofs        CustomerProof[]
   webPushSubs   WebPushSubscription[]
 
   createdAt DateTime @default(now())
@@ -606,4 +612,20 @@ model StaffPushToken {
   lastSeenAt DateTime @default(now())
 
   @@index([userId])
+}
+
+/** Photos / videos a wholesale applicant sends to prove he resells (shop, online orders). Staff see them in the customer card. */
+model CustomerProof {
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /** "img" | "video" */
+  kind       String
+  /** file name in DATA_DIR/proofs */
+  file       String
+  mime       String
+  size       Int
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
 }
