@@ -27,3 +27,19 @@ describe("website: retail customers with a card pay the discount price", () => {
     }
   });
 });
+
+describe("bonuses switched off (no MAXMA_BONUSES in .env)", () => {
+  it("no price type gets bonuses — the card isn't sent to MAXMA, nothing spent or accrued", async () => {
+    const { bonusPriceType, canSpendBonuses } = await import("./maxma");
+    const was = process.env.MAXMA_BONUSES;
+    delete process.env.MAXMA_BONUSES;
+    try {
+      expect(bonusPriceType("retail")).toBe(false);
+      expect(bonusPriceType("discount")).toBe(false);
+      expect(canSpendBonuses({ priceType: "retail", loyaltyCard: "2000123" })).toBe(false);
+    } finally {
+      process.env.MAXMA_BONUSES = was;
+    }
+    expect(bonusPriceType("retail")).toBe(true);
+  });
+});
