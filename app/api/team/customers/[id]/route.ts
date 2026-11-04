@@ -40,6 +40,7 @@ export async function GET(
       roleRequestedAt: true,
       isActive: true,
       isApproved: true,
+      requestStaleAt: true,
       role: true,
       createdAt: true,
       updatedAt: true,

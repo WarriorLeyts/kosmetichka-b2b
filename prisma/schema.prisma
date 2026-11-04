@@ -141,7 +141,7 @@ model Customer {
   wholesaleAccess String?
   /// Customer's request for a higher price type ("wholesale" | "big_wholesale"), decided by an admin
   roleRequest       String?
-  /// "pending" | "rejected"
+  /// "pending" | "rejected" | "stale" (неактуальная: staff set it aside, a new request makes it pending again)
   roleRequestStatus String?
   roleRequestedAt   DateTime?
   /// Consent to promo push notifications (акции); order / bonus / chat notifications are always sent
@@ -151,6 +151,9 @@ model Customer {
   /// MAXMA loyalty card number linked in the app (confirmed by an SMS code from MAXMA)
   loyaltyCard String?
   isApproved Boolean @default(false)
+  /// a wholesale sign-up waiting for approval that staff set aside as «Неактуальные» (the customer changed
+  /// his mind); registering again with the same phone brings it back to «Ожидают»
+  requestStaleAt DateTime?
 
   role String @default("customer")
 
