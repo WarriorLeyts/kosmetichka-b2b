@@ -47,9 +47,9 @@ export async function GET(request: NextRequest) {
   const selectedStatus = sp.get("status") || "";
   const page = parsePage(sp.get("page"));
 
-  const where: Prisma.OrderWhereInput = {
+  // the summary tiles: the chosen day (or all dates) and the search, every status
+  const scope: Prisma.OrderWhereInput = {
     ...(selectedDate ? { createdAt: businessDayRange(selectedDate) } : {}),
-    status: selectedStatus || undefined,
     customer: customerSearch
       ? {
           OR: [
@@ -61,8 +61,9 @@ export async function GET(request: NextRequest) {
         }
       : undefined,
   };
+  const where: Prisma.OrderWhereInput = { ...scope, status: selectedStatus || undefined };
 
-  const [totalCount, orders, todayCounts] = await Promise.all([
+  const [totalCount, orders, todayCounts, scopeGroups, confirmedCount] = await Promise.all([
     prisma.order.count({ where }),
     prisma.order.findMany({
       where,
@@ -94,6 +95,9 @@ export async function GET(request: NextRequest) {
       where: { createdAt: businessDayRange(businessToday) },
       _count: { id: true },
     }),
+    prisma.order.groupBy({ by: ["status"], where: scope, _count: { id: true }, _sum: { total: true } }),
+    // «На проверке», the customer already confirmed — the manager can finish the order
+    prisma.order.count({ where: { ...scope, status: "consultation", customerConfirmed: true, confirmRequestedAt: null } }),
   ]);
 
   // «Новое сообщение» marks in the list
@@ -138,7 +142,17 @@ export async function GET(request: NextRequest) {
       customer: customerSearch,
       status: selectedStatus,
     },
-    // Chips shown above the list: counts for the current business day
+    // Tiles above the list: count and sum per status for the chosen day (or all dates) and search
+    counts: {
+      total: scopeGroups.reduce((a, g) => a + g._count.id, 0),
+      sum: scopeGroups.reduce((a, g) => a + (g._sum.total ?? 0), 0),
+      confirmed: confirmedCount,
+      byStatus: PIPELINE_STATUSES.map((status) => {
+        const g = scopeGroups.find((x) => x.status === status);
+        return { status, label: ORDER_STATUS_LABELS[status] ?? status, count: g?._count.id ?? 0, sum: g?._sum.total ?? 0 };
+      }),
+    },
+    // Chips shown above the list: counts for the current business day (older app versions)
     todayCounts: {
       total: todayTotal,
       byStatus: PIPELINE_STATUSES.map((status) => ({
