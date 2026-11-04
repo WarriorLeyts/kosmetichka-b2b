@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ADMIN_MANAGER, requireStaff } from "../../_auth";
 import { PRICE_TYPE_LABELS, badId, notFound, parseId } from "../../_shared";
 import { maxAccess } from "@/lib/roles";
+import { SHOP_TYPE_LABELS, proofViewUrl, type ShopType } from "@/lib/proofs";
 
 // GET /api/team/customers/:id — fields shown on app/admin/customers/[id]/page.tsx (password hash excluded)
 export async function GET(
@@ -27,6 +28,9 @@ export async function GET(
       inn: true,
       city: true,
       address: true,
+      shopType: true,
+      shopLink: true,
+      proofs: { orderBy: { id: "asc" }, select: { id: true, kind: true, size: true, createdAt: true } },
       oneCId: true,
       manager: true,
       priceType: true,
@@ -45,7 +49,7 @@ export async function GET(
 
   if (!customer) return notFound();
 
-  const { _count, ...rest } = customer;
+  const { _count, proofs, ...rest } = customer;
 
   return NextResponse.json({
     customer: {
@@ -56,6 +60,9 @@ export async function GET(
       roleRequestLabel: rest.roleRequest ? PRICE_TYPE_LABELS[rest.roleRequest] ?? rest.roleRequest : null,
       roleRequestedAt: rest.roleRequestedAt?.toISOString() ?? null,
       ordersCount: _count.orders,
+      shopTypeLabel: rest.shopType ? SHOP_TYPE_LABELS[rest.shopType as ShopType] ?? rest.shopType : null,
+      // wholesale proof: 1-hour links (images shown in the card, videos opened by URL)
+      proofs: await Promise.all(proofs.map(async (p) => ({ id: p.id, kind: p.kind, size: p.size, createdAt: p.createdAt.toISOString(), url: await proofViewUrl(p.id) }))),
       createdAt: rest.createdAt.toISOString(),
       updatedAt: rest.updatedAt.toISOString(),
     },

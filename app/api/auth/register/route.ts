@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createProofToken, shopFields } from "@/lib/proofs";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
@@ -39,7 +40,8 @@ async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
 const AUTO_APPROVE_TYPES = new Set(["retail"]);
 
 export async function POST(request: Request) {
-  const { name, companyName, phone, email, password, captchaToken, smsCode, priceType: rawPriceType, source, address: rawAddress } = await request.json();
+  const body = await request.json();
+  const { name, companyName, phone, email, password, captchaToken, smsCode, priceType: rawPriceType, source, address: rawAddress } = body;
 
   // the website registers wholesale customers only for now (retail signs up in the app)
   if (source === "site" && !SITE_RETAIL_ENABLED && rawPriceType !== "wholesale" && rawPriceType !== "big_wholesale") {
@@ -55,6 +57,9 @@ export async function POST(request: Request) {
   if (needsShopAddress(priceType) && !address) {
     return NextResponse.json({ error: ADDRESS_REQUIRED, field: "address" }, { status: 400 });
   }
+  // wholesale: where the customer resells (shop / online + link) — the manager checks it with the photos
+  const shop = needsShopAddress(priceType) ? shopFields(body) : null;
+  if (shop && "error" in shop) return NextResponse.json(shop, { status: 400 });
 
   // ─── Проверка капчи ───────────────────────────────────────────
   if (!captchaToken) {
@@ -179,6 +184,7 @@ export async function POST(request: Request) {
       name,
       companyName: companyName?.trim() || null,
       address,
+      ...(shop ? { shopType: shop.shopType, shopLink: shop.shopLink } : {}),
       phone: cleanPhone,
       email: cleanEmail,
       password: hashedPassword,
@@ -223,10 +229,12 @@ export async function POST(request: Request) {
   return NextResponse.json({
     success: true,
     autoLogin: shouldAutoApprove,
+    // waiting for the manager: 3 days to upload the photos / videos of the shop (POST /api/proofs)
+    ...(shouldAutoApprove ? {} : { proofToken: await createProofToken(customer.id) }),
     oneCLinked: Boolean(oneCCustomer),
 
     message: shouldAutoApprove
       ? "Регистрация успешно завершена."
-      : "Заявка отправлена на рассмотрение. Менеджер свяжется с вами для подтверждения того, что вы являетесь владельцем магазина или бизнеса.",
+      : "Заявка с подтверждением отправлена. Менеджер проверит её и свяжется с вами.",
   });
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { shopFields } from "@/lib/proofs";
 import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../_auth";
 import { sendMail } from "@/lib/mail";
@@ -80,6 +81,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ ...roleInfo(c), requested: true });
   }
 
+  // first wholesale request of a retail customer (never had wholesale): where he resells + at least one
+  // photo / video (uploaded before, POST /api/proofs) — the same as a wholesale registration
+  let shop: { shopType: string; shopLink: string | null } | null = null;
+  if (target !== "retail" && c.priceType === "retail" && !c.wholesaleAccess) {
+    const f = shopFields(body ?? {});
+    if ("error" in f) return NextResponse.json(f, { status: 400 });
+    if ((await prisma.customerProof.count({ where: { customerId: id } })) === 0) {
+      return NextResponse.json({ error: "Добавьте хотя бы одно фото или видео магазина или онлайн-заказов", field: "proofs" }, { status: 400 });
+    }
+    shop = f;
+  }
+
   const companyName = String(body?.companyName ?? "").trim().slice(0, 200);
   const inn = String(body?.inn ?? "").trim().replace(/\s+/g, "").slice(0, 20);
   if (inn && !/^\d{10}(\d{2})?$/.test(inn)) {
@@ -94,6 +107,7 @@ export async function POST(request: Request) {
       roleRequestedAt: new Date(),
       ...(companyName ? { companyName } : {}),
       ...(inn ? { inn } : {}),
+      ...(shop ? { shopType: shop.shopType, shopLink: shop.shopLink } : {}),
     },
     select: SELECT,
   });
