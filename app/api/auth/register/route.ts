@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { createProofToken, shopFields } from "@/lib/proofs";
+import path from "path";
+import { unlink } from "fs/promises";
+import { PROOF_DIR, createProofToken, shopFields } from "@/lib/proofs";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
@@ -141,7 +143,14 @@ export async function POST(request: Request) {
     },
   });
 
-  if (exists) {
+  // «Неактуальные» sign-up (staff set it aside) registering again with the same phone: his data and
+  // photos are replaced and the request is back in «Ожидают»
+  const again =
+    exists && !exists.isApproved && exists.isActive && exists.requestStaleAt && exists.phone === cleanPhone ? exists : null;
+  if (again && exists!.email !== cleanEmail && (await prisma.customer.findFirst({ where: { email: cleanEmail, id: { not: again.id } } }))) {
+    return NextResponse.json({ error: "Этот email уже занят другим клиентом" }, { status: 400 });
+  }
+  if (exists && !again) {
     return NextResponse.json(
       { error: "Такой клиент уже зарегистрирован" },
       { status: 400 }
@@ -179,8 +188,13 @@ export async function POST(request: Request) {
     AUTO_APPROVE_TYPES.has(effectivePriceType) ||
     (Boolean(oneCCustomer) && (!isWholesaleRole(effectivePriceType) || isWholesaleRole(oneCCustomer?.priceType)));
 
-  const customer = await prisma.customer.create({
-    data: {
+  if (again) {
+    // the old photos / videos go: the customer sends new ones (up to the same 10 files)
+    const old = await prisma.customerProof.findMany({ where: { customerId: again.id }, select: { file: true } });
+    await prisma.customerProof.deleteMany({ where: { customerId: again.id } });
+    for (const p of old) await unlink(path.join(PROOF_DIR, p.file)).catch(() => {});
+  }
+  const customerData = {
       name,
       companyName: companyName?.trim() || null,
       address,
@@ -200,8 +214,19 @@ export async function POST(request: Request) {
       // wholesale level the customer can switch back to after choosing retail (login still needs approval)
       wholesaleAccess: isWholesaleRole(effectivePriceType) ? effectivePriceType : null,
       ...(wantsBig ? { roleRequest: "big_wholesale", roleRequestStatus: "pending", roleRequestedAt: new Date() } : {}),
-    },
-  });
+  };
+  const customer = again
+    ? await prisma.customer.update({
+        where: { id: again.id },
+        data: {
+          ...customerData,
+          requestStaleAt: null,
+          ...(shop ? {} : { shopType: null, shopLink: null }),
+          ...(wantsBig ? {} : { roleRequest: null, roleRequestStatus: null, roleRequestedAt: null }),
+        },
+      })
+    : await prisma.customer.create({ data: customerData });
+  if (again) console.log(`[register] customer ${again.id}: «Неактуальная» sign-up sent again`);
 
   // staff decide on wholesale sign-ups (retail is approved at once): approve the account and / or «Крупный опт»
   if (!shouldAutoApprove || wantsBig) {

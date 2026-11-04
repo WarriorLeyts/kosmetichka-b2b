@@ -6,6 +6,18 @@ import { PRICE_TYPE_LABELS, parsePage } from "../_shared";
 
 const PAGE_SIZE = 50;
 
+/**
+ * Status tiles. «Ожидают» — new sign-ups to approve, «Заявки на опт» — approved customers asking for more;
+ * both leave out blocked and «Неактуальные» (staff set them aside; a new request brings them back).
+ */
+const STATUS_WHERE: Record<string, Prisma.CustomerWhereInput> = {
+  pending: { isApproved: false, isActive: true, requestStaleAt: null },
+  requests: { roleRequestStatus: "pending", isActive: true },
+  approved: { isApproved: true, isActive: true },
+  blocked: { isActive: false },
+  stale: { isActive: true, OR: [{ isApproved: false, requestStaleAt: { not: null } }, { roleRequestStatus: "stale" }] },
+};
+
 // GET /api/team/customers?q=&status=&page= — same list as app/admin/customers/page.tsx
 export async function GET(request: NextRequest) {
   const auth = await requireStaff(ADMIN_MANAGER);
@@ -13,41 +25,38 @@ export async function GET(request: NextRequest) {
 
   const sp = request.nextUrl.searchParams;
   const q = sp.get("q")?.trim() || "";
-  const statusFilter = sp.get("status") || ""; // "" | "approved" | "pending" | "blocked"
+  const statusFilter = sp.get("status") || ""; // "" | "pending" | "requests" | "approved" | "blocked" | "stale"
   // price type: "retail" (розница + скидочная карта) | "wholesale" | "big_wholesale" | "" (all)
   const typeFilter = sp.get("type") || "";
   const page = parsePage(sp.get("page"));
 
-  const where: Prisma.CustomerWhereInput = {
-    AND: [
-      q
-        ? {
-            OR: [
-              { name: { contains: q, mode: "insensitive" as const } },
-              { companyName: { contains: q, mode: "insensitive" as const } },
-              { phone: { contains: q } },
-              { email: { contains: q, mode: "insensitive" as const } },
-            ],
-          }
-        : {},
-      statusFilter === "approved"
-        ? { isApproved: true }
-        : statusFilter === "pending"
-        ? { isApproved: false }
-        : statusFilter === "blocked"
-        ? { isActive: false }
-        : statusFilter === "requests"
-        ? { roleRequestStatus: "pending" }
-        : {},
-      typeFilter === "retail"
-        ? { priceType: { in: ["retail", "discount"] } }
-        : typeFilter === "wholesale" || typeFilter === "big_wholesale"
-        ? { priceType: typeFilter }
-        : {},
-    ],
-  };
+  const search: Prisma.CustomerWhereInput = q
+    ? {
+        OR: [
+          { name: { contains: q, mode: "insensitive" as const } },
+          { companyName: { contains: q, mode: "insensitive" as const } },
+          { phone: { contains: q } },
+          { email: { contains: q, mode: "insensitive" as const } },
+        ],
+      }
+    : {};
+  const byType = (t: string): Prisma.CustomerWhereInput =>
+    t === "retail" ? { priceType: { in: ["retail", "discount"] } } : t === "wholesale" || t === "big_wholesale" ? { priceType: t } : {};
+  const where: Prisma.CustomerWhereInput = { AND: [search, STATUS_WHERE[statusFilter] ?? {}, byType(typeFilter)] };
 
-  const [totalCount, customers] = await Promise.all([
+  // tiles: each status within the chosen type, each type within the chosen status (and the search)
+  const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+  const statusKeys = Object.keys(STATUS_WHERE);
+  const typeKeys = ["retail", "wholesale", "big_wholesale"];
+  const countsP = Promise.all([
+    prisma.customer.count({ where: { AND: [search, byType(typeFilter)] } }),
+    prisma.customer.count({ where: { AND: [search, byType(typeFilter), { createdAt: { gte: weekAgo } }] } }),
+    ...statusKeys.map((k) => prisma.customer.count({ where: { AND: [search, byType(typeFilter), STATUS_WHERE[k]] } })),
+    prisma.customer.count({ where: { AND: [search, STATUS_WHERE[statusFilter] ?? {}] } }),
+    ...typeKeys.map((t) => prisma.customer.count({ where: { AND: [search, STATUS_WHERE[statusFilter] ?? {}, byType(t)] } })),
+  ]);
+
+  const [totalCount, customers, nums] = await Promise.all([
     prisma.customer.count({ where }),
     prisma.customer.findMany({
       where,
@@ -64,6 +73,7 @@ export async function GET(request: NextRequest) {
         roleRequestStatus: true,
         isActive: true,
         isApproved: true,
+        requestStaleAt: true,
         manager: true,
         createdAt: true,
       },
@@ -71,7 +81,12 @@ export async function GET(request: NextRequest) {
       take: PAGE_SIZE,
       skip: (page - 1) * PAGE_SIZE,
     }),
+    countsP,
   ]);
+  const [all, newWeek, ...rest] = nums;
+  const byStatus = Object.fromEntries(statusKeys.map((k, i) => [k, rest[i]]));
+  const typesAll = rest[statusKeys.length];
+  const byTypeCount = Object.fromEntries(typeKeys.map((t, i) => [t, rest[statusKeys.length + 1 + i]]));
 
   return NextResponse.json({
     customers: customers.map((c) => ({
@@ -79,11 +94,13 @@ export async function GET(request: NextRequest) {
       displayName: c.companyName || c.name || "—",
       priceTypeLabel: PRICE_TYPE_LABELS[c.priceType] ?? c.priceType,
       createdAt: c.createdAt.toISOString(),
+      requestStaleAt: c.requestStaleAt?.toISOString() ?? null,
     })),
     page,
     pageSize: PAGE_SIZE,
     totalCount,
     totalPages: Math.ceil(totalCount / PAGE_SIZE),
     filters: { q, status: statusFilter, type: typeFilter },
+    counts: { all, newWeek, byStatus, types: { all: typesAll, ...byTypeCount } },
   });
 }
