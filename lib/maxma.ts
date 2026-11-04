@@ -242,7 +242,16 @@ export type LoyaltyCustomer = {
  * wholesale and big wholesale never do.
  */
 export function bonusPriceType(priceType: string | null | undefined): boolean {
+  if (!bonusesOn()) return false;
   return priceType === "retail" || priceType === "discount";
+}
+
+/**
+ * MAXMA bonuses are switched off for now (owner's decision): neither spent nor accrued — orders go
+ * to MAXMA without the card (promo codes still work by phone). On again: MAXMA_BONUSES=on in .env.
+ */
+export function bonusesOn(): boolean {
+  return process.env.MAXMA_BONUSES === "on";
 }
 
 /** Bonuses may be spent (and are accrued) only for retail buyers with a linked card. */
