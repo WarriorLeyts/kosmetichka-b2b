@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const auth = vi.hoisted(() => ({ admin: true }));
 vi.mock("@/lib/auth", () => ({ requireAdmin: vi.fn(async () => ({ id: 1 })), requireAdminRole: vi.fn(async () => auth.admin) }));
-const db = vi.hoisted(() => ({ customer: { findUnique: vi.fn(), update: vi.fn(async () => ({})) } }));
+const db = vi.hoisted(() => ({ customer: { findUnique: vi.fn(), update: vi.fn(async (_a: { data: Record<string, unknown> }) => ({})) } }));
+const updated = () => (db.customer.update.mock.calls[0] as [{ data: Record<string, unknown> }])[0].data;
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
 import { POST } from "./route";
@@ -20,19 +21,19 @@ describe("stale", () => {
   it("sets aside a sign-up waiting for approval", async () => {
     db.customer.findUnique.mockResolvedValue({ isApproved: false, requestStaleAt: null, roleRequestStatus: null });
     expect((await call(true)).status).toBe(200);
-    expect(db.customer.update.mock.calls[0][0].data.requestStaleAt).toBeInstanceOf(Date);
+    expect(updated().requestStaleAt).toBeInstanceOf(Date);
   });
 
   it("sets aside a wholesale request of an approved customer", async () => {
     db.customer.findUnique.mockResolvedValue({ isApproved: true, requestStaleAt: null, roleRequestStatus: "pending" });
     expect((await call(true)).status).toBe(200);
-    expect(db.customer.update.mock.calls[0][0].data).toEqual({ roleRequestStatus: "stale" });
+    expect(updated()).toEqual({ roleRequestStatus: "stale" });
   });
 
   it("brings both back", async () => {
     db.customer.findUnique.mockResolvedValue({ isApproved: false, requestStaleAt: new Date(), roleRequestStatus: "stale" });
     expect((await call(false)).status).toBe(200);
-    expect(db.customer.update.mock.calls[0][0].data).toEqual({ requestStaleAt: null, roleRequestStatus: "pending" });
+    expect(updated()).toEqual({ requestStaleAt: null, roleRequestStatus: "pending" });
   });
 
   it("409 without a request", async () => {
