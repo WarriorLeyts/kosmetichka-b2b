@@ -164,6 +164,7 @@ model Customer {
   /** wholesale: proof of reselling (photos / videos of the shop or online orders) */
   proofs        CustomerProof[]
   cart          CustomerCart?
+  favorites     CustomerFavorites?
   webPushSubs   WebPushSubscription[]
 
   createdAt DateTime @default(now())
@@ -636,6 +637,14 @@ model CustomerProof {
 
 /// The customer's cart, shared by all his devices (site, phone apps). `items` — the lines as the apps
 /// keep them (product snapshot + cartKey + quantity); the apps refresh prices and stock themselves.
+/// the customer's favourites, the same on the site and in the apps (GET/PUT /api/mobile/favorites)
+model CustomerFavorites {
+  customerId Int      @id
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items      Json
+  updatedAt  DateTime @updatedAt
+}
+
 model CustomerCart {
   customerId Int      @id
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
