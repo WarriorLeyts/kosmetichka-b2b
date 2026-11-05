@@ -40,16 +40,14 @@ export type ShopType = (typeof SHOP_TYPES)[number];
 export const SHOP_TYPE_LABELS: Record<ShopType, string> = { offline: "Магазин (офлайн)", online: "Онлайн-магазин", both: "Магазин и онлайн" };
 
 /**
- * Checks «где вы продаёте» of a wholesale application: the type, and a link for an online shop.
+ * Checks «где вы продаёте» of a wholesale application: the type (a link is kept when sent, not required).
  * Returns the cleaned values or an error text.
  */
 export function shopFields(body: { shopType?: unknown; shopLink?: unknown }): { shopType: ShopType; shopLink: string | null } | { error: string; field: string } {
   const shopType = String(body.shopType ?? "");
   if (!(SHOP_TYPES as readonly string[]).includes(shopType)) return { error: "Укажите, где вы продаёте: магазин или онлайн", field: "shopType" };
+  // the link is optional (the owner's choice: photos / videos are enough); older apps may still send one
   const shopLink = String(body.shopLink ?? "").trim().slice(0, 300) || null;
-  if (shopType !== "offline" && (!shopLink || shopLink.length < 4)) {
-    return { error: "Укажите ссылку на онлайн-магазин: сайт, Instagram или маркетплейс", field: "shopLink" };
-  }
   return { shopType: shopType as ShopType, shopLink };
 }
 

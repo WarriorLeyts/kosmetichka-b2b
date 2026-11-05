@@ -12,11 +12,11 @@ describe("wholesale proof", () => {
     expect(proofType("noext")).toBeNull();
   });
 
-  it("where the customer resells: a type, and a link for an online shop", () => {
+  it("where the customer resells: a type; a link is optional", () => {
     expect(shopFields({ shopType: "offline" })).toEqual({ shopType: "offline", shopLink: null });
     expect(shopFields({ shopType: "online", shopLink: " instagram.com/shop " })).toEqual({ shopType: "online", shopLink: "instagram.com/shop" });
-    expect(shopFields({ shopType: "online" })).toMatchObject({ field: "shopLink" });
-    expect(shopFields({ shopType: "both", shopLink: "" })).toMatchObject({ field: "shopLink" });
+    expect(shopFields({ shopType: "online" })).toEqual({ shopType: "online", shopLink: null });
+    expect(shopFields({ shopType: "both", shopLink: "" })).toEqual({ shopType: "both", shopLink: null });
     expect(shopFields({})).toMatchObject({ field: "shopType" });
     expect(shopFields({ shopType: "warehouse" })).toMatchObject({ field: "shopType" });
   });
