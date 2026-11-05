@@ -163,6 +163,7 @@ model Customer {
   pushTokens    PushToken[]
   /** wholesale: proof of reselling (photos / videos of the shop or online orders) */
   proofs        CustomerProof[]
+  cart          CustomerCart?
   webPushSubs   WebPushSubscription[]
 
   createdAt DateTime @default(now())
@@ -631,4 +632,14 @@ model CustomerProof {
   createdAt  DateTime @default(now())
 
   @@index([customerId])
+}
+
+/// The customer's cart, shared by all his devices (site, phone apps). `items` — the lines as the apps
+/// keep them (product snapshot + cartKey + quantity); the apps refresh prices and stock themselves.
+model CustomerCart {
+  customerId Int      @id
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items      Json
+  comment    String   @default("")
+  updatedAt  DateTime @updatedAt
 }
