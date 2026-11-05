@@ -7,11 +7,12 @@ import { PRICE_TYPE_LABELS, parsePage } from "../_shared";
 const PAGE_SIZE = 50;
 
 /**
- * Status tiles. «Ожидают» — new sign-ups to approve, «Заявки на опт» — approved customers asking for more;
- * both leave out blocked and «Неактуальные» (staff set them aside; a new request brings them back).
+ * Status tiles. «Ожидают» — every request waiting for a decision: a new sign-up (опт / крупный опт) and a
+ * customer asking for опт / крупный опт; blocked and «Неактуальные» are left out (staff set them aside;
+ * a new request brings them back). «requests» (only the price-type requests) stays for older app versions.
  */
 const STATUS_WHERE: Record<string, Prisma.CustomerWhereInput> = {
-  pending: { isApproved: false, isActive: true, requestStaleAt: null },
+  pending: { isActive: true, OR: [{ isApproved: false, requestStaleAt: null }, { roleRequestStatus: "pending" }] },
   requests: { roleRequestStatus: "pending", isActive: true },
   approved: { isApproved: true, isActive: true },
   blocked: { isActive: false },
