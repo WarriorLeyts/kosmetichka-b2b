@@ -34,14 +34,15 @@ export async function GET(
   const msgs = await prisma.orderMessage.findMany({
     where: { orderId, source: "customer" },
     orderBy: { createdAt: "asc" },
-    select: { id: true, text: true, userId: true, createdAt: true },
+    select: { id: true, text: true, userId: true, isFromPicker: true, createdAt: true },
   });
 
   return NextResponse.json({
     messages: msgs.map((m) => ({
       id: m.id,
       text: m.text,
-      isFromManager: m.userId !== null,
+      // staff (userId) or the shop itself — Bitrix comments, the after-hours note (isFromPicker)
+      isFromManager: m.userId !== null || m.isFromPicker,
       createdAt: m.createdAt.toISOString(),
     })),
   });

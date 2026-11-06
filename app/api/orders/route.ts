@@ -3,6 +3,7 @@ import { bonusSpendOff, pricingCustomer } from "@/lib/siteMode";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyStaffLater } from "@/lib/staffNotify";
+import { afterHoursNote } from "@/lib/afterHours";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { sendMail } from "@/lib/mail";
 import { orderCreationLimiter } from "@/lib/rateLimit";
@@ -257,6 +258,8 @@ export async function POST(request: Request) {
 
   // staff browsers (admin website): «Новый заказ №N»
   notifyStaffLater({ kind: "new-order", orderId: order.id });
+  // placed after 18:40 or before 9:00 (Moscow): a warm note in the chat that the manager answers in working hours
+  await afterHoursNote(order.id);
 
   // Уведомление покупателю о принятом заказе
   if (customer.email) {
