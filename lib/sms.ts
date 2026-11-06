@@ -61,6 +61,6 @@ export async function smsCustomer(customerId: number, text: string): Promise<boo
 /** the texts (each fits one SMS) */
 export const SMS_TEXT = {
   registrationApproved: "Регистрация подтверждена! Оптовые цены открыты💜 kosmetichka-opt.ru",
-  roleApproved: (label: string) => `Доступ к ценам «${label}» открыт: kosmetichka-opt.ru`,
-  roleRejected: (label: string) => `Заявка на «${label}» отклонена. Вопросы — менеджеру`,
+  roleApproved: (label: string) => `Доступ к ценам «${label}» открыт💜 kosmetichka-opt.ru`,
+  roleRejected: (label: string) => `Заявка на «${label}» отклонена. Вопросы — менеджеру💜`,
 };
