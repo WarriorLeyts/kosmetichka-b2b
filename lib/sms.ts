@@ -42,7 +42,7 @@ export async function sendSmsAero(phone: string, text: string): Promise<boolean>
 
 /**
  * An SMS to the customer's phone about a decision on their account (registration / wholesale request).
- * Kept within one SMS (70 Cyrillic characters). Never throws: a failed SMS must not break the decision.
+ * Role texts are kept within one SMS (70 Cyrillic characters). Never throws: a failed SMS must not break the decision.
  */
 export async function smsCustomer(customerId: number, text: string): Promise<boolean> {
   try {
@@ -60,7 +60,8 @@ export async function smsCustomer(customerId: number, text: string): Promise<boo
 
 /** the texts (each fits one SMS) */
 export const SMS_TEXT = {
-  registrationApproved: "Регистрация в Косметичке подтверждена. Цены: kosmetichka-opt.ru",
+  // the owner's text: 3 SMS (emoji makes it Unicode, 67 characters a part)
+  registrationApproved: "Добро пожаловать в Косметичку! Регистрация подтверждена. Оптовые цены уже открыты. Войдите в свой аккаунт и оформляйте заказы.💜\nhttps://kosmetichka-opt.ru",
   roleApproved: (label: string) => `Доступ к ценам «${label}» открыт: kosmetichka-opt.ru`,
   roleRejected: (label: string) => `Заявка на «${label}» отклонена. Вопросы — менеджеру`,
 };
