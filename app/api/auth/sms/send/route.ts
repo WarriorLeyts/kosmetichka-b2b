@@ -4,48 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { toSmsAeroPhone } from "@/lib/phone";
 import { getClientIp } from "@/lib/rateLimit";
 import { sendMail } from "@/lib/mail";
+import { sendSmsAero } from "@/lib/sms";
 
 function generateCode(): string {
   // crypto, not Math.random: Math.random is predictable from its earlier outputs
   return String(randomInt(100000, 1000000));
-}
-
-async function sendSmsAero(phone: string, text: string): Promise<boolean> {
-  const email = process.env.SMSAERO_EMAIL;
-  const apiKey = process.env.SMSAERO_API_KEY;
-  const sign = process.env.SMSAERO_SIGN || "Kosmetichka";
-
-  if (!email || !apiKey) {
-    console.error("SMSAERO_EMAIL или SMSAERO_API_KEY не заданы");
-    return false;
-  }
-
-  const credentials = Buffer.from(`${email}:${apiKey}`).toString("base64");
-
-  try {
-    const url = new URL("https://gate.smsaero.ru/v2/sms/send");
-    url.searchParams.set("number", phone);
-    url.searchParams.set("text", text);
-    url.searchParams.set("sign", sign);
-    url.searchParams.set("channel", "DIRECT");
-
-    const res = await fetch(url.toString(), {
-      method: "GET",
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        "Content-Type": "application/json",
-      },
-    });
-
-    const data = await res.json();
-    // the response holds the phone and the SMS text (the code) — log only the outcome
-    if (data?.success !== true) console.error("SMS AERO: not sent:", data?.message ?? "unknown error");
-
-    return data.success === true;
-  } catch (err) {
-    console.error("Ошибка отправки SMS:", err);
-    return false;
-  }
 }
 
 /** SMS a day: per phone number, per IP, for the whole site (audit P2-05) */

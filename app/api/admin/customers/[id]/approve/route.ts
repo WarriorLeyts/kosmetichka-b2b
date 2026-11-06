@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireAdminRole } from "@/lib/auth";
+import { SMS_TEXT, smsCustomer } from "@/lib/sms";
 
 type Props = {
   params: Promise<{
@@ -15,7 +16,10 @@ export async function POST(request: Request, { params }: Props) {
 
   const { id } = await params;
 
+  let wasApproved = true;
   try {
+    const before = await prisma.customer.findUnique({ where: { id: Number(id) }, select: { isApproved: true } });
+    wasApproved = !!before?.isApproved;
     await prisma.customer.update({
       where: {
         id: Number(id),
@@ -28,6 +32,9 @@ export async function POST(request: Request, { params }: Props) {
     console.error("[approve] prisma.customer.update error:", err);
     return NextResponse.json({ error: "Не удалось одобрить клиента" }, { status: 500 });
   }
+
+  // an SMS to the customer's phone — only when the registration is confirmed now, not again
+  if (!wasApproved) void smsCustomer(Number(id), SMS_TEXT.registrationApproved);
 
   return NextResponse.json({ success: true });
 }
