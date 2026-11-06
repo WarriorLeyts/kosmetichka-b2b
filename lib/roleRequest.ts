@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { isWholesaleRole, maxAccess } from "@/lib/roles";
 import { notify } from "@/lib/notify";
+import { SMS_TEXT, smsCustomer } from "@/lib/sms";
 
 /**
  * Admin decision on a customer's request for a wholesale price type.
@@ -32,5 +33,7 @@ export async function decideRoleRequest(customerId: number, action: "approve" | 
   void notify(customerId, action === "approve"
     ? { kind: "role", title: `Доступ к ценам «${label}» открыт`, body: "Цены в каталоге и корзине уже пересчитаны. Переключаться между розницей и оптом можно в профиле.", link: "/profile" }
     : { kind: "role", title: `Заявка на «${label}» отклонена`, body: "Если есть вопросы, свяжитесь с менеджером.", link: "/profile" });
+  // and an SMS to the phone
+  void smsCustomer(customerId, action === "approve" ? SMS_TEXT.roleApproved(label) : SMS_TEXT.roleRejected(label));
   return true;
 }
