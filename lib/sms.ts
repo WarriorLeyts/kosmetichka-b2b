@@ -60,8 +60,7 @@ export async function smsCustomer(customerId: number, text: string): Promise<boo
 
 /** the texts (each fits one SMS) */
 export const SMS_TEXT = {
-  // the owner's text: 3 SMS (emoji makes it Unicode, 67 characters a part)
-  registrationApproved: "Добро пожаловать в Косметичку! Регистрация подтверждена. Оптовые цены уже открыты. Войдите в свой аккаунт и оформляйте заказы.💜\nhttps://kosmetichka-opt.ru",
+  registrationApproved: "Регистрация подтверждена! Оптовые цены открыты💜 kosmetichka-opt.ru",
   roleApproved: (label: string) => `Доступ к ценам «${label}» открыт: kosmetichka-opt.ru`,
   roleRejected: (label: string) => `Заявка на «${label}» отклонена. Вопросы — менеджеру`,
 };
