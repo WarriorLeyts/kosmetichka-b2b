@@ -43,3 +43,20 @@ describe("team customers 1С mark", () => {
     who.role = "admin";
   });
 });
+
+describe("team customers manager filter", () => {
+  it("admin: nomanager → wholesale without 1С or manager; counts", async () => {
+    const j = await (await GET(new NextRequest("https://x/api/team/customers?manager=nomanager"))).json();
+    const where = JSON.stringify((db.customer.findMany.mock.calls.at(-1) as [{ where: unknown }])[0].where);
+    expect(where).toContain('"oneCId":null');
+    expect(j.counts.managers).toBeDefined();
+  });
+  it("managers can't filter by it", async () => {
+    who.role = "manager";
+    const j = await (await GET(new NextRequest("https://x/api/team/customers?manager=nomanager"))).json();
+    const where = JSON.stringify((db.customer.findMany.mock.calls.at(-1) as [{ where: unknown }])[0].where);
+    expect(where).not.toContain("oneCId");
+    expect(j.counts.managers).toBeUndefined();
+    who.role = "admin";
+  });
+});

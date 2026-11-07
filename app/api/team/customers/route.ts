@@ -11,6 +11,12 @@ const PAGE_SIZE = 50;
  * customer asking for опт / крупный опт; blocked and «Неактуальные» are left out (staff set them aside;
  * a new request brings them back). «requests» (only the price-type requests) stays for older app versions.
  */
+const WHOLESALE: Prisma.CustomerWhereInput = { priceType: { in: ["wholesale", "big_wholesale"] } };
+const MANAGER_WHERE: Record<string, Prisma.CustomerWhereInput> = {
+  linked: { AND: [WHOLESALE, { oneCId: { not: null } }, { manager: { not: null } }, { NOT: { manager: "" } }] },
+  nomanager: { AND: [WHOLESALE, { OR: [{ oneCId: null }, { manager: null }, { manager: "" }] }] },
+};
+
 const STATUS_WHERE: Record<string, Prisma.CustomerWhereInput> = {
   pending: { isActive: true, OR: [{ isApproved: false, requestStaleAt: null }, { roleRequestStatus: "pending" }] },
   requests: { roleRequestStatus: "pending", isActive: true },
@@ -19,7 +25,7 @@ const STATUS_WHERE: Record<string, Prisma.CustomerWhereInput> = {
   stale: { isActive: true, OR: [{ isApproved: false, requestStaleAt: { not: null } }, { roleRequestStatus: "stale" }] },
 };
 
-// GET /api/team/customers?q=&status=&type=&from=&to=&page= — same list as app/admin/customers/page.tsx
+// GET /api/team/customers?q=&status=&type=&from=&to=&manager=&page= — same list as app/admin/customers/page.tsx
 export async function GET(request: NextRequest) {
   const auth = await requireStaff(ADMIN_MANAGER);
   if (!auth.ok) return auth.response;
@@ -30,6 +36,9 @@ export async function GET(request: NextRequest) {
   // price type: "retail" (розница + скидочная карта) | "wholesale" | "big_wholesale" | "" (all)
   const typeFilter = sp.get("type") || "";
   const page = parsePage(sp.get("page"));
+  const admin = auth.session.role === "admin";
+  // admins only: wholesale customers with their 1С manager ("linked") or with nobody yet ("nomanager")
+  const managerFilter = admin ? sp.get("manager") || "" : "";
   // sign-up period: from / to as YYYY-MM-DD, whole Moscow days, both ends included (either may be missing)
   const from = /^\d{4}-\d{2}-\d{2}$/.test(sp.get("from") || "") ? sp.get("from")! : "";
   const to = /^\d{4}-\d{2}-\d{2}$/.test(sp.get("to") || "") ? sp.get("to")! : "";
@@ -53,7 +62,7 @@ export async function GET(request: NextRequest) {
   const search: Prisma.CustomerWhereInput = { AND: [text, period] };
   const byType = (t: string): Prisma.CustomerWhereInput =>
     t === "retail" ? { priceType: { in: ["retail", "discount"] } } : t === "wholesale" || t === "big_wholesale" ? { priceType: t } : {};
-  const where: Prisma.CustomerWhereInput = { AND: [search, STATUS_WHERE[statusFilter] ?? {}, byType(typeFilter)] };
+  const where: Prisma.CustomerWhereInput = { AND: [search, STATUS_WHERE[statusFilter] ?? {}, byType(typeFilter), MANAGER_WHERE[managerFilter] ?? {}] };
 
   // tiles: each status within the chosen type, each type within the chosen status (and the search)
   const weekAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000);
@@ -67,7 +76,15 @@ export async function GET(request: NextRequest) {
     ...typeKeys.map((t) => prisma.customer.count({ where: { AND: [search, STATUS_WHERE[statusFilter] ?? {}, byType(t)] } })),
   ]);
 
-  const [totalCount, customers, nums] = await Promise.all([
+  const managerCountsP = admin
+    ? Promise.all(
+        [WHOLESALE, MANAGER_WHERE.linked, MANAGER_WHERE.nomanager].map((m) =>
+          prisma.customer.count({ where: { AND: [search, STATUS_WHERE[statusFilter] ?? {}, byType(typeFilter), m] } })
+        )
+      )
+    : Promise.resolve(null);
+
+  const [totalCount, customers, nums, managerNums] = await Promise.all([
     prisma.customer.count({ where }),
     prisma.customer.findMany({
       where,
@@ -94,6 +111,7 @@ export async function GET(request: NextRequest) {
       skip: (page - 1) * PAGE_SIZE,
     }),
     countsP,
+    managerCountsP,
   ]);
   const [all, newWeek, ...rest] = nums;
   const byStatus = Object.fromEntries(statusKeys.map((k, i) => [k, rest[i]]));
@@ -104,7 +122,7 @@ export async function GET(request: NextRequest) {
     customers: customers.map(({ oneCId, ...c }) => ({
       ...c,
       // linked to a 1С counterparty (came with the export): has its 1С manager — shown to admins only
-      ...(auth.session.role === "admin" ? { inOneC: !!oneCId } : {}),
+      ...(admin ? { inOneC: !!oneCId } : {}),
       displayName: c.companyName || c.name || "—",
       priceTypeLabel: PRICE_TYPE_LABELS[c.priceType] ?? c.priceType,
       createdAt: c.createdAt.toISOString(),
@@ -114,7 +132,14 @@ export async function GET(request: NextRequest) {
     pageSize: PAGE_SIZE,
     totalCount,
     totalPages: Math.ceil(totalCount / PAGE_SIZE),
-    filters: { q, status: statusFilter, type: typeFilter, from, to },
-    counts: { all, newWeek, byStatus, types: { all: typesAll, ...byTypeCount } },
+    filters: { q, status: statusFilter, type: typeFilter, from, to, manager: managerFilter },
+    counts: {
+      all,
+      newWeek,
+      byStatus,
+      types: { all: typesAll, ...byTypeCount },
+      // admins: wholesale customers — all / with their 1С manager / nobody looks after them yet
+      ...(managerNums ? { managers: { all: managerNums[0], linked: managerNums[1], nomanager: managerNums[2] } } : {}),
+    },
   });
 }
