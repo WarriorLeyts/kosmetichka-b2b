@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notify } from "@/lib/notify";
+import { notifyStaffLater } from "@/lib/staffNotify";
 
 /**
  * The manager collects the order («Сборка», the only status where staff change items), then sends it
@@ -80,4 +81,32 @@ const g = globalThis as unknown as { __confirmReminderTimer?: ReturnType<typeof 
 export function startConfirmReminders(everyMs = 10 * 60e3): void {
   if (g.__confirmReminderTimer) return;
   g.__confirmReminderTimer = setInterval(() => void sendConfirmReminders(), everyMs);
+}
+
+type ConfirmableOrder = { id: number; status: string; confirmRequestedAt: Date | null; customerConfirmed: boolean | null };
+
+/**
+ * «Подтвердить заказ» — by the customer, or by a manager / admin for them (`staff`: the customer said yes
+ * by phone, in a messenger…). Same rules for both: only while the order waits for the customer's check.
+ * The order chat gets a line that staff and the customer see. Returns null on success, else the error.
+ */
+export async function confirmOrderFor(order: ConfirmableOrder, staff?: { id: number; name: string | null }): Promise<string | null> {
+  const waiting = !!order.confirmRequestedAt;
+  const legacy = order.status === "consultation" && !order.customerConfirmed;
+  if (["payment", "exported", "cancelled"].includes(order.status) || (!waiting && !legacy)) {
+    if (order.customerConfirmed) return null; // idempotent
+    return "Подтверждение недоступно для текущего статуса заказа";
+  }
+  await prisma.order.update({ where: { id: order.id }, data: { customerConfirmed: true, confirmRequestedAt: null } });
+  // staff see it at once in the order chat (admin, Team, Bitrix); «Заказ оформлен» is now available.
+  // A manager's confirmation is written as theirs (userId): the customer sees it as the manager's message.
+  await prisma.orderMessage
+    .create({
+      data: staff
+        ? { orderId: order.id, source: "customer", userId: staff.id, text: `✅ ${staff.name?.trim() || "Менеджер"} подтвердил(а) заказ по договорённости с клиентом` }
+        : { orderId: order.id, source: "customer", text: "✅ Клиент подтвердил изменения в заказе" },
+    })
+    .catch(() => {});
+  notifyStaffLater({ kind: "confirmed", orderId: order.id });
+  return null;
 }
