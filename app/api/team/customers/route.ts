@@ -86,6 +86,7 @@ export async function GET(request: NextRequest) {
         isApproved: true,
         requestStaleAt: true,
         manager: true,
+        oneCId: true,
         createdAt: true,
       },
       orderBy: { createdAt: "desc" },
@@ -100,8 +101,10 @@ export async function GET(request: NextRequest) {
   const byTypeCount = Object.fromEntries(typeKeys.map((t, i) => [t, rest[statusKeys.length + 1 + i]]));
 
   return NextResponse.json({
-    customers: customers.map((c) => ({
+    customers: customers.map(({ oneCId, ...c }) => ({
       ...c,
+      // linked to a 1С counterparty (came with the export): has its 1С manager — shown to admins only
+      ...(auth.session.role === "admin" ? { inOneC: !!oneCId } : {}),
       displayName: c.companyName || c.name || "—",
       priceTypeLabel: PRICE_TYPE_LABELS[c.priceType] ?? c.priceType,
       createdAt: c.createdAt.toISOString(),
