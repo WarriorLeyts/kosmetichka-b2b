@@ -2,7 +2,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-vi.mock("../_auth", () => ({ ADMIN_MANAGER: ["admin", "manager"], requireStaff: vi.fn(async () => ({ ok: true })) }));
+const who = vi.hoisted(() => ({ role: "admin" }));
+
+vi.mock("../_auth", () => ({ ADMIN_MANAGER: ["admin", "manager"], requireStaff: vi.fn(async () => ({ ok: true, session: { role: who.role } })) }));
 const db = vi.hoisted(() => ({ customer: { count: vi.fn(async (_a?: unknown) => 0), findMany: vi.fn(async (_a?: unknown) => []) } }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
@@ -23,5 +25,21 @@ describe("team customers period", () => {
   it("bad dates are ignored", async () => {
     await GET(new NextRequest("https://x/api/team/customers?from=yesterday"));
     expect(JSON.stringify((db.customer.findMany.mock.calls[0] as [{ where: unknown }])[0].where)).not.toContain("createdAt");
+  });
+});
+
+describe("team customers 1С mark", () => {
+  it("inOneC instead of the 1С id", async () => {
+    db.customer.findMany.mockResolvedValueOnce([{ id: 1, name: "A", companyName: null, priceType: "wholesale", oneCId: "6597-…", manager: "Ахтаева Инсана", createdAt: new Date(), requestStaleAt: null }] as never);
+    const j = await (await GET(new NextRequest("https://x/api/team/customers"))).json();
+    expect(j.customers[0].inOneC).toBe(true);
+    expect(j.customers[0].oneCId).toBeUndefined();
+  });
+  it("managers don't get the mark", async () => {
+    who.role = "manager";
+    db.customer.findMany.mockResolvedValueOnce([{ id: 1, name: "A", companyName: null, priceType: "wholesale", oneCId: null, manager: null, createdAt: new Date(), requestStaleAt: null }] as never);
+    const j = await (await GET(new NextRequest("https://x/api/team/customers"))).json();
+    expect(j.customers[0].inOneC).toBeUndefined();
+    who.role = "admin";
   });
 });
