@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
-import { notifyStaffLater } from "@/lib/staffNotify";
+import { confirmOrderFor } from "@/lib/orderConfirm";
 import { lockedByOrderId } from "@/lib/orderLock";
 
 async function confirmOrder(
@@ -35,24 +35,9 @@ async function confirmOrder(
     return NextResponse.json({ error: "Нет доступа" }, { status: 403 });
   }
 
-  // Confirmation: the staff changed the order and wait for the customer (confirmRequestedAt), or the
-  // old «consultation» flow. Not once the order is «Заказ оформлен» / done / cancelled.
-  const waiting = !!order.confirmRequestedAt;
-  const legacy = order.status === "consultation" && !order.customerConfirmed;
-  if (["payment", "exported", "cancelled"].includes(order.status) || (!waiting && !legacy)) {
-    if (order.customerConfirmed) return NextResponse.json({ success: true }); // idempotent
-    return NextResponse.json({ error: "Подтверждение недоступно для текущего статуса заказа" }, { status: 400 });
-  }
-
-  await prisma.order.update({
-    where: { id: orderId },
-    data: { customerConfirmed: true, confirmRequestedAt: null },
-  });
-  // staff see it at once in the order chat (admin, Team, Bitrix); «Заказ оформлен» is now available
-  await prisma.orderMessage
-    .create({ data: { orderId, source: "customer", text: "✅ Клиент подтвердил изменения в заказе" } })
-    .catch(() => {});
-  notifyStaffLater({ kind: "confirmed", orderId });
+  // the same rules as when a manager confirms for the customer (lib/orderConfirm.ts)
+  const error = await confirmOrderFor(order);
+  if (error) return NextResponse.json({ error }, { status: 400 });
 
   return NextResponse.json({ success: true });
 }
