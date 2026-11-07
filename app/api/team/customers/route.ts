@@ -19,7 +19,7 @@ const STATUS_WHERE: Record<string, Prisma.CustomerWhereInput> = {
   stale: { isActive: true, OR: [{ isApproved: false, requestStaleAt: { not: null } }, { roleRequestStatus: "stale" }] },
 };
 
-// GET /api/team/customers?q=&status=&page= — same list as app/admin/customers/page.tsx
+// GET /api/team/customers?q=&status=&type=&from=&to=&page= — same list as app/admin/customers/page.tsx
 export async function GET(request: NextRequest) {
   const auth = await requireStaff(ADMIN_MANAGER);
   if (!auth.ok) return auth.response;
@@ -30,8 +30,16 @@ export async function GET(request: NextRequest) {
   // price type: "retail" (розница + скидочная карта) | "wholesale" | "big_wholesale" | "" (all)
   const typeFilter = sp.get("type") || "";
   const page = parsePage(sp.get("page"));
+  // sign-up period: from / to as YYYY-MM-DD, whole Moscow days, both ends included (either may be missing)
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(sp.get("from") || "") ? sp.get("from")! : "";
+  const to = /^\d{4}-\d{2}-\d{2}$/.test(sp.get("to") || "") ? sp.get("to")! : "";
+  const mskDay = (d: string) => new Date(`${d}T00:00:00+03:00`);
+  const period: Prisma.CustomerWhereInput =
+    from || to
+      ? { createdAt: { ...(from ? { gte: mskDay(from) } : {}), ...(to ? { lt: new Date(mskDay(to).getTime() + 24 * 3600 * 1000) } : {}) } }
+      : {};
 
-  const search: Prisma.CustomerWhereInput = q
+  const text: Prisma.CustomerWhereInput = q
     ? {
         OR: [
           { name: { contains: q, mode: "insensitive" as const } },
@@ -41,6 +49,8 @@ export async function GET(request: NextRequest) {
         ],
       }
     : {};
+  // the search and the period narrow everything: the list and every tile
+  const search: Prisma.CustomerWhereInput = { AND: [text, period] };
   const byType = (t: string): Prisma.CustomerWhereInput =>
     t === "retail" ? { priceType: { in: ["retail", "discount"] } } : t === "wholesale" || t === "big_wholesale" ? { priceType: t } : {};
   const where: Prisma.CustomerWhereInput = { AND: [search, STATUS_WHERE[statusFilter] ?? {}, byType(typeFilter)] };
@@ -101,7 +111,7 @@ export async function GET(request: NextRequest) {
     pageSize: PAGE_SIZE,
     totalCount,
     totalPages: Math.ceil(totalCount / PAGE_SIZE),
-    filters: { q, status: statusFilter, type: typeFilter },
+    filters: { q, status: statusFilter, type: typeFilter, from, to },
     counts: { all, newWeek, byStatus, types: { all: typesAll, ...byTypeCount } },
   });
 }
