@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { requireAdminRole } from "@/lib/auth";
 import { assignableGroups } from "@/lib/staffScope";
 
-const VALID_ROLES = ["manager", "picker", "admin", "employee", "hr"];
+// no «Сборщик» (picker) role any more — there are no pickers; admins and managers assemble
+const VALID_ROLES = ["manager", "admin", "employee", "hr"];
 
 export async function POST(request: Request) {
   // Staff accounts are managed by admins only (same as the /admin/users pages)
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
 
   if (role && !VALID_ROLES.includes(role)) {
     return NextResponse.json(
-      { error: "Недопустимая роль. Разрешено: manager, picker, admin" },
+      { error: "Недопустимая роль. Разрешено: manager, admin" },
       { status: 400 }
     );
   }

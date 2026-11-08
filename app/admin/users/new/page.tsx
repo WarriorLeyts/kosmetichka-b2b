@@ -9,7 +9,6 @@ export const dynamic = "force-dynamic";
 
 const ROLE_OPTIONS = [
   { value: "manager", label: "Менеджер" },
-  { value: "picker", label: "Сборщик" },
   { value: "admin", label: "Администратор" },
   { value: "employee", label: "Сотрудник (только тесты)" },
   { value: "hr", label: "HR (результаты и сотрудники)" },
