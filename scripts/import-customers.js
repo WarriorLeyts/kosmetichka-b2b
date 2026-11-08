@@ -218,7 +218,20 @@ async function main() {
     }
   }
 
+  // менеджер привязанного клиента — группа его контрагента в 1С (номер телефона мог смениться,
+  // и сверка по телефону выше его не находит)
+  const withLink = await prisma.customer.findMany({ where: { oneCId: { not: null } }, select: { id: true, oneCId: true, manager: true } });
+  const groupOf = new Map((await prisma.oneCCustomer.findMany({ where: { oneCId: { in: withLink.map((c) => c.oneCId) } }, select: { oneCId: true, manager: true } })).map((x) => [x.oneCId, x.manager]));
+  let managerFixed = 0;
+  for (const c of withLink) {
+    const m = groupOf.get(c.oneCId);
+    if (m && m !== c.manager) {
+      await prisma.customer.update({ where: { id: c.id }, data: { manager: m } });
+      managerFixed++;
+    }
+  }
   console.log("Клиентов сайта привязано/обновлено:", linked);
+  console.log("Менеджер исправлен по группе в 1С у:", managerFixed);
   console.log("Тип цен обновлён у:", priceUpdated);
 }
 
