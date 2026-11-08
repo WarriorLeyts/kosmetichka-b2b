@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { guestStock, withFlatPrices } from "@/lib/utils";
+import { customerStock, guestStock, isWholesaleType, withFlatPrices } from "@/lib/utils";
 import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { verifyToken } from "@/lib/auth";
@@ -42,7 +42,13 @@ export async function GET(
   const staff = staffToken ? await verifyToken(staffToken) : null;
   const signedIn = Boolean(customer?.id) || ["admin", "manager", "picker"].includes(String(staff?.role ?? ""));
   const flat = withFlatPrices(product);
-  if (signedIn) return NextResponse.json(flat);
+  if (signedIn) {
+    // a wholesale customer: fewer than 12 in the shops = out of stock for him
+    const priceType = customer?.id
+      ? (await prisma.customer.findUnique({ where: { id: Number(customer.id) }, select: { priceType: true } }))?.priceType ?? null
+      : null;
+    return NextResponse.json(isWholesaleType(priceType) ? { ...flat, stock: customerStock(flat.stock, priceType) } : flat);
+  }
   const { wholesalePrice: _w, bigWholesalePrice: _b, prices: _p, ...guest } = flat; // eslint-disable-line @typescript-eslint/no-unused-vars
   return NextResponse.json({ ...guest, prices: [], stock: guestStock(flat.stock) });
 }

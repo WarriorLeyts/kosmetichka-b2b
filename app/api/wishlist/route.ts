@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyCustomerToken } from "@/lib/customerAuth";
+import { customerStock } from "@/lib/utils";
 
 async function getCustomerId(): Promise<number | null> {
   const cookieStore = await cookies();
@@ -18,29 +19,33 @@ export async function GET() {
     return NextResponse.json({ productIds: [], products: [] });
   }
 
-  const items = await prisma.wishlistItem.findMany({
-    where: { customerId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      product: {
-        select: {
-          id: true,
-          name: true,
-          barcode: true,
-          article: true,
-          stock: true,
-          images: { select: { path: true }, take: 1 },
-          prices: { select: { priceType: true, price: true } },
-          brand: { select: { name: true } },
+  const [items, me] = await Promise.all([
+    prisma.wishlistItem.findMany({
+      where: { customerId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            barcode: true,
+            article: true,
+            stock: true,
+            images: { select: { path: true }, take: 1 },
+            prices: { select: { priceType: true, price: true } },
+            brand: { select: { name: true } },
+          },
         },
       },
-    },
-  });
+    }),
+    prisma.customer.findUnique({ where: { id: customerId }, select: { priceType: true } }),
+  ]);
 
   return NextResponse.json({
     productIds: items.map((i) => i.productId),
     products: items.map((i) => ({
       ...i.product,
+      stock: customerStock(i.product.stock, me?.priceType),
       notified: i.notified,
       wishlistItemId: i.id,
     })),

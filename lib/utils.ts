@@ -50,6 +50,22 @@ export function getStockLabel(stock: number | null | undefined) {
  * only show «Нет в наличии / Осталось мало / Больше 10 шт.», and these values give the same labels;
  * 10 for «мало» never limits a guest's cart below the real stock (which is at most 10 there).
  */
+/**
+ * Wholesale customers are not sold a product the shops have fewer than this many of:
+ * for them it is «Нет в наличии» (owner's rule). Staff and retail see the real stock.
+ */
+export const WHOLESALE_MIN_STOCK = 12;
+
+export function isWholesaleType(priceType: string | null | undefined): boolean {
+  return priceType === "wholesale" || priceType === "big_wholesale";
+}
+
+/** The stock a customer of this price type sees: 0 for a wholesaler when the shops have fewer than 12. */
+export function customerStock<T extends number | null | undefined>(stock: T, priceType: string | null | undefined): T | 0 {
+  if (!isWholesaleType(priceType)) return stock;
+  return Number(stock ?? 0) >= WHOLESALE_MIN_STOCK ? stock : 0;
+}
+
 export function guestStock(stock: number | null | undefined): number {
   const v = Number(stock ?? 0);
   if (!(v > 0)) return 0;

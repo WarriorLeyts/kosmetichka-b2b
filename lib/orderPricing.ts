@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { cartPriceTier, type PriceType } from "@/lib/pricing";
+import { isWholesaleType, WHOLESALE_MIN_STOCK } from "@/lib/utils";
 
 /** the most pieces of one product in an order line */
 export const MAX_LINE_QTY = 9999;
@@ -101,6 +102,11 @@ export async function priceOrder(
     // a typo like 1000000 must not reach the order, 1C and the invoice
     if (quantity > MAX_LINE_QTY) {
       throw new Error(`Слишком большое количество для «${product.name}»: не больше ${MAX_LINE_QTY} шт. в одной позиции`);
+    }
+
+    // wholesalers are not sold what the shops have fewer than 12 of (WHOLESALE_MIN_STOCK)
+    if (isWholesaleType(customer.priceType) && Number(product.stock ?? 0) < WHOLESALE_MIN_STOCK) {
+      throw new Error(`«${product.name}» нет в наличии. Удалите этот товар из корзины.`);
     }
 
     // MOQ check
