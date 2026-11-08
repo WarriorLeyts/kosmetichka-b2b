@@ -17,4 +17,9 @@ export async function register() {
     const { startSalesRecount } = await import("./lib/productSales");
     startSalesRecount();
   }
+  // Counterparties from 1С over OData every 15 min (instead of the «Выгрузка контрагентов сайт» extension)
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { startCustomersSync } = await import("./lib/customersSync");
+    startCustomersSync();
+  }
 }

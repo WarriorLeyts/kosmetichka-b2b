@@ -4,10 +4,13 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Counterparties come from 1С over OData on their own schedule (lib/customersSync.ts) when ODATA_* is set;
+// otherwise from customers.xml with every 1С exchange, as before.
+const odata = Boolean(process.env.ODATA_BASE_URL && process.env.ODATA_USER && process.env.ODATA_PASSWORD);
 const scripts = [
   "import-catalog.js",
   "import-prices.js",
-  "import-customers.js",
+  ...(odata ? [] : ["import-customers.js"]),
   "import-images.js",
 ];
 
