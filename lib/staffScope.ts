@@ -66,12 +66,13 @@ export async function staffSeesCustomer(s: { id: unknown; role: unknown } | null
   return customerVisible(await staffScope(s), customerId);
 }
 
-/** 1С groups an admin can give to a manager account (current groups from the 1С export) */
+/**
+ * The 1С groups an admin can give to a manager account — fixed by the owner (2026-11-08). Other groups
+ * a 1С export may bring (old folders, another export) are never offered. A new manager → add here.
+ */
+export const MANAGER_GROUPS = ["Ахтаева Инсана", "Бимарзаева Раяна", "Даудова Радима", "Лорсанова Милана", "Петька Сагаипова", "Сулейманова Сайде"];
+
+/** what the group choice of a manager account offers: the managers' 1С groups, then «Розничные клиенты» */
 export async function assignableGroups(): Promise<string[]> {
-  const rows = await prisma.oneCCustomer.groupBy({ by: ["manager"], where: { manager: { not: null } }, _count: { _all: true } });
-  return rows
-    .map((r) => r.manager as string)
-    .filter((g) => g.trim() && !ADMIN_ONLY_GROUPS.includes(g) && g !== RETAIL_GROUP)
-    .sort((a, b) => a.localeCompare(b, "ru"))
-    .concat(RETAIL_GROUP);
+  return [...MANAGER_GROUPS, RETAIL_GROUP];
 }
