@@ -160,6 +160,45 @@ export async function GET(request: Request) {
     return minStock > 0 ? { ...flat, stock: customerStock(flat.stock, priceType) } : flat;
   };
 
+  /** price range / «sale» → the guids that pass (null — no such filter) */
+  async function priceFilterGuids(): Promise<string[] | null> {
+    if (priceMin === null && priceMax === null && !quick.includes("sale")) return null;
+    const prices = await priceIndex();
+    // guests see retail prices: they filter and sort by them too — by wholesale prices a guest could
+    // narrow the range down and work out the hidden wholesale price of any product
+    const priceList = isAuthenticated ? prices.wholesale : prices.retail;
+    const merged: string[] = [];
+    for (const [guid, price] of priceList) {
+      if (priceMin !== null && price < priceMin) continue;
+      if (priceMax !== null && price > priceMax) continue;
+      if (quick.includes("sale") && !prices.sale.has(guid)) continue;
+      merged.push(guid);
+    }
+    // sale without a price range: products with a discount but no wholesale price count too
+    if (quick.includes("sale") && priceMin === null && priceMax === null) {
+      for (const guid of prices.sale) if (!priceList.has(guid)) merged.push(guid);
+    }
+    return merged;
+  }
+
+  // ?facets=brand: the brands of the products these filters / this search find (the brand filter
+  // itself ignored, so the list doesn't shrink to the chosen ones), most products first
+  if (searchParams.get("facets") === "brand") {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { brandGuid: _chosen, ...fw } = where;
+    const guids = await priceFilterGuids();
+    if (guids) fw.guid = { in: guids };
+    const rows = await prisma.product.groupBy({ by: ["brandGuid"], where: { ...fw, brandGuid: { not: null } }, _count: { _all: true } });
+    const names = new Map(
+      (await prisma.brand.findMany({ where: { guid: { in: rows.map((x) => x.brandGuid as string) } }, select: { guid: true, name: true } })).map((b) => [b.guid, b.name])
+    );
+    const brands = rows
+      .filter((x) => x.brandGuid && names.get(x.brandGuid)?.trim())
+      .map((x) => ({ guid: x.brandGuid as string, name: names.get(x.brandGuid as string)!.trim(), count: x._count._all }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ru"));
+    return NextResponse.json({ brands });
+  }
+
   // ?ids=1,2,3 (the cart, up to 120): these products as they are now, in one request instead of one
   // request per cart line. Products no longer in the catalogue are simply missing from the answer.
   const idsParam = searchParams.get("ids");
@@ -211,23 +250,9 @@ export async function GET(request: Request) {
 
   // ── Steps 1–3: price range / sale → guid constraint (from the cached index) ──
   const prices = await priceIndex();
-  // guests see retail prices: they filter and sort by them too — by wholesale prices a guest could
-  // narrow the range down and work out the hidden wholesale price of any product
   const priceList = isAuthenticated ? prices.wholesale : prices.retail;
-  if (priceMin !== null || priceMax !== null || quick.includes("sale")) {
-    const merged: string[] = [];
-    for (const [guid, price] of priceList) {
-      if (priceMin !== null && price < priceMin) continue;
-      if (priceMax !== null && price > priceMax) continue;
-      if (quick.includes("sale") && !prices.sale.has(guid)) continue;
-      merged.push(guid);
-    }
-    // sale without a price range: products with a discount but no wholesale price count too
-    if (quick.includes("sale") && priceMin === null && priceMax === null) {
-      for (const guid of prices.sale) if (!priceList.has(guid)) merged.push(guid);
-    }
-    where.guid = { in: merged };
-  }
+  const priceGuids = await priceFilterGuids();
+  if (priceGuids) where.guid = { in: priceGuids };
 
   // ── Step 4a: no price sort → fully DB-paginated ──────────────────────────
   const needsPriceSort = sort === "price_asc" || sort === "price_desc";
