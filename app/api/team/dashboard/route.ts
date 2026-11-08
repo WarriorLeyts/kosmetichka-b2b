@@ -46,7 +46,7 @@ export async function GET() {
         status: true,
         total: true,
         createdAt: true,
-        customer: { select: { name: true, companyName: true, phone: true } },
+        customer: { select: { name: true, companyName: true, phone: true, manager: true, priceType: true } },
         _count: { select: { items: true } },
       },
     }),
