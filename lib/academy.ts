@@ -56,7 +56,7 @@ export function readStart(token: unknown, testId: number, userId: number): numbe
 export const TIME_GRACE_MS = 60_000;
 
 /** Кто видит результаты всех сотрудников. */
-export const RESULTS_ROLES = ["admin", "manager", "hr"];
+export const RESULTS_ROLES = ["admin", "hr"]; // managers — no (owner: they don't see the staff tests)
 
 /** Кто редактирует сотрудников «только тесты» (раздел /academy/staff). */
 export const STAFF_EDIT_ROLES = ["admin", "hr"];
