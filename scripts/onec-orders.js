@@ -172,6 +172,23 @@ export async function findContract(counterpartyRef, orgRef, before = null, env =
   return buyer[0]?.Ref_Key ?? null;
 }
 
+export const PRICE_KIND_NAMES = { retail: "Розница", discount: "Скидка", wholesale: "Опт", big_wholesale: "Крупный опт" };
+
+/**
+ * «Основной договор» «С покупателем» of the template's organisation for a counterparty that has none
+ * (e.g. its only contract is with another organisation) — what the 1С integration did. Kind of prices by
+ * the customer's price type on the site.
+ */
+export async function createContract(ref, priceType, tpl, env = process.env) {
+  const kinds = await odataGet("Catalog_ВидыЦен", { $select: "Ref_Key,Description,DeletionMark" }, env);
+  const want = PRICE_KIND_NAMES[priceType] || "Розница";
+  const kind = kinds.find((k) => !k.DeletionMark && String(k.Description || "").trim() === want);
+  const body = { Description: "Основной договор", Owner: ref, Owner_Type: "StandardODATA.Catalog_Контрагенты", ВидДоговора: "СПокупателем", Организация_Key: tpl.Организация_Key };
+  if (isGuid(tpl.ВалютаДокумента_Key)) body.ВалютаРасчетов_Key = tpl.ВалютаДокумента_Key;
+  if (kind) body.ВидЦен_Key = kind.Ref_Key;
+  return odataCreate("Catalog_ДоговорыКонтрагентов", body, env);
+}
+
 /** guid → base unit of the products (Catalog_Номенклатура.ЕдиницаИзмерения_Key). */
 export async function productUnits(guids, env = process.env) {
   const out = new Map();
@@ -188,13 +205,15 @@ export async function productUnits(guids, env = process.env) {
  * Everything 1С-side for an order → { body, problems }. problems (Russian, for the admin) — the order can't go yet.
  * order: { id, createdAt, comment, customer: { oneCId, phone, name, companyName }, items: [{ guid, productName, … }] }
  */
-export async function prepareOrder(order, env = process.env) {
+export async function prepareOrder(order, env = process.env, { createMissingContract = false } = {}) {
   const problems = [];
   const template = await orderTemplate(env);
   const c = order.customer || {};
   const counterpartyRef = await findCounterparty(c.oneCId, c.phone, env);
   if (!counterpartyRef) problems.push(`Покупатель «${c.companyName || c.name || c.phone}» не найден в 1С (ни по коду, ни по телефону ${c.phone || "—"})`);
-  const contractRef = counterpartyRef ? await findContract(counterpartyRef, template.Организация_Key, moscowLocal(order.createdAt), env) : null;
+  let contractRef = counterpartyRef ? await findContract(counterpartyRef, template.Организация_Key, moscowLocal(order.createdAt), env) : null;
+  // no contract with our organisation (e.g. only with another one) — make «Основной договор», as the integration did
+  if (counterpartyRef && !contractRef && createMissingContract) contractRef = (await createContract(counterpartyRef, c.priceType, template, env)).Ref_Key;
   if (counterpartyRef && !contractRef) problems.push("У покупателя в 1С нет договора «С покупателем» нашей организации");
   for (const it of order.items) if (!isGuid(it.guid)) problems.push(`Товар «${it.productName}» без кода 1С`);
   if (!order.items.length) problems.push("В заказе нет товаров");
