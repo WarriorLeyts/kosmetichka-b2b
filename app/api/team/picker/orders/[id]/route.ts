@@ -4,6 +4,7 @@ import { orderChanges } from "@/lib/orderChanges";
 import { parseCheckStatuses } from "@/lib/checkStatus";
 import { ANY_STAFF, requireStaff } from "../../../_auth";
 import { badId, notFound, parseId, productImageUrl } from "../../../_shared";
+import { staffSeesOrder } from "@/lib/staffScope";
 
 // GET /api/team/picker/orders/:id — what app/picker/[orderId]/page.tsx passes to PickerOrderClient
 // The page only works for orders in "assembly"; otherwise → 409 { error, status }.
@@ -18,6 +19,7 @@ export async function GET(
   const { id } = await params;
   const orderId = parseId(id);
   if (!orderId) return badId();
+  if (!(await staffSeesOrder(auth.session, orderId))) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },

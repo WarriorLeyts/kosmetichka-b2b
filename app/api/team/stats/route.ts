@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ORDER_STATUS_LABELS } from "@/lib/orderStatus";
 import { parseCheckStatuses } from "@/lib/checkStatus";
 import { ADMIN_MANAGER, requireStaff } from "../_auth";
+import { orderScopeWhere, staffScope } from "@/lib/staffScope";
 import { CHECK_STATUS_LABELS, PRICE_TYPE_LABELS } from "../_shared";
 
 const PERIOD_DAYS: Record<string, number | null> = {
@@ -16,6 +17,8 @@ const PERIOD_DAYS: Record<string, number | null> = {
 export async function GET(request: NextRequest) {
   const auth = await requireStaff(ADMIN_MANAGER);
   if (!auth.ok) return auth.response;
+  // a manager — the numbers of his 1С group's customers only (lib/staffScope.ts)
+  const mine = orderScopeWhere(await staffScope(auth.session));
 
   const rawPeriod = request.nextUrl.searchParams.get("period") || "all";
   // Unknown values behave like "all" on the page; report the effective value
@@ -42,40 +45,41 @@ export async function GET(request: NextRequest) {
     allTimeAgg,
     checkRows,
   ] = await Promise.all([
-    prisma.order.count({ where: { createdAt: { gte: todayStart } } }),
+    prisma.order.count({ where: { ...mine, createdAt: { gte: todayStart } } }),
     prisma.order.aggregate({
       _sum: { total: true },
-      where: { createdAt: { gte: todayStart } },
+      where: { ...mine, createdAt: { gte: todayStart } },
     }),
     prisma.order.count({
       where: {
+        ...mine,
         createdAt: { gte: todayStart },
         items: { some: { check: { status: { not: "ok" } } } },
       },
     }),
     prisma.order.findMany({
-      where: { createdAt: { gte: weekStart } },
+      where: { ...mine, createdAt: { gte: weekStart } },
       select: { createdAt: true, total: true },
       orderBy: { createdAt: "asc" },
     }),
     prisma.order.groupBy({
       by: ["status"],
       _count: { id: true },
-      where: { status: { not: "exported" } },
+      where: { ...mine, status: { not: "exported" } },
     }),
     prisma.orderItem.findMany({
-      where: { order: { createdAt: { gte: weekStart } } },
+      where: { order: { ...mine, createdAt: { gte: weekStart } } },
       select: { productName: true, quantity: true, total: true },
     }),
     prisma.order.aggregate({
       _avg: { total: true },
       _count: { id: true },
-      where: { status: { not: "cancelled" } },
+      where: { ...mine, status: { not: "cancelled" } },
     }),
     prisma.orderItemCheck.findMany({
       where: {
         orderItem: {
-          order: { createdAt: { gte: checkCutoff } },
+          order: { ...mine, createdAt: { gte: checkCutoff } },
         },
       },
       select: { status: true },
@@ -89,6 +93,7 @@ export async function GET(request: NextRequest) {
     _sum: { total: true },
     _count: { id: true },
     where: {
+      ...mine,
       status: { not: "cancelled" },
       ...(periodStart ? { createdAt: { gte: periodStart } } : {}),
     },

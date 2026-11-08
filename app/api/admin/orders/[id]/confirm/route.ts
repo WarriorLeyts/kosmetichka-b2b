@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { confirmOrderFor } from "@/lib/orderConfirm";
 import { lockedByOrderId } from "@/lib/orderLock";
+import { staffSeesOrder } from "@/lib/staffScope";
 
 /**
  * POST /api/admin/orders/[id]/confirm — a manager or an admin presses «Подтвердить заказ» for the
@@ -14,6 +15,7 @@ async function confirmForCustomer(_request: Request, { params }: { params: Promi
   if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
 
   const { id } = await params;
+  if (!(await staffSeesOrder(user, Number(id)))) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
   const order = await prisma.order.findUnique({ where: { id: Number(id) } });
   if (!order) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 

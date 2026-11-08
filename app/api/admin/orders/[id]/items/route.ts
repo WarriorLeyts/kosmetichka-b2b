@@ -10,6 +10,7 @@ import { changeChatMessage, logOrderChanges, orderChanges, summarizeRows } from 
 import { notifyLater } from "@/lib/notify";
 import { markProductRequestAdded, productRequestAdded } from "@/lib/productRequest";
 import { lockedByOrderId } from "@/lib/orderLock";
+import { staffSeesOrder } from "@/lib/staffScope";
 
 function getSecret() {
   return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
@@ -37,6 +38,7 @@ async function editItems(request: NextRequest, { params }: Props) {
 
   const { id } = await params;
   const orderId = Number(id);
+  if (!(await staffSeesOrder(user, orderId))) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },

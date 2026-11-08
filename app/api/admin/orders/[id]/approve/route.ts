@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
 import { notifyOrderStatus } from "@/lib/notify";
+import { staffSeesOrder } from "@/lib/staffScope";
 
 type Props = {
   params: Promise<{
@@ -18,6 +19,7 @@ export async function POST(request: Request, { params }: Props) {
 
   const { id } = await params;
   const orderId = Number(id);
+  if (!(await staffSeesOrder(user, orderId))) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   if (!order) {

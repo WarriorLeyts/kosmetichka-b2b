@@ -8,6 +8,7 @@ import { notifyOrderStatus } from "@/lib/notify";
 import { applyPickChecks } from "@/lib/applyPickChecks";
 import { AWAITING_CONFIRMATION, confirmRequest, paymentBlocked } from "@/lib/orderConfirm";
 import { lockedByOrderId } from "@/lib/orderLock";
+import { staffSeesOrder } from "@/lib/staffScope";
 
 async function changeStatus(
   request: Request,
@@ -17,6 +18,7 @@ async function changeStatus(
   if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
 
   const { id } = await params;
+  if (!(await staffSeesOrder(user, Number(id)))) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
   const body = await request.json();
   const { status: toStatus } = body as { status: string };
 

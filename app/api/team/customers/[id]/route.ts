@@ -4,6 +4,7 @@ import { ADMIN_MANAGER, requireStaff } from "../../_auth";
 import { PRICE_TYPE_LABELS, badId, notFound, parseId } from "../../_shared";
 import { maxAccess } from "@/lib/roles";
 import { SHOP_TYPE_LABELS, proofViewUrl, type ShopType } from "@/lib/proofs";
+import { staffSeesCustomer } from "@/lib/staffScope";
 
 // GET /api/team/customers/:id — fields shown on app/admin/customers/[id]/page.tsx (password hash excluded)
 export async function GET(
@@ -16,6 +17,7 @@ export async function GET(
   const { id } = await params;
   const customerId = parseId(id);
   if (!customerId) return badId();
+  if (!(await staffSeesCustomer(auth.session, customerId))) return NextResponse.json({ error: "Клиент не найден" }, { status: 404 });
 
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },

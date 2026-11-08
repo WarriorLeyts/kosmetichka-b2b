@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { parseCheckStatuses } from "@/lib/checkStatus";
 import { ORDER_STATUS_LABELS } from "@/lib/orderStatus";
 import { ADMIN_MANAGER, requireStaff } from "../_auth";
+import { orderScopeWhere, staffScope } from "@/lib/staffScope";
 import { parsePage } from "../_shared";
 import { customerChatMarks, EMPTY_MARKS } from "@/lib/customerChatMarks";
 import { waitingSince } from "@/lib/orderConfirm";
@@ -27,6 +28,8 @@ function businessDayRange(dateStr: string) {
 export async function GET(request: NextRequest) {
   const auth = await requireStaff(ADMIN_MANAGER);
   if (!auth.ok) return auth.response;
+  // a manager — only his 1С group's customers (lib/staffScope.ts)
+  const mine = orderScopeWhere(await staffScope(auth.session));
 
   const sp = request.nextUrl.searchParams;
 
@@ -50,6 +53,7 @@ export async function GET(request: NextRequest) {
 
   // the summary tiles: the chosen day (or all dates) and the search, every status
   const scope: Prisma.OrderWhereInput = {
+    AND: [mine],
     ...(selectedDate ? { createdAt: businessDayRange(selectedDate) } : {}),
     customer: customerSearch
       ? {
@@ -93,7 +97,7 @@ export async function GET(request: NextRequest) {
     // Status chips — always for the current business day
     prisma.order.groupBy({
       by: ["status"],
-      where: { createdAt: businessDayRange(businessToday) },
+      where: { ...mine, createdAt: businessDayRange(businessToday) },
       _count: { id: true },
     }),
     prisma.order.groupBy({ by: ["status"], where: scope, _count: { id: true }, _sum: { total: true } }),

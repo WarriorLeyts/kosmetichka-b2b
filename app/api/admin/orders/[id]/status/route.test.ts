@@ -14,6 +14,7 @@ const db = vi.hoisted(() => ({
   orderStatusLog: { create: vi.fn(async () => ({})) },
   $transaction: vi.fn(async (ops: unknown[]) => ops),
 }));
+vi.mock("@/lib/staffScope", async (orig) => ({ ...(await orig<typeof import("@/lib/staffScope")>()), staffSeesOrder: async () => true }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
 import { POST } from "./route";

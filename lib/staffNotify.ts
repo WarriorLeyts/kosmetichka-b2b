@@ -1,4 +1,6 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { ADMIN_ONLY_GROUPS } from "@/lib/staffScope";
 import { getVapidConfig, sendToSubscriptions, type WebPushPayload } from "@/lib/webPush";
 import { sendPush } from "@/lib/notify";
 
@@ -90,9 +92,23 @@ export async function staffPayload(ev: StaffEvent): Promise<WebPushPayload | nul
   }
 }
 
-/** Pushes an event to every admin / manager browser and Team phone (except `exceptUserId`). Returns delivered count. */
+/**
+ * Who hears about the event: admins, and the manager whose 1С group the customer is in (lib/staffScope.ts).
+ * Customers without a manager (or of «Раяна» / «Отдел Продаж») — admins only.
+ */
+export async function recipientsWhere(ev: StaffEvent): Promise<Prisma.UserWhereInput> {
+  const c =
+    ev.kind === "customer-request"
+      ? await prisma.customer.findUnique({ where: { id: ev.customerId }, select: { manager: true } })
+      : (await prisma.order.findUnique({ where: { id: ev.orderId }, select: { customer: { select: { manager: true } } } }))?.customer;
+  const group = c?.manager?.trim() || null;
+  return group && !ADMIN_ONLY_GROUPS.includes(group) ? { OR: [{ role: "admin" }, { role: "manager", oneCGroup: group }] } : { role: "admin" };
+}
+
+/** Pushes an event to the browsers and Team phones of its recipients (except `exceptUserId`). Returns delivered count. */
 export async function notifyStaff(ev: StaffEvent, opts: { exceptUserId?: number | null } = {}): Promise<number> {
-  const [web, phones] = await Promise.all([notifyStaffBrowsers(ev, opts), notifyStaffPhones(ev, opts)]);
+  const who = await recipientsWhere(ev).catch(() => ({ role: "admin" }) as Prisma.UserWhereInput);
+  const [web, phones] = await Promise.all([notifyStaffBrowsers(ev, opts, who), notifyStaffPhones(ev, opts, who)]);
   return web + phones;
 }
 
@@ -100,11 +116,11 @@ export async function notifyStaff(ev: StaffEvent, opts: { exceptUserId?: number 
  * The staff app «Косметичка Team» on phones: Expo push (FCM on Android) to the tokens it registered
  * (/api/team/push-token). Tapping the notification opens the order.
  */
-async function notifyStaffPhones(ev: StaffEvent, opts: { exceptUserId?: number | null }): Promise<number> {
+async function notifyStaffPhones(ev: StaffEvent, opts: { exceptUserId?: number | null }, who: Prisma.UserWhereInput): Promise<number> {
   try {
     const tokens = await prisma.staffPushToken.findMany({
       where: {
-        user: { role: { in: STAFF_PUSH_ROLES } },
+        user: { AND: [{ role: { in: STAFF_PUSH_ROLES } }, who] },
         ...(opts.exceptUserId ? { userId: { not: opts.exceptUserId } } : {}),
       },
       select: { token: true },
@@ -130,13 +146,13 @@ async function notifyStaffPhones(ev: StaffEvent, opts: { exceptUserId?: number |
   }
 }
 
-async function notifyStaffBrowsers(ev: StaffEvent, opts: { exceptUserId?: number | null }): Promise<number> {
+async function notifyStaffBrowsers(ev: StaffEvent, opts: { exceptUserId?: number | null }, who: Prisma.UserWhereInput): Promise<number> {
   const cfg = getVapidConfig();
   if (!cfg) return 0;
   try {
     const subs = await prisma.staffWebPushSubscription.findMany({
       where: {
-        user: { role: { in: STAFF_PUSH_ROLES } },
+        user: { AND: [{ role: { in: STAFF_PUSH_ROLES } }, who] },
         ...(opts.exceptUserId ? { userId: { not: opts.exceptUserId } } : {}),
       },
       select: { id: true, endpoint: true, p256dh: true, auth: true },

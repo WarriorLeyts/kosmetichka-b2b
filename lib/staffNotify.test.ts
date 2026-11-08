@@ -78,7 +78,7 @@ describe("notifyStaff", () => {
     fetchMock.mockImplementation(async (url: string) => ({ status: url.endsWith("/gone") ? 410 : 201, text: async () => "" }));
     expect(await notifyStaff({ kind: "new-order", orderId: 42 }, { exceptUserId: 5 })).toBe(1);
     expect(db.staffWebPushSubscription.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { user: { role: { in: ["admin", "manager"] } }, userId: { not: 5 } } })
+      expect.objectContaining({ where: { user: { AND: [{ role: { in: ["admin", "manager"] } }, { role: "admin" }] }, userId: { not: 5 } } })
     );
     expect(db.staffWebPushSubscription.deleteMany).toHaveBeenCalledWith({ where: { id: { in: [2] } } });
   });
@@ -86,7 +86,7 @@ describe("notifyStaff", () => {
   it("no subscriptions → no order lookup, no fetch", async () => {
     db.staffWebPushSubscription.findMany.mockResolvedValue([]);
     expect(await notifyStaff({ kind: "chat", orderId: 42, text: "a" })).toBe(0);
-    expect(db.order.findUnique).not.toHaveBeenCalled();
+    expect(db.order.findUnique).toHaveBeenCalledTimes(1); // only to pick the recipients (the customer's manager)
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

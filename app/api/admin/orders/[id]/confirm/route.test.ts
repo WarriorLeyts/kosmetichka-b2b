@@ -11,6 +11,7 @@ const db = vi.hoisted(() => ({
   user: { findUnique: vi.fn(async () => ({ id: 3, name: "Мадина" })) },
   orderMessage: { create: vi.fn(async (_a: { data: { text: string; userId?: number } }) => ({})) },
 }));
+vi.mock("@/lib/staffScope", async (orig) => ({ ...(await orig<typeof import("@/lib/staffScope")>()), staffSeesOrder: async () => true }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
 import { POST } from "./route";

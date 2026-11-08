@@ -5,6 +5,7 @@ import { notifyOrderStatus } from "@/lib/notify";
 import { applyPickChecks } from "@/lib/applyPickChecks";
 import { denyIfNotAllowed, getPickerUser, parseId } from "../_access";
 import { withOrderLock } from "@/lib/orderLock";
+import { staffSeesOrder } from "@/lib/staffScope";
 
 async function submitChecks(request: Request) {
   const user = await getPickerUser();
@@ -41,6 +42,7 @@ async function submitChecks(request: Request) {
 
   const denied = denyIfNotAllowed(user, order);
   if (denied) return denied;
+  if (!(await staffSeesOrder(user, orderId))) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
   if (order.status !== "assembly") {
     return NextResponse.json(

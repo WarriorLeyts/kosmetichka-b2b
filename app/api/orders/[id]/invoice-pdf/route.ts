@@ -5,6 +5,7 @@ import { verifyInvoiceLink } from "@/lib/auth";
 import { getStaffSession } from "../../../team/_auth";
 import { loadInvoice } from "@/lib/invoice";
 import { invoicePdf } from "@/lib/invoicePdf";
+import { staffSeesOrder } from "@/lib/staffScope";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     mustBeCustomer = link.customerId;
   } else {
     const staff = await getStaffSession();
-    if (staff && (staff.role === "admin" || staff.role === "manager")) audience = "staff";
+    // a manager — only his 1С group's orders
+    if (staff && (staff.role === "admin" || staff.role === "manager") && (await staffSeesOrder(staff, id))) audience = "staff";
     else {
       const ct = (await cookies()).get("auth_token")?.value;
       const c = ct ? await verifyCustomerToken(ct) : null;

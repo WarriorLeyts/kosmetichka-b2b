@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ADMIN_MANAGER, requireStaff } from "../_auth";
 import { PRICE_TYPE_LABELS, parsePage } from "../_shared";
+import { customerScopeWhere, staffScope } from "@/lib/staffScope";
 
 const PAGE_SIZE = 50;
 
@@ -59,7 +60,9 @@ export async function GET(request: NextRequest) {
       }
     : {};
   // the search and the period narrow everything: the list and every tile
-  const search: Prisma.CustomerWhereInput = { AND: [text, period] };
+  // a manager — only his 1С group's customers (lib/staffScope.ts)
+  const mine = customerScopeWhere(await staffScope(auth.session));
+  const search: Prisma.CustomerWhereInput = { AND: [text, period, mine] };
   const byType = (t: string): Prisma.CustomerWhereInput =>
     t === "retail" ? { priceType: { in: ["retail", "discount"] } } : t === "wholesale" || t === "big_wholesale" ? { priceType: t } : {};
   const where: Prisma.CustomerWhereInput = { AND: [search, STATUS_WHERE[statusFilter] ?? {}, byType(typeFilter), MANAGER_WHERE[managerFilter] ?? {}] };

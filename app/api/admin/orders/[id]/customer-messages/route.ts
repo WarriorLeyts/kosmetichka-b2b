@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendMail } from "@/lib/mail";
 import { notifyManagerMessage } from "@/lib/notify";
+import { staffSeesOrder } from "@/lib/staffScope";
 
 export async function GET(
   _: Request,
@@ -12,6 +13,7 @@ export async function GET(
   if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
 
   const { id } = await params;
+  if (!(await staffSeesOrder(user, Number(id)))) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
   const msgs = await prisma.orderMessage.findMany({
     where: { orderId: Number(id), source: "customer" },
@@ -45,6 +47,7 @@ export async function POST(
 
   const { id } = await params;
   const orderId = Number(id);
+  if (!(await staffSeesOrder(user, orderId))) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
   const { text } = await request.json();
   if (!text || typeof text !== "string" || text.trim().length === 0) {
