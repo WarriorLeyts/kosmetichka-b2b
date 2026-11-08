@@ -62,6 +62,27 @@ export async function odataCreate(entity, body, env = process.env) {
   return JSON.parse(text);
 }
 
+/** PATCH an existing object (only the fields given). */
+export async function odataPatch(entity, ref, body, env = process.env) {
+  const base = String(env.ODATA_BASE_URL).replace(/\/+$/, "") + "/";
+  const auth = Buffer.from(`${env.ODATA_USER}:${env.ODATA_PASSWORD}`).toString("base64");
+  const res = await fetch(base + enc(`${entity}(guid'${ref}')`) + "?$format=json", {
+    method: "PATCH",
+    headers: { Authorization: `Basic ${auth}`, Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(60_000),
+  });
+  const text = await res.text().catch(() => "");
+  if (!res.ok) {
+    let msg = text.slice(0, 300);
+    try {
+      msg = JSON.parse(text)["odata.error"]?.message?.value || msg;
+    } catch {}
+    throw new Error(`1С OData ${entity}: HTTP ${res.status} ${msg}`);
+  }
+  return text ? JSON.parse(text) : {};
+}
+
 /** All rows, page by page ($top/$skip ordered by Ref_Key). */
 export async function odataAll(entity, params = {}, page = 5000, env = process.env) {
   const out = [];

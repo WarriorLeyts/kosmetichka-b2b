@@ -47,6 +47,7 @@ export async function GET(
             inn: true,
             manager: true,
             priceType: true,
+            oneCId: true,
           },
         },
         picker: { select: { id: true, name: true } },
@@ -170,6 +171,8 @@ export async function GET(
         address: order.customer.address ?? null,
         inn: order.customer.inn ?? null,
         manager: order.customer.manager ?? null,
+        // linked to a 1С counterparty (the «Менеджер 1С» choice moves it; without it — a new one is made)
+        oneCId: order.customer.oneCId ?? null,
         // price type of this order (the customer may have switched since)
         priceType: order.priceType ?? order.customer.priceType,
         // the prices of this order («Опт»: by the order sum — discount / wholesale / big wholesale)

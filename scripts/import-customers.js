@@ -3,6 +3,7 @@ import { XMLParser } from "fast-xml-parser";
 import fs from "fs";
 import nodePath from "path";
 import { fetchCustomers, odataConfigured } from "./onec-odata.js";
+import { IMPORT_GROUPS } from "./onec-groups.js";
 // 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
 const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
 
@@ -69,22 +70,7 @@ function normalizePriceType(value) {
   return text || null;
 }
 
-/**
- * Только эти группы 1С («Родитель») попадают на сайт — выгрузка, которую сделали 08.11.2026
- * (6 менеджеров + «Раяна» и «Отдел Продаж»). Контрагенты других групп, которые может прислать
- * другая выгрузка 1С (старые папки), пропускаются. Новая группа → добавить сюда
- * (и менеджера — в MANAGER_GROUPS в lib/staffScope.ts).
- */
-const IMPORT_GROUPS = [
-  "Ахтаева Инсана",
-  "Бимарзаева Раяна",
-  "Даудова Радима",
-  "Лорсанова Милана",
-  "Петька Сагаипова",
-  "Сулейманова Сайде",
-  "Раяна",
-  "Отдел Продаж",
-];
+// the 8 groups — scripts/onec-groups.js (also offered in an order: «Менеджер 1С»)
 
 async function main() {
   // Source: 1С over OData when it's configured (ODATA_* in .env) — the 1С extension «Выгрузка контрагентов
