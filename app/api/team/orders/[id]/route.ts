@@ -1,6 +1,7 @@
 import { orderTier } from "@/lib/orderTier";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { warehouseStockByProductId } from "@/lib/warehouseStock";
 import { orderChanges } from "@/lib/orderChanges";
 import { paymentBlocked, waitingSince } from "@/lib/orderConfirm";
 import { customerChatMarks, EMPTY_MARKS } from "@/lib/customerChatMarks";
@@ -105,6 +106,9 @@ export async function GET(
     productStock.set(p.id, p.stock ?? null);
   }
 
+  // staff only: stock per 1C warehouse (empty when 1C doesn't split the stock)
+  const byWarehouse = await warehouseStockByProductId(productIds);
+
   // who changed which line (customer / staff) and what was removed
   const changes = await orderChanges(order.id, order.items);
 
@@ -191,6 +195,8 @@ export async function GET(
           imageUrl: productImageUrl(imagePath),
           /** current stock in the shop */
           stock: productStock.get(item.productId) ?? null,
+          /** staff only: [{ name, qty }] per 1C warehouse */
+          stockByWarehouse: byWarehouse.get(item.productId) ?? [],
           /** what the customer / staff did to this line: { kind: "added"|"changed", oldQuantity, oldPrice, oldVariant, actorName, at } */
           customerChange: changes.lines[item.id]?.customer ?? null,
           staffChange: changes.lines[item.id]?.staff ?? null,

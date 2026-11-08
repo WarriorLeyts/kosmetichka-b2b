@@ -3,7 +3,7 @@ import { XMLParser } from "fast-xml-parser";
 import nodemailer from "nodemailer";
 import fs from "fs";
 import nodePath from "path";
-import { hideMissing, toKopecks } from "./onec-helpers.js";
+import { hideMissing, offerTotalStock, offerWarehouseStock, toKopecks, warehouseNames } from "./onec-helpers.js";
 // 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
 const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
 
@@ -154,6 +154,66 @@ async function sendWishlistNotifications(productIds) {
   }
 }
 
+/** productGuid → (warehouseGuid → qty) for the products of this package */
+async function loadWarehouseRows(guids) {
+  const map = new Map();
+  for (let i = 0; i < guids.length; i += 1000) {
+    const rows = await prisma.productWarehouseStock.findMany({
+      where: { productGuid: { in: guids.slice(i, i + 1000) } },
+      select: { productGuid: true, warehouseGuid: true, qty: true },
+    });
+    for (const r of rows) {
+      if (!map.has(r.productGuid)) map.set(r.productGuid, new Map());
+      map.get(r.productGuid).set(r.warehouseGuid, r.qty);
+    }
+  }
+  return map;
+}
+
+/** Every warehouse the split mentions exists in «Warehouse»; names from offers.xml / import.xml «Склады». */
+async function ensureWarehouses(packageData, splits) {
+  const names = warehouseNames(packageData);
+  try {
+    const imp = parser.parse(fs.readFileSync(nodePath.join(DATA_1C, "import.xml"), "utf8"));
+    for (const [g, n] of warehouseNames(imp?.КоммерческаяИнформация?.Классификатор)) if (!names.has(g)) names.set(g, n);
+  } catch {
+    // no import.xml — names from offers.xml only
+  }
+  const guids = new Set(names.keys());
+  for (const s of splits) for (const w of s ?? []) guids.add(w.guid);
+  const known = new Map((await prisma.warehouse.findMany({ select: { guid: true, name: true } })).map((w) => [w.guid, w.name]));
+  for (const guid of guids) {
+    const name = names.get(guid);
+    if (!known.has(guid)) {
+      await prisma.warehouse.create({ data: { guid, name: name || `Склад ${guid.slice(0, 8)}` } });
+    } else if (name && known.get(guid) !== name) {
+      await prisma.warehouse.update({ where: { guid }, data: { name } });
+    }
+  }
+  console.log(`Складов в выгрузке: ${guids.size}`);
+}
+
+/** Writes only what changed; rows with qty ≤ 0 are not kept. Returns the number of changed rows. */
+async function writeWarehouseRows(productGuid, split, had = new Map()) {
+  const want = new Map(split.filter((w) => w.qty > 0).map((w) => [w.guid, w.qty]));
+  let changed = 0;
+  for (const [warehouseGuid, qty] of want) {
+    if (had.get(warehouseGuid) === qty) continue;
+    await prisma.productWarehouseStock.upsert({
+      where: { productGuid_warehouseGuid: { productGuid, warehouseGuid } },
+      update: { qty },
+      create: { productGuid, warehouseGuid, qty },
+    });
+    changed++;
+  }
+  const gone = [...had.keys()].filter((g) => !want.has(g));
+  if (gone.length) {
+    await prisma.productWarehouseStock.deleteMany({ where: { productGuid, warehouseGuid: { in: gone } } });
+    changed += gone.length;
+  }
+  return changed;
+}
+
 async function main() {
   const xml = fs.readFileSync(nodePath.join(DATA_1C, "offers.xml"), "utf8");
   const data = parser.parse(xml);
@@ -190,14 +250,22 @@ async function main() {
     }
   }
 
+  // Остатки по складам (только для сотрудников): склады пакета и их остатки по товарам
+  const splits = offers.map((o) => offerWarehouseStock(o));
+  // the package carries the split (some offer has warehouses, or it lists «Склады»)
+  const anySplit = splits.some(Boolean) || warehouseNames(packageData).size > 0;
+  const existingSplit = anySplit ? await loadWarehouseRows(offers.map((o) => o.Ид)) : new Map();
+  if (anySplit) await ensureWarehouses(packageData, splits);
+
   // Обрабатываем предложения
   const cameIntoStock = [];
   const full = String(packageData?.СодержитТолькоИзменения ?? "").toLowerCase() === "false";
+  let changedWarehouseRows = 0;
   const present = [];
   let changedPrices = 0;
   let changedStock = 0;
 
-  for (const offer of offers) {
+  for (const [offerIndex, offer] of offers.entries()) {
     const productGuid = offer.Ид;
 
     const product = await prisma.product.findUnique({
@@ -224,11 +292,15 @@ async function main() {
       changedPrices++;
     }
 
-    const newStock = Number(offer.Количество || 0);
+    const split = splits[offerIndex];
+    const newStock = offerTotalStock(offer, split);
     if (product.stock !== newStock) {
       await prisma.product.update({ where: { guid: productGuid }, data: { stock: newStock } });
       changedStock++;
     }
+    // the package splits the stock, but this offer lists no warehouse → it is nowhere: clear its old split
+    const rows = split ?? (anySplit ? [] : null);
+    if (rows) changedWarehouseRows += await writeWarehouseRows(productGuid, rows, existingSplit.get(productGuid));
 
     // Проверяем появился ли товар в наличии
     if (watchedIds.has(product.id)) {
@@ -239,7 +311,16 @@ async function main() {
     }
   }
 
-  console.log(`Изменено цен: ${changedPrices}, остатков: ${changedStock}`);
+  console.log(`Изменено цен: ${changedPrices}, остатков: ${changedStock}` + (anySplit ? `, строк остатков по складам: ${changedWarehouseRows}` : ""));
+  // a full upload without the split: the setting was switched off in 1C — the old split is stale
+  if (full && !anySplit) {
+    try {
+      const { count } = await prisma.productWarehouseStock.deleteMany({});
+      if (count) console.log(`Остатки по складам не выгружаются (полная выгрузка без складов): удалено строк ${count}`);
+    } catch (e) {
+      console.error("Остатки по складам не очищены:", e.message);
+    }
+  }
   // full price list: products 1C no longer offers can't be ordered (see hideMissing)
   if (full) await hideMissing(prisma, present, "остатки");
 

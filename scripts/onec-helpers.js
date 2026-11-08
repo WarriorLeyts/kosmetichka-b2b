@@ -31,8 +31,72 @@ export async function hideMissing(db, presentGuids, label) {
   }
   for (let i = 0; i < missing.length; i += 1000) {
     await db.product.updateMany({ where: { guid: { in: missing.slice(i, i + 1000) } }, data: { stock: 0 } });
+    await db.productWarehouseStock?.deleteMany({ where: { productGuid: { in: missing.slice(i, i + 1000) } } });
   }
   console.log(`[1c] ${label}: нет в полной выгрузке, остаток обнулён: ${missing.length}`);
   return missing.length;
 }
 
+
+// ── Stock per warehouse («Разбивать остатки по складам» in the 1C integration) ──────────────────
+// Staff only: customers see Product.stock (the total), the split goes to ProductWarehouseStock.
+
+function arr(v) {
+  if (v === undefined || v === null || v === "") return [];
+  return Array.isArray(v) ? v : [v];
+}
+
+function num(v) {
+  const n = Number(String(v ?? "").replace(",", ".").replace(/\s/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** guid → name of the warehouses listed in a package («Склады» of ПакетПредложений or Классификатор). */
+export function warehouseNames(node) {
+  const names = new Map();
+  for (const w of arr(node?.Склады?.Склад)) {
+    const guid = String(w?.Ид ?? "").trim();
+    if (guid) names.set(guid, String(w?.Наименование ?? "").trim() || guid);
+  }
+  return names;
+}
+
+/**
+ * Stock of one offer per warehouse → [{ guid, qty }] (qty summed if a warehouse repeats), or null when
+ * the offer carries no split (the setting is off). Both CommerceML forms:
+ *   2.08: <Склад ИдСклада="…" КоличествоНаСкладе="5"/>
+ *   2.10: <Остатки><Остаток><Склад><Ид>…</Ид><Количество>5</Количество></Склад></Остаток></Остатки>
+ */
+export function offerWarehouseStock(offer) {
+  const byGuid = new Map();
+  let seen = false;
+  const add = (guid, qty) => {
+    const g = String(guid ?? "").trim();
+    if (!g) return;
+    seen = true;
+    byGuid.set(g, (byGuid.get(g) ?? 0) + num(qty));
+  };
+  for (const w of arr(offer?.Склад)) {
+    if (typeof w !== "object") continue;
+    add(w.ИдСклада ?? w.Ид, w.КоличествоНаСкладе ?? w.Количество);
+  }
+  for (const r of arr(offer?.Остатки?.Остаток)) {
+    for (const w of arr(r?.Склад)) {
+      if (typeof w !== "object") continue;
+      add(w.Ид ?? w.ИдСклада, w.Количество ?? w.КоличествоНаСкладе);
+    }
+  }
+  if (!seen) return null;
+  return [...byGuid].map(([guid, qty]) => ({ guid, qty }));
+}
+
+/**
+ * Total stock of an offer (what customers see): <Количество> as before; when 1C sends only the split,
+ * the sum over the warehouses.
+ */
+export function offerTotalStock(offer, split) {
+  const q = offer?.Количество;
+  if (q !== undefined && q !== null && q !== "" && typeof q !== "object") return num(q);
+  if (split) return split.reduce((s, w) => s + Math.max(0, w.qty), 0);
+  return 0;
+}

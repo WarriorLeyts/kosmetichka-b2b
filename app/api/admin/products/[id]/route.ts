@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { warehouseStockByProductId } from "@/lib/warehouseStock";
 
 export async function GET(
   request: NextRequest,
@@ -32,5 +33,7 @@ export async function GET(
   });
 
   if (!product) return NextResponse.json({ error: "Не найден" }, { status: 404 });
-  return NextResponse.json({ product });
+  // staff only: stock per 1C warehouse (empty when 1C doesn't split the stock)
+  const stockByWarehouse = (await warehouseStockByProductId([product.id])).get(product.id) ?? [];
+  return NextResponse.json({ product: { ...product, stockByWarehouse } });
 }

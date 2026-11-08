@@ -71,6 +71,9 @@ model Product {
 
   wishlistItems WishlistItem[]
 
+  /// Stock per warehouse from 1C («Разбивать остатки по складам»). STAFF ONLY — never select it in customer APIs
+  warehouseStock ProductWarehouseStock[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -82,6 +85,30 @@ model Product {
   @@index([name])
   @@index([stock])
   // trigram indexes for the «contains» search (pg_trgm) live in prisma/manual/2026-10-31-search-trigram.sql
+}
+
+/// A 1C warehouse (offers.xml «Склады»). Staff only.
+model Warehouse {
+  guid      String   @id
+  name      String
+  updatedAt DateTime @updatedAt
+
+  stock ProductWarehouseStock[]
+}
+
+/// Stock of a product in one warehouse (offers.xml «Склад ИдСклада КоличествоНаСкладе»). Staff only:
+/// customers see only Product.stock (the total). Only rows with qty > 0 are kept.
+/// SQL: prisma/manual/2026-11-08-warehouse-stock.sql
+model ProductWarehouseStock {
+  productGuid   String
+  product       Product   @relation(fields: [productGuid], references: [guid], onDelete: Cascade)
+  warehouseGuid String
+  warehouse     Warehouse @relation(fields: [warehouseGuid], references: [guid], onDelete: Cascade)
+  qty           Float
+  updatedAt     DateTime  @updatedAt
+
+  @@id([productGuid, warehouseGuid])
+  @@index([warehouseGuid])
 }
 
 model ProductVariant {

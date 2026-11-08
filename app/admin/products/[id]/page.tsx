@@ -3,6 +3,7 @@ import { verifyToken } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { AdminProductImagesClient } from "./AdminProductImagesClient";
+import { warehouseStockByProductId } from "@/lib/warehouseStock";
 
 export default async function AdminProductImagesPage({
   params,
@@ -34,5 +35,7 @@ export default async function AdminProductImagesPage({
 
   if (!product) redirect("/admin/orders");
 
-  return <AdminProductImagesClient product={product} />;
+  const stockByWarehouse = (await warehouseStockByProductId([product.id])).get(product.id) ?? [];
+
+  return <AdminProductImagesClient product={product} stockByWarehouse={stockByWarehouse} />;
 }

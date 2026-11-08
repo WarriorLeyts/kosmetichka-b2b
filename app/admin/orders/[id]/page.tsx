@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { warehouseStockByProductId } from "@/lib/warehouseStock";
 import { orderChanges } from "@/lib/orderChanges";
 import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
@@ -79,6 +80,8 @@ export default async function AdminOrderPage({
     }),
     maxmaStuckByOrder([order.id]),
   ]);
+  // staff only: stock per 1C warehouse (empty when 1C doesn't split the stock)
+  const productStockByWarehouse = Object.fromEntries(await warehouseStockByProductId(productIds));
   const productImages: Record<number, string | null> = {};
   for (const img of productImageRows) {
     if (!productImages[img.productId]) {
@@ -166,6 +169,7 @@ export default async function AdminOrderPage({
       productImages={productImages}
       changes={changes}
       productStock={productStock}
+      productStockByWarehouse={productStockByWarehouse}
       maxmaStuck={maxmaStuck.get(order.id) ?? null}
     />
   );
