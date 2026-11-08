@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../_auth";
 import { RateLimiter } from "@/lib/rateLimit";
 import { onLive } from "@/lib/realtime";
+import { needsConfirm } from "@/lib/orderConfirm";
 
 // one browser must not be able to load the server: the same list asked again within 2 s gets the
 // last answer from memory (no database), and more than 120 lists a minute get «too often»
@@ -135,7 +136,7 @@ export async function GET(request: Request) {
       createdAt: o.createdAt.toISOString(),
       customerConfirmed: o.customerConfirmed,
       /** the manager changed the order and waits for the customer's «Подтвердить» */
-      needsConfirm: !!o.confirmRequestedAt || (o.status === "consultation" && !o.customerConfirmed),
+      needsConfirm: needsConfirm(o),
       changesSnapshot: o.changesSnapshot ?? null,
       items: o.items.map((item) => ({
         ...item,

@@ -5,7 +5,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: db }));
 const n = vi.hoisted(() => ({ notify: vi.fn(async () => ({ customers: 1, devices: 1 })) }));
 vi.mock("@/lib/notify", () => n);
 
-import { isAwaiting, sendConfirmReminders } from "./orderConfirm";
+import { isAwaiting, needsConfirm, sendConfirmReminders, waitingSince } from "./orderConfirm";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -30,5 +30,20 @@ describe("confirmation reminders", () => {
   it("isAwaiting", () => {
     expect(isAwaiting({ confirmRequestedAt: new Date() })).toBe(true);
     expect(isAwaiting({ confirmRequestedAt: null })).toBe(false);
+  });
+});
+
+describe("a cancelled order waits for nobody", () => {
+  const at = new Date("2026-11-08T14:40:00Z");
+  it("the flag left over from «На проверке» doesn't count once cancelled / placed", () => {
+    for (const status of ["cancelled", "payment", "exported"]) {
+      expect(waitingSince({ status, confirmRequestedAt: at })).toBeNull();
+      expect(needsConfirm({ status, confirmRequestedAt: at, customerConfirmed: false })).toBe(false);
+      expect(isAwaiting({ status, confirmRequestedAt: at })).toBe(false);
+    }
+  });
+  it("still waiting while the order is active", () => {
+    expect(waitingSince({ status: "consultation", confirmRequestedAt: at })).toBe(at);
+    expect(needsConfirm({ status: "consultation", confirmRequestedAt: null, customerConfirmed: false })).toBe(true);
   });
 });

@@ -4,6 +4,7 @@ import { currentCustomerId } from "../../_auth";
 import { orderChanges } from "@/lib/orderChanges";
 import { SHOP_ADDRESS, SHOP_MAP_URL } from "@/lib/delivery";
 import { CUSTOMER_EDITABLE_STATUSES, customerEditBlockedReason } from "@/lib/orderStatus";
+import { needsConfirm, waitingSince } from "@/lib/orderConfirm";
 
 // GET /api/mobile/orders/:id — one order of the logged-in customer
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -39,8 +40,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     /** why not (shown instead of «Изменить»), for an active order */
     editBlockedReason: customerEditBlockedReason(order.status),
     /** the manager changed the order and waits for «Подтвердить» (until then it can't be «Заказ оформлен») */
-    needsConfirm: !!order.confirmRequestedAt || (order.status === "consultation" && !order.customerConfirmed),
-    confirmRequestedAt: order.confirmRequestedAt ? order.confirmRequestedAt.toISOString() : null,
+    needsConfirm: needsConfirm(order),
+    confirmRequestedAt: waitingSince(order)?.toISOString() ?? null,
     status: order.status,
     total: order.total,
     promoCode: order.promoCode ?? null,

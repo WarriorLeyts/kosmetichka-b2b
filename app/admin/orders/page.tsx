@@ -6,6 +6,7 @@ import { AdminOrdersList } from "@/components/admin/AdminOrdersList";
 import { parseCheckStatuses } from "@/lib/checkStatus";
 import { ORDER_STATUS_LABELS as STATUS_LABELS } from "@/lib/orderStatus";
 import { maxmaStuckOrderIds } from "@/lib/maxmaQueue";
+import { waitingSince } from "@/lib/orderConfirm";
 
 const PAGE_SIZE = 50;
 
@@ -252,7 +253,7 @@ export default async function AdminOrdersPage({
         orders={orders.map((order) => ({
           ...order,
           createdAt: order.createdAt.toISOString(),
-          awaitingConfirmation: !!order.confirmRequestedAt,
+          awaitingConfirmation: !!waitingSince(order),
           confirmRequestedAt: undefined,
           hasIssues: order.items.some((i) => {
             if (!i.check) return false;

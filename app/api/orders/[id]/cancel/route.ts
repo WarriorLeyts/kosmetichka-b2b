@@ -99,7 +99,7 @@ async function cancelOrder(request: Request, { params }: Props) {
   try {
     await prisma.order.update({
       where: { id: order.id },
-      data: { status: "cancelled" },
+      data: { status: "cancelled", confirmRequestedAt: null },
     });
   } catch (err) {
     console.error("[cancel] update error:", err);
