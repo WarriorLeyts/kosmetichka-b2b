@@ -85,6 +85,7 @@ async function main() {
   let created = 0;
   let updated = 0;
   let skipped = 0;
+  const seen = new Set();
 
   for (const item of customers) {
     const oneCId = getValue(item, ["Ид", "Id", "ID", "oneCId"]);
@@ -110,6 +111,7 @@ async function main() {
       continue;
     }
 
+    seen.add(oneCId);
     const exists = await prisma.oneCCustomer.findUnique({
       where: { oneCId },
     });
@@ -142,6 +144,22 @@ async function main() {
   console.log("Создано:", created);
   console.log("Обновлено:", updated);
   console.log("Пропущено:", skipped);
+
+  // ── Контрагенты, которых в 1С больше нет (удалены, их группа удалена или помечена на удаление) ──
+  // Убираем с сайта, а у клиентов сайта, привязанных к ним, — привязку и менеджера (ниже по телефону
+  // они снова привяжутся, если номер есть у другого контрагента 1С). Защита от битого / неполного
+  // файла: ничего не удаляем, если в файле подозрительно мало контрагентов.
+  const before = await prisma.oneCCustomer.count();
+  if (seen.size >= 1000 && seen.size >= before * 0.5) {
+    const gone = (await prisma.oneCCustomer.findMany({ select: { oneCId: true } })).map((x) => x.oneCId).filter((id) => !seen.has(id));
+    if (gone.length > 0) {
+      const unlinked = await prisma.customer.updateMany({ where: { oneCId: { in: gone } }, data: { oneCId: null, manager: null } });
+      const removed = await prisma.oneCCustomer.deleteMany({ where: { oneCId: { in: gone } } });
+      console.log("Удалено (нет в 1С):", removed.count, "· клиентов сайта отвязано:", unlinked.count);
+    }
+  } else {
+    console.log(`Удаление пропущено: в файле ${seen.size} контрагентов, на сайте ${before} — файл похож на неполный`);
+  }
 
   // ── Синхронизация таблицы Customer с OneCCustomer по телефону ──────────────
   // Ищем клиентов сайта без привязки к 1С (oneCId = null) и связываем их
