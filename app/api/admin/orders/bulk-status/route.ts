@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
             status: toStatus,
             ...(toStatus === "consultation" ? confirmRequest() : {}),
             ...(earlier ? { confirmRequestedAt: null, customerConfirmed: false } : {}),
+            ...(toStatus === "cancelled" ? { confirmRequestedAt: null } : {}),
           },
         }),
       ]);

@@ -6,6 +6,7 @@ import { ORDER_STATUS_LABELS } from "@/lib/orderStatus";
 import { ADMIN_MANAGER, requireStaff } from "../_auth";
 import { parsePage } from "../_shared";
 import { customerChatMarks, EMPTY_MARKS } from "@/lib/customerChatMarks";
+import { waitingSince } from "@/lib/orderConfirm";
 
 const PAGE_SIZE = 50;
 
@@ -120,7 +121,7 @@ export async function GET(request: NextRequest) {
       createdAt: o.createdAt.toISOString(),
       pickerId: o.pickerId,
       /** waiting for the customer to confirm staff changes */
-      awaitingConfirmation: !!o.confirmRequestedAt,
+      awaitingConfirmation: !!waitingSince(o),
       /** the customer confirmed the checked order («На проверке» → can go on) */
       customerConfirmed: o.customerConfirmed,
       customer: o.customer,

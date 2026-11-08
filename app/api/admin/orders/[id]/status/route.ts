@@ -68,7 +68,7 @@ async function changeStatus(
         // «На проверке»: the customer is asked to check and confirm the collected order
         ...(toStatus === "consultation" ? confirmRequest() : {}),
         // back to the manager (assembly / earlier): nothing to confirm until it is sent again
-        ...(toStatus === "assembly" || toStatus === "pending" || toStatus === "approved" ? { confirmRequestedAt: null } : {}),
+        ...(toStatus === "assembly" || toStatus === "pending" || toStatus === "approved" || toStatus === "cancelled" ? { confirmRequestedAt: null } : {}),
       },
     }),
     prisma.orderStatusLog.create({

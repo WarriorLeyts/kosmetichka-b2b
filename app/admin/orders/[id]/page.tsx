@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { maxmaStuckByOrder } from "@/lib/maxmaQueue";
 import AdminOrderClient from "./AdminOrderClient";
+import { waitingSince } from "@/lib/orderConfirm";
 
 export const dynamic = "force-dynamic";
 
@@ -97,7 +98,7 @@ export default async function AdminOrderPage({
     createdAt: order.createdAt.toISOString(),
     updatedAt: undefined,
     customerConfirmed: order.customerConfirmed,
-    confirmRequestedAt: order.confirmRequestedAt ? order.confirmRequestedAt.toISOString() : null,
+    confirmRequestedAt: waitingSince(order)?.toISOString() ?? null,
     pickerId: order.pickerId ?? null,
     picker: order.picker ?? null,
     customer: {

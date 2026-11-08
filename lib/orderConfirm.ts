@@ -15,8 +15,25 @@ import { notifyStaffLater } from "@/lib/staffNotify";
 export const AWAITING_CONFIRMATION =
   "Ждём подтверждения клиента: «Заказ оформлен» станет доступен после того, как клиент проверит и подтвердит заказ.";
 
-export function isAwaiting(order: { confirmRequestedAt?: Date | null }): boolean {
-  return !!order.confirmRequestedAt;
+/** statuses where nothing waits for the customer's «Подтвердить заказ» any more */
+const CONFIRM_OVER = ["cancelled", "payment", "exported"];
+
+/**
+ * Since when the order waits for the customer's confirmation, or null. A cancelled / placed order never
+ * waits, even if the flag stayed set (an order cancelled while «На проверке»).
+ */
+export function waitingSince(order: { confirmRequestedAt?: Date | null; status?: string }): Date | null {
+  if (order.status && CONFIRM_OVER.includes(order.status)) return null;
+  return order.confirmRequestedAt ?? null;
+}
+
+/** «Подтвердите заказ» for the customer's apps: waiting, or (old orders) «Консультация» not confirmed yet */
+export function needsConfirm(order: { confirmRequestedAt?: Date | null; status: string; customerConfirmed?: boolean | null }): boolean {
+  return !!waitingSince(order) || (order.status === "consultation" && !order.customerConfirmed);
+}
+
+export function isAwaiting(order: { confirmRequestedAt?: Date | null; status?: string }): boolean {
+  return !!waitingSince(order);
 }
 
 /** «Заказ оформлен» only after the customer confirmed the collected order. */

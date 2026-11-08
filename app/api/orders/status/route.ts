@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { attachmentPreview } from "@/lib/chatAttachments";
+import { needsConfirm } from "@/lib/orderConfirm";
 
 // Lightweight endpoint — returns order statuses + latest manager message per order.
 // Used by OrderNotifications for polling (pending count + approval + unread messages).
@@ -45,7 +46,7 @@ export async function GET() {
     const statuses = orders.map((o) => ({
       id: o.id,
       status: o.status,
-      needsConfirm: !!o.confirmRequestedAt || (o.status === "consultation" && !o.customerConfirmed),
+      needsConfirm: needsConfirm(o),
     }));
 
     // Orders that have at least one manager message — include latest timestamp
