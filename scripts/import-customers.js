@@ -146,16 +146,21 @@ async function main() {
   console.log("Пропущено:", skipped);
 
   // ── Контрагенты, которых в 1С больше нет (удалены, их группа удалена или помечена на удаление) ──
-  // Убираем с сайта, а у клиентов сайта, привязанных к ним, — привязку и менеджера (ниже по телефону
-  // они снова привяжутся, если номер есть у другого контрагента 1С). Защита от битого / неполного
-  // файла: ничего не удаляем, если в файле подозрительно мало контрагентов.
+  // 1С присылает customers.xml из нескольких выгрузок, и они немного разные (контрагент есть в одной и
+  // нет в другой). Поэтому удаляем только тех, кого НИ ОДНА выгрузка не присылала 3 дня (updatedAt
+  // обновляется при каждой встрече в файле). Клиентов сайта, привязанных к ним, отвязываем (ниже по
+  // телефону они снова привяжутся, если номер есть у другого контрагента). Защита от битого файла:
+  // ничего не удаляем, если в файле подозрительно мало контрагентов.
   const before = await prisma.oneCCustomer.count();
   if (seen.size >= 1000 && seen.size >= before * 0.5) {
-    const gone = (await prisma.oneCCustomer.findMany({ select: { oneCId: true } })).map((x) => x.oneCId).filter((id) => !seen.has(id));
+    const staleSince = new Date(Date.now() - 3 * 24 * 3600 * 1000);
+    const gone = (await prisma.oneCCustomer.findMany({ where: { updatedAt: { lt: staleSince } }, select: { oneCId: true } }))
+      .map((x) => x.oneCId)
+      .filter((id) => !seen.has(id));
     if (gone.length > 0) {
       const unlinked = await prisma.customer.updateMany({ where: { oneCId: { in: gone } }, data: { oneCId: null, manager: null } });
       const removed = await prisma.oneCCustomer.deleteMany({ where: { oneCId: { in: gone } } });
-      console.log("Удалено (нет в 1С):", removed.count, "· клиентов сайта отвязано:", unlinked.count);
+      console.log("Удалено (нет в 1С 3 дня):", removed.count, "· клиентов сайта отвязано:", unlinked.count);
     }
   } else {
     console.log(`Удаление пропущено: в файле ${seen.size} контрагентов, на сайте ${before} — файл похож на неполный`);
