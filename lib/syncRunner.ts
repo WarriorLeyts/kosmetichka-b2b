@@ -6,7 +6,7 @@ import path from "path";
 // traced files are copied — the import-*.js scripts are NOT there. So run the
 // scripts from the project root, but keep cwd = process.cwd(), because the XML
 // files from 1C are saved to process.cwd()/data/1c.
-function appRoot(): string {
+export function appRoot(): string {
   if (process.env.APP_ROOT) return process.env.APP_ROOT;
   const cwd = process.cwd();
   return cwd.endsWith(path.join(".next", "standalone")) ? path.resolve(cwd, "..", "..") : cwd;

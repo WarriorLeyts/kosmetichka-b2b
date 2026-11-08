@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { XMLParser } from "fast-xml-parser";
 import fs from "fs";
 import nodePath from "path";
+import { fetchCustomers, odataConfigured } from "./onec-odata.js";
 // 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
 const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
 
@@ -86,18 +87,18 @@ const IMPORT_GROUPS = [
 ];
 
 async function main() {
-  const xml = fs.readFileSync(nodePath.join(DATA_1C, "customers.xml"), "utf8");
-
-  const data = parser.parse(xml);
-
-  let customers =
-    data?.Контрагенты?.Контрагент ||
-    data?.Customers?.Customer ||
-    [];
-
-  customers = toArray(customers);
-
-  console.log("Контрагентов найдено:", customers.length);
+  // Source: 1С over OData when it's configured (ODATA_* in .env) — the 1С extension «Выгрузка контрагентов
+  // сайт» and customers.xml are not needed then. Without OData — customers.xml as before.
+  let customers;
+  if (odataConfigured()) {
+    customers = await fetchCustomers(IMPORT_GROUPS);
+    console.log("Контрагентов из 1С (OData):", customers.length);
+  } else {
+    const xml = fs.readFileSync(nodePath.join(DATA_1C, "customers.xml"), "utf8");
+    const data = parser.parse(xml);
+    customers = toArray(data?.Контрагенты?.Контрагент || data?.Customers?.Customer || []);
+    console.log("Контрагентов найдено (customers.xml):", customers.length);
+  }
 
   let created = 0;
   let updated = 0;
@@ -275,7 +276,10 @@ async function main() {
 }
 
 main()
-  .catch(console.error)
+  .catch((e) => {
+    console.error(e);
+    process.exitCode = 1; // the admin «Импорт контрагентов» shows the error
+  })
   .finally(async () => {
     await prisma.$disconnect();
   });
