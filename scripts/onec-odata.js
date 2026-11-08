@@ -27,7 +27,39 @@ export async function odataGet(entity, params = {}, env = process.env) {
     } catch {}
     throw new Error(`1С OData ${entity}: HTTP ${res.status} ${msg}`);
   }
-  return (await res.json()).value ?? [];
+  const json = await res.json();
+  return json.value ?? json; // a collection → its rows; one object by key → the object
+}
+
+/** POST a new object (document / catalog item); returns what 1С created (Ref_Key, Number…). */
+export async function odataCreate(entity, body, env = process.env) {
+  const base = String(env.ODATA_BASE_URL).replace(/\/+$/, "") + "/";
+  const auth = Buffer.from(`${env.ODATA_USER}:${env.ODATA_PASSWORD}`).toString("base64");
+  let res;
+  try {
+    res = await fetch(base + enc(entity) + "?$format=json", {
+      method: "POST",
+      headers: { Authorization: `Basic ${auth}`, Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120_000),
+    });
+  } catch (e) {
+    // timeout / connection lost: 1С may still have created it — the caller looks it up before trying again
+    const err = new Error(`1С OData ${entity}: нет ответа (${e instanceof Error ? e.message : e})`);
+    err.uncertain = true;
+    throw err;
+  }
+  const text = await res.text().catch(() => "");
+  if (!res.ok) {
+    let msg = text.slice(0, 300);
+    try {
+      msg = JSON.parse(text)["odata.error"]?.message?.value || msg;
+    } catch {}
+    const err = new Error(`1С OData ${entity}: HTTP ${res.status} ${msg}`);
+    err.status = res.status;
+    throw err;
+  }
+  return JSON.parse(text);
 }
 
 /** All rows, page by page ($top/$skip ordered by Ref_Key). */

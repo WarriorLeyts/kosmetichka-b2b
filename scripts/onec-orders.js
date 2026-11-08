@@ -1,0 +1,194 @@
+// Site order → «Заказ покупателя» in 1С over OData (instead of 1С fetching orders by the standard exchange).
+// Same document the 1С integration made: number «СА-000209», unposted, the service fields copied from the
+// latest site order in 1С (СА-…). No database client here: lib/onecOrders.ts claims, retries and acks.
+import { odataCreate, odataGet } from "./onec-odata.js";
+
+export const EMPTY = "00000000-0000-0000-0000-000000000000";
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ENTITY = "Document_ЗаказПокупателя";
+const PRODUCT_TYPE = "StandardODATA.Catalog_Номенклатура";
+const UNIT_TYPE = "StandardODATA.Catalog_КлассификаторЕдиницИзмерения";
+
+/** Header fields copied from the template (the latest «СА-» order: same organisation, state, store, VAT…). */
+export const HEADER_COPY = [
+  "ВалютаДокумента_Key", "ВидЗаказа", "ВидЗаказа_Type", "ХозяйственнаяОперация_Key", "УсловияСчетаЗаказа_Key",
+  "СпециальныйНалоговыйРежим", "Кратность", "Курс", "Организация_Key", "ПоложениеСклада", "ПоложениеДатыОтгрузки",
+  "ПоложениеДокументаПоступления", "ПоложениеВидаРабот", "УчетПотребностиПоСкладам", "УчетПотребностиПоЗаказам",
+  "УчитыватьВНУ", "БанковскийСчет_Key", "НДСВключатьВСтоимость", "НалогообложениеНДС", "СостояниеЗаказа",
+  "СостояниеЗаказа_Type", "СуммаВключаетНДС", "СтруктурнаяЕдиницаРезерв_Key", "СтруктурнаяЕдиницаПродажи_Key",
+  "ТипДенежныхСредств", "СпособДоставки",
+];
+
+export const isGuid = (v) => GUID.test(String(v || "")) && v !== EMPTY;
+const q = (s) => "'" + String(s).replace(/'/g, "''") + "'";
+
+/** «СА-000209» — the number the 1С integration gave site order 209. */
+export function orderNumber(id) {
+  return "СА-" + String(id).padStart(6, "0");
+}
+
+/** Moscow wall-clock time as 1С wants it: 2026-11-08T15:14:11 */
+export function moscowLocal(d) {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" })
+      .formatToParts(new Date(d))
+      .map((x) => [x.type, x.value])
+  );
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
+}
+
+const round2 = (n) => Math.round(n * 100) / 100;
+
+/**
+ * The document body. Pure: everything 1С-side is passed in.
+ * order: { id, createdAt, comment (already with promo / bonuses), items: [{ guid, quantity, price, total, discount, bonusDiscount }] }
+ * ctx: { template, counterpartyRef, contractRef, units: Map(guid → unit ref), customerName, phone }
+ */
+export function buildOrderBody(order, ctx) {
+  const tpl = ctx.template || {};
+  const body = {};
+  for (const k of HEADER_COPY) if (tpl[k] !== undefined && tpl[k] !== null && tpl[k] !== "") body[k] = tpl[k];
+  body.ВидОперации = "ЗаказНаПродажу";
+  body.Number = orderNumber(order.id);
+  body.Date = moscowLocal(order.createdAt);
+  body.Контрагент_Key = ctx.counterpartyRef;
+  body.Договор_Key = ctx.contractRef;
+  body.Комментарий = order.comment || "";
+  const name = String(ctx.customerName || "").trim();
+  body.КонтактноеЛицо = name;
+  body.ИнформацияПоКонтрагенту = [
+    ["Наименование", name],
+    ["Полное наименование", name],
+    ["Юр./Физ. лицо", "Физ. лицо"],
+    ["Телефон", ctx.phone || ""],
+  ].map(([Вид, Представление], i) => ({ LineNumber: String(i + 1), Вид, Представление }));
+
+  const tplLine = (tpl.Запасы || [])[0] || {};
+  const store = body.СтруктурнаяЕдиницаРезерв_Key;
+  body.Запасы = order.items.map((it, i) => {
+    const total = Number(it.total) || 0;
+    const disc = Math.min(Math.max(0, Number(it.discount) || 0) + Math.max(0, Number(it.bonusDiscount) || 0), Math.max(0, total));
+    const sum = round2(total - disc);
+    const row = {
+      LineNumber: String(i + 1),
+      Номенклатура: it.guid,
+      Номенклатура_Type: PRODUCT_TYPE,
+      ТипНоменклатурыЗапас: true,
+      Количество: Number(it.quantity) || 0,
+      Цена: Number(it.price) || 0,
+      ПроцентСкидкиНаценки: total > 0 && disc > 0 ? round2((disc / total) * 100) : 0,
+      СуммаСкидкиНаценки: disc,
+      Сумма: sum,
+      СуммаНДС: 0,
+      Всего: sum,
+    };
+    const unit = ctx.units?.get(it.guid) || tplLine.ЕдиницаИзмерения;
+    if (unit) {
+      row.ЕдиницаИзмерения = unit;
+      row.ЕдиницаИзмерения_Type = UNIT_TYPE;
+    }
+    if (tplLine.СтавкаНДС_Key) row.СтавкаНДС_Key = tplLine.СтавкаНДС_Key;
+    if (store) row.СтруктурнаяЕдиницаРезерв_Key = store;
+    return row;
+  });
+  body.СуммаДокумента = round2(body.Запасы.reduce((s, r) => s + r.Всего, 0));
+  return body;
+}
+
+let tplCache = null;
+/** The latest site order in 1С («СА-…», last 60 days) — its service fields are what a site order needs. */
+export async function orderTemplate(env = process.env) {
+  if (tplCache && Date.now() - tplCache.at < 3600_000) return tplCache.doc;
+  const since = moscowLocal(Date.now() - 60 * 86400_000);
+  const heads = await odataGet(ENTITY, { $select: "Ref_Key,Number,Date,DeletionMark", $filter: `Date gt datetime'${since}'` }, env);
+  const site = heads.filter((h) => !h.DeletionMark && String(h.Number || "").startsWith("СА-"));
+  if (!site.length) throw new Error("В 1С нет заказов с сайта (СА-…) за 60 дней — не из чего взять настройки документа");
+  const latest = site.reduce((a, b) => (b.Date > a.Date ? b : a));
+  const doc = (await odataGet(`${ENTITY}(guid'${latest.Ref_Key}')`, {}, env)) ?? null;
+  const one = Array.isArray(doc) ? doc[0] : doc;
+  tplCache = { at: Date.now(), doc: one };
+  return one;
+}
+
+/** The document with this number already in 1С (created before, by us or by the old exchange). */
+export async function findOrderDoc(number, createdAt, env = process.env) {
+  const year = moscowLocal(createdAt).slice(0, 4);
+  const rows = await odataGet(ENTITY, { $select: "Ref_Key,Number,Posted,DeletionMark", $filter: `Number eq ${q(number)} and Date ge datetime'${year}-01-01T00:00:00'` }, env);
+  return rows.find((r) => !r.DeletionMark && String(r.Number).trim() === number) ?? null;
+}
+
+const digits = (s) => String(s || "").replace(/\D/g, "");
+
+/** Counterparty: the customer's 1С id, otherwise one counterparty with his phone. */
+export async function findCounterparty(oneCId, phone, env = process.env) {
+  if (isGuid(oneCId)) {
+    const r = await odataGet("Catalog_Контрагенты", { $select: "Ref_Key,DeletionMark", $filter: `Ref_Key eq guid'${oneCId}'` }, env);
+    if (r[0] && !r[0].DeletionMark) return r[0].Ref_Key;
+  }
+  let d = digits(phone);
+  if (d.length === 11 && d.startsWith("7")) d = "8" + d.slice(1);
+  if (d.length === 10) d = "8" + d;
+  if (d.length !== 11) return null;
+  const rows = (await odataGet("Catalog_Контрагенты", { $select: "Ref_Key,DeletionMark,IsFolder", $filter: `НомерТелефонаДляПоиска eq ${q(d)}` }, env)).filter((r) => !r.DeletionMark && !r.IsFolder);
+  return rows.length === 1 ? rows[0].Ref_Key : null;
+}
+
+/**
+ * Contract: the one of the counterparty's latest «Заказ покупателя» / «Расходная накладная» (what the 1С integration
+ * did — checked on all site orders since September); without history — «С покупателем» of the template's
+ * organisation, «Основной договор» and valid ones first.
+ */
+export async function findContract(counterpartyRef, orgRef, before = null, env = process.env) {
+  const rows = await odataGet(
+    "Catalog_ДоговорыКонтрагентов",
+    { $select: "Ref_Key,Description,ВидДоговора,Организация_Key,Недействителен,DeletionMark", $filter: `Owner eq cast(guid'${counterpartyRef}', 'Catalog_Контрагенты')` },
+    env
+  );
+  const buyer = rows.filter((c) => c.ВидДоговора === "СПокупателем" && !c.DeletionMark && (!orgRef || c.Организация_Key === orgRef));
+  const usable = new Set(buyer.map((c) => c.Ref_Key));
+  const history = [];
+  for (const entity of ["Document_ЗаказПокупателя", "Document_РасходнаяНакладная"]) {
+    history.push(...(await odataGet(entity, { $select: "Date,Договор_Key,DeletionMark", $filter: `Контрагент_Key eq guid'${counterpartyRef}'` }, env)));
+  }
+  const used = history.filter((d) => !d.DeletionMark && usable.has(d.Договор_Key) && (!before || d.Date < before)).sort((a, b) => (a.Date < b.Date ? 1 : -1))[0];
+  if (used) return used.Договор_Key;
+  const score = (c) => (c.Недействителен ? 0 : 2) + (String(c.Description || "").trim().toLowerCase() === "основной договор" ? 1 : 0);
+  buyer.sort((a, b) => score(b) - score(a));
+  return buyer[0]?.Ref_Key ?? null;
+}
+
+/** guid → base unit of the products (Catalog_Номенклатура.ЕдиницаИзмерения_Key). */
+export async function productUnits(guids, env = process.env) {
+  const out = new Map();
+  const list = [...new Set(guids.filter(isGuid))];
+  for (let i = 0; i < list.length; i += 20) {
+    const part = list.slice(i, i + 20);
+    const rows = await odataGet("Catalog_Номенклатура", { $select: "Ref_Key,ЕдиницаИзмерения_Key", $filter: part.map((g) => `Ref_Key eq guid'${g}'`).join(" or ") }, env);
+    for (const r of rows) if (isGuid(r.ЕдиницаИзмерения_Key)) out.set(r.Ref_Key, r.ЕдиницаИзмерения_Key);
+  }
+  return out;
+}
+
+/**
+ * Everything 1С-side for an order → { body, problems }. problems (Russian, for the admin) — the order can't go yet.
+ * order: { id, createdAt, comment, customer: { oneCId, phone, name, companyName }, items: [{ guid, productName, … }] }
+ */
+export async function prepareOrder(order, env = process.env) {
+  const problems = [];
+  const template = await orderTemplate(env);
+  const c = order.customer || {};
+  const counterpartyRef = await findCounterparty(c.oneCId, c.phone, env);
+  if (!counterpartyRef) problems.push(`Покупатель «${c.companyName || c.name || c.phone}» не найден в 1С (ни по коду, ни по телефону ${c.phone || "—"})`);
+  const contractRef = counterpartyRef ? await findContract(counterpartyRef, template.Организация_Key, moscowLocal(order.createdAt), env) : null;
+  if (counterpartyRef && !contractRef) problems.push("У покупателя в 1С нет договора «С покупателем» нашей организации");
+  for (const it of order.items) if (!isGuid(it.guid)) problems.push(`Товар «${it.productName}» без кода 1С`);
+  if (!order.items.length) problems.push("В заказе нет товаров");
+  const units = await productUnits(order.items.map((i) => i.guid), env);
+  const body = buildOrderBody(order, { template, counterpartyRef, contractRef, units, customerName: c.companyName || c.name, phone: c.phone });
+  return { body, problems };
+}
+
+/** Creates the document (unposted). */
+export async function createOrderDoc(body, env = process.env) {
+  return odataCreate(ENTITY, body, env);
+}
