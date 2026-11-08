@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
+import { WarehouseStock } from "@/components/staff/WarehouseStock";
+import type { WarehouseQty } from "@/lib/warehouseStock";
 
 type Product = {
   id: number;
@@ -19,7 +21,7 @@ function resolveImageUrl(p: string) {
   return "/1c/" + p;
 }
 
-export function AdminProductImagesClient({ product: initialProduct }: { product: Product }) {
+export function AdminProductImagesClient({ product: initialProduct, stockByWarehouse }: { product: Product; stockByWarehouse?: WarehouseQty[] }) {
   const [product, setProduct] = useState(initialProduct);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -91,6 +93,7 @@ export function AdminProductImagesClient({ product: initialProduct }: { product:
       <p className={`-mt-4 mb-6 text-base font-bold ${(product.stock ?? 0) > 0 ? "text-green-700" : "text-red-600"}`}>
         {(product.stock ?? 0) > 0 ? `Остаток в магазине: ${product.stock} шт.` : "Нет в наличии"}
       </p>
+      <WarehouseStock list={stockByWarehouse} className="-mt-5 mb-6" />
 
       <div className="mb-6">
         <h2 className="font-semibold text-gray-700 mb-2">Текущее фото</h2>

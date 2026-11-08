@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { warehouseStockByProductId } from "@/lib/warehouseStock";
 import { orderChanges } from "@/lib/orderChanges";
 import { parseCheckStatuses } from "@/lib/checkStatus";
 import { ANY_STAFF, requireStaff } from "../../../_auth";
@@ -70,6 +71,9 @@ export async function GET(
     barcodeMap.set(p.id, p.barcode ?? null);
   }
 
+  // staff only: stock per 1C warehouse (empty when 1C doesn't split the stock)
+  const byWarehouse = await warehouseStockByProductId(order.items.map((i) => i.productId));
+
   // what the customer / staff changed (the picker must see it: added, changed, removed lines)
   const changes = await orderChanges(order.id, order.items);
 
@@ -96,6 +100,7 @@ export async function GET(
         variantImageUrl: item.variantImageUrl ?? null,
         imageUrl: imageMap.get(item.productId) ?? null,
         stock: stockMap.get(item.productId) ?? null,
+        stockByWarehouse: byWarehouse.get(item.productId) ?? [],
         customerChange: changes.lines[item.id]?.customer ?? null,
         staffChange: changes.lines[item.id]?.staff ?? null,
         check: item.check

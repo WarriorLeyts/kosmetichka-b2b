@@ -193,6 +193,7 @@ async function main() {
   // deleted in 1C → can't be ordered (stock 0); the product itself and its history stay
   if (deleted.length) {
     await prisma.product.updateMany({ where: { guid: { in: deleted } }, data: { stock: 0 } });
+    await prisma.productWarehouseStock.deleteMany({ where: { productGuid: { in: deleted } } }).catch(() => {});
     console.log("Удалены в 1С, остаток обнулён:", deleted.length);
   }
   if (full) {

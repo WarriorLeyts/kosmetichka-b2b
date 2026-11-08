@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { WarehouseStock } from "@/components/staff/WarehouseStock";
+import type { WarehouseQty } from "@/lib/warehouseStock";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { renderMsgContent, getProductImageUrl } from "@/lib/renderMsgContent";
@@ -213,6 +215,7 @@ export default function AdminOrderClient({
   productImages = {},
   changes: initialChanges = { lines: {}, removed: [] },
   productStock = {},
+  productStockByWarehouse = {},
   maxmaStuck = null,
 }: {
   order: Order;
@@ -222,6 +225,8 @@ export default function AdminOrderClient({
   changes?: { lines: Record<number, LineChanges>; removed: RemovedLine[] };
   /** current stock of the order's products (shown on the lines) */
   productStock?: Record<number, number | null>;
+  /** staff only: stock per 1C warehouse */
+  productStockByWarehouse?: Record<number, WarehouseQty[]>;
   maxmaStuck?: MaxmaStuck | null;
 }) {
   const router = useRouter();
@@ -1294,6 +1299,7 @@ export default function AdminOrderClient({
                       {item.variantName && <div className="text-xs text-blue-600 mt-0.5">🎨 {item.variantName}</div>}
                       <ChangeBadges ch={changes.lines[item.id]} />
                       <StockLine stock={productStock[item.productId]} need={item.quantity} />
+                      <WarehouseStock list={productStockByWarehouse[item.productId]} className="mt-0.5" />
                       {item.barcode && <div className="text-xs text-slate-400 font-mono mt-0.5">{item.barcode}</div>}
                       {item.photos.length > 0 && (
                         <div className="mt-1 flex gap-1">
@@ -1397,6 +1403,7 @@ export default function AdminOrderClient({
                           )}
                           <ChangeBadges ch={changes.lines[item.id]} />
                       <StockLine stock={productStock[item.productId]} need={item.quantity} />
+                      <WarehouseStock list={productStockByWarehouse[item.productId]} className="mt-0.5" />
                           {item.barcode && <div className="mt-0.5 text-xs text-slate-400 font-mono">{item.barcode}</div>}
                           {item.photos.length > 0 && (
                             <div className="mt-1 flex gap-1">
