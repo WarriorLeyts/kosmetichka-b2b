@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
         pickerId: true,
         confirmRequestedAt: true,
         customerConfirmed: true,
-        customer: { select: { name: true, companyName: true, phone: true, manager: true, priceType: true } },
+        customer: { select: { name: true, companyName: true, phone: true, manager: true, priceType: true, oneCId: true } },
         _count: { select: { items: true } },
         items: {
           select: { check: { select: { status: true } } },
