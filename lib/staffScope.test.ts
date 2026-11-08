@@ -23,8 +23,15 @@ describe("staffScope", () => {
     db.user.findUnique.mockResolvedValue({ oneCGroup: "Ахтаева Инсана" });
     const sc = await staffScope({ id: 5, role: "manager" });
     expect(sc).toEqual({ all: false, group: "Ахтаева Инсана" });
-    expect(orderScopeWhere(sc)).toEqual({ customer: { manager: "Ахтаева Инсана" } });
-    expect(customerScopeWhere(sc)).toEqual({ manager: "Ахтаева Инсана" });
+    const own = { manager: "Ахтаева Инсана", NOT: { priceType: { in: ["retail", "discount"] } } };
+    expect(orderScopeWhere(sc)).toEqual({ customer: own });
+    expect(customerScopeWhere(sc)).toEqual(own);
+  });
+  it("the retail account — every retail customer (with or without a card)", async () => {
+    db.user.findUnique.mockResolvedValue({ oneCGroup: "Розничные клиенты" });
+    const sc = await staffScope({ id: 6, role: "manager" });
+    expect(customerScopeWhere(sc)).toEqual({ priceType: { in: ["retail", "discount"] } });
+    expect(orderScopeWhere(sc)).toEqual({ customer: { priceType: { in: ["retail", "discount"] } } });
   });
   it("a manager without a group (or with an admin-only one) sees nobody", async () => {
     for (const g of [null, "", "Раяна", "Отдел Продаж"]) {
@@ -39,12 +46,12 @@ describe("staffScope", () => {
   it("orderVisible checks the order against the group", async () => {
     db.order.count.mockResolvedValue(0);
     expect(await orderVisible({ all: false, group: "Даудова Радима" }, 211)).toBe(false);
-    expect(db.order.count).toHaveBeenCalledWith({ where: { id: 211, customer: { manager: "Даудова Радима" } } });
+    expect(db.order.count).toHaveBeenCalledWith({ where: { id: 211, customer: { manager: "Даудова Радима", NOT: { priceType: { in: ["retail", "discount"] } } } } });
     expect(await orderVisible({ all: true }, 211)).toBe(true);
   });
   it("assignable groups: current 1С groups without «Раяна» / «Отдел Продаж»", async () => {
     db.oneCCustomer.groupBy.mockResolvedValue([{ manager: "Раяна" }, { manager: "Даудова Радима" }, { manager: "Отдел Продаж" }, { manager: "Ахтаева Инсана" }]);
-    expect(await assignableGroups()).toEqual(["Ахтаева Инсана", "Даудова Радима"]);
+    expect(await assignableGroups()).toEqual(["Ахтаева Инсана", "Даудова Радима", "Розничные клиенты"]);
   });
 });
 
@@ -52,6 +59,10 @@ describe("staff notifications go to the customer's manager and admins", () => {
   it("an order of a manager's customer", async () => {
     db.order.findUnique.mockResolvedValue({ customer: { manager: "Лорсанова Милана" } });
     expect(await recipientsWhere({ kind: "new-order", orderId: 1 })).toEqual({ OR: [{ role: "admin" }, { role: "manager", oneCGroup: "Лорсанова Милана" }] });
+  });
+  it("a retail customer — the retail account, even inside a manager's 1С group", async () => {
+    db.order.findUnique.mockResolvedValue({ customer: { manager: "Даудова Радима", priceType: "discount" } });
+    expect(await recipientsWhere({ kind: "new-order", orderId: 1 })).toEqual({ OR: [{ role: "admin" }, { role: "manager", oneCGroup: "Розничные клиенты" }] });
   });
   it("no manager / «Отдел Продаж» — admins only", async () => {
     db.order.findUnique.mockResolvedValue({ customer: { manager: null } });
