@@ -2048,7 +2048,7 @@ export default function AdminOrderClient({
                               {p.stock > 0 ? `${p.stock} шт.` : "Нет"}
                             </p>
                           )}
-                          <WarehouseStock list={p.stockByWarehouse} className="text-[9px] leading-tight" />
+                          <WarehouseStock list={p.stockByWarehouse} className="mt-1" />
                           <p className="text-[11px] font-bold">{p.price.toLocaleString("ru-RU")} ₽</p>
                         </div>
                       </button>
