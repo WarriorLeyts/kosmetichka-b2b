@@ -31,7 +31,6 @@ export function notFound() {
 export const ROLE_LABELS: Record<string, string> = {
   admin: "Администратор",
   manager: "Менеджер",
-  picker: "Сборщик",
   employee: "Сотрудник (только тесты)",
   hr: "HR (результаты и сотрудники)",
 };
