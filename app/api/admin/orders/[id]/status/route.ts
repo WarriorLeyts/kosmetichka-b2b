@@ -5,6 +5,7 @@ import { sendMail } from "@/lib/mail";
 import { onOrderStatus } from "@/lib/maxmaOrders";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TRANSITIONS as TRANSITIONS } from "@/lib/orderStatus";
 import { notifyOrderStatus } from "@/lib/notify";
+import { kickOrderTo1C } from "@/lib/onecOrders";
 import { applyPickChecks } from "@/lib/applyPickChecks";
 import { AWAITING_CONFIRMATION, confirmRequest, paymentBlocked } from "@/lib/orderConfirm";
 import { lockedByOrderId } from "@/lib/orderLock";
@@ -86,6 +87,8 @@ async function changeStatus(
   // MAXMA: confirm / cancel via the queue (one attempt now; retried by the worker; never fails the request)
   await onOrderStatus(Number(id), toStatus);
   if (order.status !== toStatus) void notifyOrderStatus(Number(id), toStatus);
+  // «Заказ оформлен» → «Заказ покупателя» in 1С right away (ORDERS_TO_1C=odata)
+  if (toStatus === "payment") kickOrderTo1C(Number(id));
 
   // Уведомление покупателю о смене статуса
   const notifyStatuses = ["payment", "cancelled", "assembly", "exported", "consultation"];

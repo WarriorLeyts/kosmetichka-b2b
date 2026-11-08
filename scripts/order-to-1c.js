@@ -3,23 +3,9 @@
 // Prints the problems (if any) and, when 1С already has СА-000209, the difference from it.
 import { PrismaClient } from "@prisma/client";
 import { odataGet } from "./onec-odata.js";
-import { findOrderDoc, orderNumber, prepareOrder } from "./onec-orders.js";
-import { cmlComment } from "./onec-order-comment.js";
+import { findOrderDoc, loadOrder, orderNumber, prepareOrder } from "./onec-orders.js";
 
 const prisma = new PrismaClient();
-
-export async function loadOrder(db, id) {
-  const o = await db.order.findUnique({ where: { id }, include: { customer: true, items: { orderBy: { id: "asc" } } } });
-  if (!o) return null;
-  const guids = new Map((await db.product.findMany({ where: { id: { in: o.items.map((i) => i.productId) } }, select: { id: true, guid: true } })).map((p) => [p.id, p.guid]));
-  return {
-    id: o.id,
-    createdAt: o.createdAt,
-    comment: cmlComment(o),
-    customer: o.customer,
-    items: o.items.map((i) => ({ ...i, guid: guids.get(i.productId) })),
-  };
-}
 
 async function main() {
   const id = Number(process.argv[2]);

@@ -22,4 +22,9 @@ export async function register() {
     const { startCustomersSync } = await import("./lib/customersSync");
     startCustomersSync();
   }
+  // Site orders → «Заказ покупателя» in 1С over OData (ORDERS_TO_1C=odata)
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { startOrdersTo1C } = await import("./lib/onecOrders");
+    startOrdersTo1C();
+  }
 }

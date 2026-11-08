@@ -10,6 +10,7 @@ import { MAXMA_ORDER_WHERE, onOrderStatus } from "@/lib/maxmaOrders";
 import { DATA_ROOT } from "@/lib/dataDir";
 import { notifyOrderStatus } from "@/lib/notify";
 import { orderTier } from "@/lib/orderTier";
+import { ordersViaOData } from "@/lib/onecOrders";
 
 // Auth: any login + SYNC_API_KEY as password (set in .env)
 const COOKIE_NAME = "1C_SESS";
@@ -157,7 +158,9 @@ export async function GET(request: NextRequest) {
         .replace(/"/g, "&quot;");
     }
 
-    const orders = await prisma.order.findMany({
+    // ORDERS_TO_1C=odata: the site creates the orders in 1С itself (lib/onecOrders.ts) — 1С gets none here,
+    // otherwise an order could come twice
+    const orders = ordersViaOData() ? [] : await prisma.order.findMany({
       where: { status: { in: ["approved", "payment"] }, oneCExportedAt: null },
       include: { customer: true, items: true },
       orderBy: { createdAt: "desc" },

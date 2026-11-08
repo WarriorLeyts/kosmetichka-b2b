@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { syncKeyOk } from "@/lib/syncKey";
 import { prisma } from "@/lib/prisma";
+import { ordersViaOData } from "@/lib/onecOrders";
 import { cmlComment, cmlItemDiscounts, cmlItemSum } from "@/lib/commerceml";
 import { orderTier } from "@/lib/orderTier";
 
@@ -33,7 +34,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const orders = await prisma.order.findMany({
+  // ORDERS_TO_1C=odata: the site creates the orders in 1С itself (lib/onecOrders.ts) — nothing to hand out here
+  const orders = ordersViaOData() ? [] : await prisma.order.findMany({
     where: {
       status: "payment",
       oneCExportedAt: null,

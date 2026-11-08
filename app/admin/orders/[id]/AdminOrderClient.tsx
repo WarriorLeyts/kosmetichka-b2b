@@ -66,6 +66,9 @@ type StatusLog = {
 type Order = {
   id: number;
   status: string;
+  /** «Заказ покупателя» in 1С (ORDERS_TO_1C=odata) and why it couldn't go there */
+  oneCNumber?: string | null;
+  oneCError?: string | null;
   total: number;
   promoCode?: string | null;
   discount?: number;
@@ -1061,6 +1064,17 @@ export default function AdminOrderClient({
           </div>
         </div>
       </div>
+
+      {/* 1С: the order couldn't be created there (lib/onecOrders.ts retries by itself) */}
+      {order.oneCError && order.status !== "exported" && (
+        <div className="no-print mb-4 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700 whitespace-pre-line">
+          ⚠️ <b>Заказ не ушёл в 1С</b> (сайт повторит сам):{"\n"}
+          {order.oneCError}
+        </div>
+      )}
+      {order.oneCNumber && (
+        <div className="no-print mb-4 text-xs text-slate-500">В 1С: заказ покупателя {order.oneCNumber}</div>
+      )}
 
       {/* MAXMA: promo code / bonuses not synced */}
       {maxmaStuck && (

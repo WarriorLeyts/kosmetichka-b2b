@@ -2,6 +2,7 @@
 // Same document the 1С integration made: number «СА-000209», unposted, the service fields copied from the
 // latest site order in 1С (СА-…). No database client here: lib/onecOrders.ts claims, retries and acks.
 import { odataCreate, odataGet } from "./onec-odata.js";
+import { cmlComment } from "./onec-order-comment.js";
 
 export const EMPTY = "00000000-0000-0000-0000-000000000000";
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -110,11 +111,25 @@ export async function orderTemplate(env = process.env) {
   return one;
 }
 
-/** The document with this number already in 1С (created before, by us or by the old exchange). */
-export async function findOrderDoc(number, createdAt, env = process.env) {
+/**
+ * The order's document already in 1С (made before — by us or by the old exchange): by its number «СА-000209»,
+ * or — in case 1С numbered it its own way — by the counterparty and the exact date-time of the order.
+ */
+export async function findOrderDoc(number, createdAt, counterpartyRef = null, env = process.env) {
   const year = moscowLocal(createdAt).slice(0, 4);
   const rows = await odataGet(ENTITY, { $select: "Ref_Key,Number,Posted,DeletionMark", $filter: `Number eq ${q(number)} and Date ge datetime'${year}-01-01T00:00:00'` }, env);
-  return rows.find((r) => !r.DeletionMark && String(r.Number).trim() === number) ?? null;
+  const byNumber = rows.find((r) => !r.DeletionMark && String(r.Number).trim() === number);
+  if (byNumber || !isGuid(counterpartyRef)) return byNumber ?? null;
+  const same = await odataGet(ENTITY, { $select: "Ref_Key,Number,Posted,DeletionMark", $filter: `Контрагент_Key eq guid'${counterpartyRef}' and Date eq datetime'${moscowLocal(createdAt)}'` }, env);
+  return same.find((r) => !r.DeletionMark) ?? null;
+}
+
+/** The order as prepareOrder wants it (db — a Prisma client). */
+export async function loadOrder(db, id) {
+  const o = await db.order.findUnique({ where: { id }, include: { customer: true, items: { orderBy: { id: "asc" } } } });
+  if (!o) return null;
+  const guids = new Map((await db.product.findMany({ where: { id: { in: o.items.map((i) => i.productId) } }, select: { id: true, guid: true } })).map((p) => [p.id, p.guid]));
+  return { id: o.id, createdAt: o.createdAt, comment: cmlComment(o), customer: o.customer, items: o.items.map((i) => ({ ...i, guid: guids.get(i.productId) })) };
 }
 
 const digits = (s) => String(s || "").replace(/\D/g, "");
@@ -185,7 +200,7 @@ export async function prepareOrder(order, env = process.env) {
   if (!order.items.length) problems.push("В заказе нет товаров");
   const units = await productUnits(order.items.map((i) => i.guid), env);
   const body = buildOrderBody(order, { template, counterpartyRef, contractRef, units, customerName: c.companyName || c.name, phone: c.phone });
-  return { body, problems };
+  return { body, problems, counterpartyRef };
 }
 
 /** Creates the document (unposted). */
