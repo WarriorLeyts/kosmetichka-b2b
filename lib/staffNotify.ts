@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { ADMIN_ONLY_GROUPS } from "@/lib/staffScope";
+import { ADMIN_ONLY_GROUPS, RETAIL_GROUP, RETAIL_TYPES } from "@/lib/staffScope";
 import { getVapidConfig, sendToSubscriptions, type WebPushPayload } from "@/lib/webPush";
 import { sendPush } from "@/lib/notify";
 
@@ -93,14 +93,17 @@ export async function staffPayload(ev: StaffEvent): Promise<WebPushPayload | nul
 }
 
 /**
- * Who hears about the event: admins, and the manager whose 1С group the customer is in (lib/staffScope.ts).
+ * Who hears about the event: admins, and the manager whose 1С group the customer is in, or for a retail
+ * customer the retail manager (lib/staffScope.ts).
  * Customers without a manager (or of «Раяна» / «Отдел Продаж») — admins only.
  */
 export async function recipientsWhere(ev: StaffEvent): Promise<Prisma.UserWhereInput> {
   const c =
     ev.kind === "customer-request"
-      ? await prisma.customer.findUnique({ where: { id: ev.customerId }, select: { manager: true } })
-      : (await prisma.order.findUnique({ where: { id: ev.orderId }, select: { customer: { select: { manager: true } } } }))?.customer;
+      ? await prisma.customer.findUnique({ where: { id: ev.customerId }, select: { manager: true, priceType: true } })
+      : (await prisma.order.findUnique({ where: { id: ev.orderId }, select: { customer: { select: { manager: true, priceType: true } } } }))?.customer;
+  // retail customers (розница, скидочная карта) — the retail manager's
+  if (c?.priceType && RETAIL_TYPES.includes(c.priceType)) return { OR: [{ role: "admin" }, { role: "manager", oneCGroup: RETAIL_GROUP }] };
   const group = c?.manager?.trim() || null;
   return group && !ADMIN_ONLY_GROUPS.includes(group) ? { OR: [{ role: "admin" }, { role: "manager", oneCGroup: group }] } : { role: "admin" };
 }
