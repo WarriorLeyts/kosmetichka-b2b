@@ -250,6 +250,14 @@ model Order {
   items OrderItem[]
 
   oneCExportedAt    DateTime?
+  /// «Заказ покупателя» created in 1С over OData (lib/onecOrders.ts, ORDERS_TO_1C=odata): its ref and number
+  oneCRef           String?
+  oneCNumber        String?
+  /// why it couldn't go to 1С (shown in the admin); retried at oneCNextTryAt
+  oneCError         String?   @db.Text
+  oneCNextTryAt     DateTime?
+  /// a send in progress (claim); older than 10 min — the sender died, the next try looks the document up first
+  oneCSendingAt     DateTime?
   bitrixDealId      Int?
   customerConfirmed Boolean  @default(false)
   changesSnapshot   Json?
