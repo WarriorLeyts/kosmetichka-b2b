@@ -438,7 +438,7 @@ export default function AdminProductsClient() {
                           <p className={`text-xs font-bold mt-0.5 ${(p.stock ?? 0) > 0 ? "text-green-700" : "text-red-500"}`}>
                             {(p.stock ?? 0) > 0 ? `Остаток: ${p.stock} шт.` : "Нет в наличии"}
                           </p>
-                          <WarehouseStock list={p.stockByWarehouse} className="mt-0.5 text-[10px] leading-tight" />
+                          <WarehouseStock list={p.stockByWarehouse} className="mt-1" />
                           {hasV ? (
                             <p className="text-xs text-green-600 font-semibold mt-0.5">✓ Варианты настроены</p>
                           ) : (

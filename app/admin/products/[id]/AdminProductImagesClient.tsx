@@ -93,7 +93,7 @@ export function AdminProductImagesClient({ product: initialProduct, stockByWareh
       <p className={`-mt-4 mb-6 text-base font-bold ${(product.stock ?? 0) > 0 ? "text-green-700" : "text-red-600"}`}>
         {(product.stock ?? 0) > 0 ? `Остаток в магазине: ${product.stock} шт.` : "Нет в наличии"}
       </p>
-      <WarehouseStock list={stockByWarehouse} className="-mt-5 mb-6" />
+      <WarehouseStock list={stockByWarehouse} className="-mt-4 mb-6" />
 
       <div className="mb-6">
         <h2 className="font-semibold text-gray-700 mb-2">Текущее фото</h2>
