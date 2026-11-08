@@ -160,6 +160,9 @@ export async function GET(
       createdAt: order.createdAt.toISOString(),
       updatedAt: order.updatedAt.toISOString(),
       customerId: order.customerId,
+      // «Заказ покупателя» in 1С (ORDERS_TO_1C=odata): its number, or why it couldn't go there yet (retried by itself)
+      oneCNumber: order.oneCNumber ?? null,
+      oneCError: order.oneCExportedAt ? null : (order.oneCError ?? null),
       customer: {
         id: order.customer.id,
         companyName: order.customer.companyName,

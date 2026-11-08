@@ -52,7 +52,7 @@ export async function sendOrderTo1C(id: number): Promise<Outcome> {
     let doc = await findOrderDoc(number, order.createdAt);
     let outcome: Outcome = "linked";
     if (!doc) {
-      const { body, problems, counterpartyRef } = await prepareOrder(order);
+      const { body, problems, counterpartyRef } = await prepareOrder(order, process.env, { createMissingContract: true });
       if (problems.length) {
         await prisma.order.update({
           where: { id },

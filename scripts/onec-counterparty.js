@@ -2,13 +2,12 @@
 // an existing counterparty is moved to the group's folder; a new customer gets a counterparty there,
 // with a contract «С покупателем», the same as the old 1С integration made for site customers.
 import { odataCreate, odataGet, odataPatch } from "./onec-odata.js";
-import { findCounterparty, isGuid, orderTemplate } from "./onec-orders.js";
+import { createContract, findCounterparty, isGuid, orderTemplate } from "./onec-orders.js";
 
 const CP = "Catalog_Контрагенты";
 const CONTRACT = "Catalog_ДоговорыКонтрагентов";
 // the accounting accounts every buyer has (copied from the template counterparty)
 const ACCOUNTS = ["СчетУчетаРасчетовСПокупателем_Key", "СчетУчетаАвансовПокупателя_Key", "СчетУчетаРасчетовСПоставщиком_Key", "СчетУчетаАвансовПоставщику_Key"];
-export const PRICE_KIND_NAMES = { retail: "Розница", discount: "Скидка", wholesale: "Опт", big_wholesale: "Крупный опт" };
 
 /** 8 digits+ → 8XXXXXXXXXX (what 1С keeps in НомерТелефонаДляПоиска) */
 export function phone8(phone) {
@@ -68,16 +67,6 @@ export function counterpartyBody({ name, phone, parentRef, template = {}, phoneK
 async function hasBuyerContract(ref, orgRef, env) {
   const rows = await odataGet(CONTRACT, { $select: "Ref_Key,ВидДоговора,Организация_Key,DeletionMark", $filter: `Owner eq cast(guid'${ref}', 'Catalog_Контрагенты')` }, env);
   return rows.some((c) => c.ВидДоговора === "СПокупателем" && !c.DeletionMark && (!orgRef || c.Организация_Key === orgRef));
-}
-
-async function createContract(ref, priceType, tpl, env) {
-  const kinds = await odataGet("Catalog_ВидыЦен", { $select: "Ref_Key,Description,DeletionMark" }, env);
-  const want = PRICE_KIND_NAMES[priceType] || "Розница";
-  const kind = kinds.find((k) => !k.DeletionMark && String(k.Description || "").trim() === want);
-  const body = { Description: "Основной договор", Owner: ref, Owner_Type: "StandardODATA.Catalog_Контрагенты", ВидДоговора: "СПокупателем", Организация_Key: tpl.Организация_Key };
-  if (isGuid(tpl.ВалютаДокумента_Key)) body.ВалютаРасчетов_Key = tpl.ВалютаДокумента_Key;
-  if (kind) body.ВидЦен_Key = kind.Ref_Key;
-  return odataCreate(CONTRACT, body, env);
 }
 
 /**
