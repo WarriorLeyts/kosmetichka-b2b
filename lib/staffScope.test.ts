@@ -49,9 +49,12 @@ describe("staffScope", () => {
     expect(db.order.count).toHaveBeenCalledWith({ where: { id: 211, customer: { manager: "Даудова Радима", NOT: { priceType: { in: ["retail", "discount"] } } } } });
     expect(await orderVisible({ all: true }, 211)).toBe(true);
   });
-  it("assignable groups: current 1С groups without «Раяна» / «Отдел Продаж»", async () => {
-    db.oneCCustomer.groupBy.mockResolvedValue([{ manager: "Раяна" }, { manager: "Даудова Радима" }, { manager: "Отдел Продаж" }, { manager: "Ахтаева Инсана" }]);
-    expect(await assignableGroups()).toEqual(["Ахтаева Инсана", "Даудова Радима", "Розничные клиенты"]);
+  it("assignable groups: only the managers' groups fixed by the owner, then «Розничные клиенты»", async () => {
+    const g = await assignableGroups();
+    expect(g).toContain("Даудова Радима");
+    expect(g).not.toContain("Макка");
+    expect(g).not.toContain("Раяна");
+    expect(g.at(-1)).toBe("Розничные клиенты");
   });
 });
 
