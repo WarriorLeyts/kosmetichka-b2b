@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ORDER_STATUS_LABELS } from "@/lib/orderStatus";
 import { ADMIN_MANAGER, requireStaff } from "../_auth";
+import { customerScopeWhere, orderScopeWhere, staffScope } from "@/lib/staffScope";
 
 const ACTIVE_STATUSES = ["pending", "approved", "assembly", "consultation", "payment"];
 
@@ -9,6 +10,10 @@ const ACTIVE_STATUSES = ["pending", "approved", "assembly", "consultation", "pay
 export async function GET() {
   const auth = await requireStaff(ADMIN_MANAGER);
   if (!auth.ok) return auth.response;
+  // a manager — only his 1С group's customers (lib/staffScope.ts)
+  const sc = await staffScope(auth.session);
+  const mine = orderScopeWhere(sc);
+  const myCustomers = customerScopeWhere(sc);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -29,16 +34,17 @@ export async function GET() {
   ] = await Promise.all([
     prisma.order.groupBy({
       by: ["status"],
-      where: { createdAt: { gte: today, lt: tomorrow } },
+      where: { ...mine, createdAt: { gte: today, lt: tomorrow } },
       _count: { id: true },
       _sum: { total: true },
     }),
     prisma.order.groupBy({
       by: ["status"],
-      where: { status: { in: ACTIVE_STATUSES } },
+      where: { ...mine, status: { in: ACTIVE_STATUSES } },
       _count: { id: true },
     }),
     prisma.order.findMany({
+      where: mine,
       orderBy: { createdAt: "desc" },
       take: 10,
       select: {
@@ -52,6 +58,7 @@ export async function GET() {
     }),
     prisma.order.aggregate({
       where: {
+        ...mine,
         createdAt: { gte: today, lt: tomorrow },
         status: { not: "cancelled" },
       },
@@ -59,16 +66,17 @@ export async function GET() {
     }),
     prisma.order.aggregate({
       where: {
+        ...mine,
         createdAt: { gte: week },
         status: { not: "cancelled" },
       },
       _sum: { total: true },
     }),
     prisma.customer.count({
-      where: { createdAt: { gte: today, lt: tomorrow } },
+      where: { ...myCustomers, createdAt: { gte: today, lt: tomorrow } },
     }),
     prisma.customer.count({
-      where: { isApproved: true },
+      where: { ...myCustomers, isApproved: true },
     }),
   ]);
 

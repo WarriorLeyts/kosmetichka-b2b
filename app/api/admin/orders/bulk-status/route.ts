@@ -6,6 +6,7 @@ import { onOrderStatus } from "@/lib/maxmaOrders";
 import { notifyOrderStatus } from "@/lib/notify";
 import { confirmRequest, paymentBlocked } from "@/lib/orderConfirm";
 import { withOrderLock } from "@/lib/orderLock";
+import { orderScopeWhere, staffScope } from "@/lib/staffScope";
 
 export async function POST(request: NextRequest) {
   const user = await requireAdmin();
@@ -21,7 +22,8 @@ export async function POST(request: NextRequest) {
   }
 
   const orders = await prisma.order.findMany({
-    where: { id: { in: orderIds } },
+    // a manager changes only his 1С group's orders
+    where: { id: { in: orderIds }, ...orderScopeWhere(await staffScope(user)) },
     select: { id: true, status: true, confirmRequestedAt: true, customerConfirmed: true },
   });
 

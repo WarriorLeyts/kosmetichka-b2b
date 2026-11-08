@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ADMIN_ONLY, requireStaff } from "../../_auth";
 import { ROLE_LABELS, badId, notFound, parseId } from "../../_shared";
+import { assignableGroups } from "@/lib/staffScope";
 
 // GET /api/team/users/:id — app/admin/users/[id]/page.tsx (admin only, like the page)
 export async function GET(
@@ -22,6 +23,7 @@ export async function GET(
       name: true,
       login: true,
       role: true,
+      oneCGroup: true,
       createdAt: true,
       updatedAt: true,
       _count: { select: { assignedOrders: true } },
@@ -39,6 +41,7 @@ export async function GET(
       login: user.login,
       role: user.role,
       roleLabel: ROLE_LABELS[user.role] ?? user.role,
+      oneCGroup: user.oneCGroup ?? null,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
       assignedOrdersCount: user._count.assignedOrders,
@@ -47,5 +50,6 @@ export async function GET(
       canDelete: !isSelf,
     },
     roleOptions: Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label })),
+    groups: await assignableGroups(),
   });
 }

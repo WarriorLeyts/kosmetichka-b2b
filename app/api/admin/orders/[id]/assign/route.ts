@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
+import { staffSeesOrder } from "@/lib/staffScope";
 
 function getSecret() {
   return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest, { params }: Props) {
 
   const { id } = await params;
   const orderId = Number(id);
+  if (!(await staffSeesOrder(user, orderId))) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
   const body = await request.json();
   const pickerId: number | null = body.pickerId ?? null;

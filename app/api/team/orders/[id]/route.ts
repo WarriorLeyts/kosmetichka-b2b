@@ -13,6 +13,7 @@ import {
 import { maxmaActionLabel, maxmaStuckByOrder } from "@/lib/maxmaQueue";
 import { ADMIN_MANAGER, requireStaff } from "../../_auth";
 import { badId, notFound, parseId, productImageUrl } from "../../_shared";
+import { staffSeesOrder } from "@/lib/staffScope";
 
 // GET /api/team/orders/:id — everything app/admin/orders/[id]/page.tsx passes to AdminOrderClient
 // (customer chat is NOT included: use GET /api/admin/orders/:id/customer-messages)
@@ -26,6 +27,8 @@ export async function GET(
   const { id } = await params;
   const orderId = parseId(id);
   if (!orderId) return badId();
+  // a manager opens only his 1С group's orders
+  if (!(await staffSeesOrder(auth.session, orderId))) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
   const [order, pickers] = await Promise.all([
     prisma.order.findUnique({

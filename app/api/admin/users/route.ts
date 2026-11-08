@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { requireAdminRole } from "@/lib/auth";
+import { assignableGroups } from "@/lib/staffScope";
 
 const VALID_ROLES = ["manager", "picker", "admin", "employee", "hr"];
 
@@ -31,6 +32,12 @@ export async function POST(request: Request) {
     );
   }
   const safeRole = VALID_ROLES.includes(role) ? role : "manager";
+  // a manager's 1С group (only a current one, not «Раяна» / «Отдел Продаж»); "" / null — none
+  const groupGiven = body?.oneCGroup !== undefined;
+  const oneCGroup = typeof body?.oneCGroup === "string" && body.oneCGroup.trim() ? body.oneCGroup.trim() : null;
+  if (oneCGroup && !(await assignableGroups()).includes(oneCGroup)) {
+    return NextResponse.json({ error: "Такой группы нет в 1С" }, { status: 400 });
+  }
 
   const exists = await prisma.user.findUnique({
     where: { login },
@@ -51,6 +58,7 @@ export async function POST(request: Request) {
       login,
       password: hashedPassword,
       role: safeRole,
+      oneCGroup: safeRole === "manager" ? oneCGroup : null,
     },
   });
 

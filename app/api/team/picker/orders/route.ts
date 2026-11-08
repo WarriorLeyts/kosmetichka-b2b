@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseCheckStatuses } from "@/lib/checkStatus";
 import { ANY_STAFF, requireStaff } from "../../_auth";
+import { orderScopeWhere, staffScope } from "@/lib/staffScope";
 
 // GET /api/team/picker/orders — same list as app/picker/page.tsx
 // (all orders in "assembly"; mine first, then the rest, oldest first inside each group)
@@ -10,8 +11,9 @@ export async function GET() {
   if (!auth.ok) return auth.response;
   const currentUserId = auth.session.id;
 
+  const mine = orderScopeWhere(await staffScope(auth.session));
   const orders = await prisma.order.findMany({
-    where: { status: "assembly" },
+    where: { ...mine, status: "assembly" },
     select: {
       id: true,
       status: true,

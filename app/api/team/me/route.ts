@@ -10,7 +10,7 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({
     where: { id: auth.session.id },
-    select: { id: true, name: true, login: true, role: true, createdAt: true },
+    select: { id: true, name: true, login: true, role: true, oneCGroup: true, createdAt: true },
   });
   // Token is still valid but the account was deleted
   if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
@@ -22,6 +22,8 @@ export async function GET() {
     role: user.role,
     roleLabel: ROLE_LABELS[user.role] ?? user.role,
     tokenRole: auth.session.role,
+    // a manager: his 1С group — he sees only its customers and their orders
+    oneCGroup: user.oneCGroup ?? null,
     createdAt: user.createdAt.toISOString(),
   });
 }

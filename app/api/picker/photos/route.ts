@@ -4,6 +4,7 @@ import { writeFile, mkdir } from "fs/promises";
 import { randomBytes } from "crypto";
 import path from "path";
 import { denyIfNotAllowed, getPickerUser, parseId } from "../_access";
+import { staffSeesOrder } from "@/lib/staffScope";
 
 const MAX_SIZE = 15 * 1024 * 1024; // 15 MB
 
@@ -50,13 +51,14 @@ export async function POST(request: Request) {
 
   const orderItem = await prisma.orderItem.findUnique({
     where: { id: orderItemId },
-    select: { order: { select: { pickerId: true } } },
+    select: { orderId: true, order: { select: { pickerId: true } } },
   });
   if (!orderItem) {
     return NextResponse.json({ error: "Позиция не найдена" }, { status: 404 });
   }
   const denied = denyIfNotAllowed(user, orderItem.order);
   if (denied) return denied;
+  if (!(await staffSeesOrder(user, orderItem.orderId))) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
   const buffer = Buffer.from(await file.arrayBuffer());
 

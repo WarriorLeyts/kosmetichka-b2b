@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { denyIfNotAllowed, getPickerUser, parseId, type PickerUser } from "../../_access";
+import { staffSeesOrder } from "@/lib/staffScope";
 
 /** Validates the order id and the caller's access to the order. */
 async function checkOrder(
@@ -20,6 +21,7 @@ async function checkOrder(
   }
   const denied = denyIfNotAllowed(user, order);
   if (denied) return { response: denied };
+  if (!(await staffSeesOrder(user, orderId))) return { response: NextResponse.json({ error: "Заказ не найден" }, { status: 404 }) };
   return { orderId };
 }
 
