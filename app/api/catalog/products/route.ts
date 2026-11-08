@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { productSearchWhere } from "@/lib/productSearch";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { guestStock, withFlatPrices } from "@/lib/utils";
+import { customerStock, guestStock, isWholesaleType, WHOLESALE_MIN_STOCK, withFlatPrices } from "@/lib/utils";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { verifyToken } from "@/lib/auth";
 import { createHash } from "crypto";
@@ -57,15 +57,18 @@ async function priceIndex(): Promise<PriceIndex> {
  * the in-stock part is paged first, then the rest.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function pageInStockFirst(where: any, orderBy: any[], page: number, limit: number, include: any, omit: any) {
+async function pageInStockFirst(where: any, orderBy: any[], page: number, limit: number, include: any, omit: any, minStock = 0) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const find = (w: any, skip: number, take: number) => (take > 0 ? prisma.product.findMany({ where: w, skip, take, include, omit, orderBy }) : Promise.resolve([]));
   if (where.stock) {
     const [products, total] = await Promise.all([find(where, (page - 1) * limit, limit), prisma.product.count({ where })]);
     return { products, total };
   }
-  const inWhere = { AND: [where, { stock: { gt: 0 } }] };
-  const outWhere = { AND: [where, { OR: [{ stock: { lte: 0 } }, { stock: null }] }] };
+  // wholesalers: fewer than 12 in the shops counts as out of stock (WHOLESALE_MIN_STOCK)
+  const inStock = minStock > 0 ? { stock: { gte: minStock } } : { stock: { gt: 0 } };
+  const outStock = minStock > 0 ? { stock: { lt: minStock } } : { stock: { lte: 0 } };
+  const inWhere = { AND: [where, inStock] };
+  const outWhere = { AND: [where, { OR: [outStock, { stock: null }] }] };
   const [inCount, outCount] = await Promise.all([prisma.product.count({ where: inWhere }), prisma.product.count({ where: outWhere })]);
   const offset = (page - 1) * limit;
   const first = offset < inCount ? await find(inWhere, offset, limit) : [];
@@ -84,6 +87,11 @@ export async function GET(request: Request) {
   const staffToken = payload?.id ? null : cookieStore.get("admin_token")?.value;
   const staff = staffToken ? await verifyToken(staffToken) : null;
   const isAuthenticated = Boolean(payload?.id) || ["admin", "manager", "picker"].includes(String(staff?.role ?? ""));
+  // a wholesale customer is not sold what the shops have fewer than 12 of: for him it is out of stock
+  const priceType = payload?.id
+    ? (await prisma.customer.findUnique({ where: { id: Number(payload.id) }, select: { priceType: true } }))?.priceType ?? null
+    : null;
+  const minStock = isWholesaleType(priceType) ? WHOLESALE_MIN_STOCK : 0;
 
   // ?page=abc / 0 / -5 → page 1 (it was a 500 from the database)
   const pageRaw = Math.floor(Number(searchParams.get("page") || 1));
@@ -121,7 +129,7 @@ export async function GET(request: Request) {
   const where: any = {
     ...(categoryGuids.length > 0 ? { categoryGuid: { in: categoryGuids } } : {}),
     ...(brandGuids.length > 0 ? { brandGuid: { in: brandGuids } } : {}),
-    ...(onlyStock ? { stock: { gt: 0 } } : {}),
+    ...(onlyStock ? { stock: minStock > 0 ? { gte: minStock } : { gt: 0 } } : {}),
     ...(quick.includes("new") ? { createdAt: { gte: newSince } } : {}),
     ...(quick.includes("gift")
       ? { name: { contains: "Подарок", mode: "insensitive" } }
@@ -148,7 +156,8 @@ export async function GET(request: Request) {
 
   const applyPrices = (product: any) => {
     const flat = withFlatPrices(product);
-    return isAuthenticated ? flat : maskGuestPrices(flat);
+    if (!isAuthenticated) return maskGuestPrices(flat);
+    return minStock > 0 ? { ...flat, stock: customerStock(flat.stock, priceType) } : flat;
   };
 
   // ?ids=1,2,3 (the cart, up to 120): these products as they are now, in one request instead of one
@@ -181,7 +190,7 @@ export async function GET(request: Request) {
       : [{ salesCount: "desc" as const }, { updatedAt: "desc" as const }];
 
   if (!needsPriceJoin) {
-    const { products, total } = await pageInStockFirst(where, dbOrder, page, limit, include, omit);
+    const { products, total } = await pageInStockFirst(where, dbOrder, page, limit, include, omit, minStock);
 
     return NextResponse.json({
       nameAnyApplied: nameAny.length > 0,
@@ -224,7 +233,7 @@ export async function GET(request: Request) {
   const needsPriceSort = sort === "price_asc" || sort === "price_desc";
 
   if (!needsPriceSort) {
-    const { products, total } = await pageInStockFirst(where, dbOrder, page, limit, include, omit);
+    const { products, total } = await pageInStockFirst(where, dbOrder, page, limit, include, omit, minStock);
 
     return NextResponse.json({
       nameAnyApplied: nameAny.length > 0,
@@ -244,7 +253,7 @@ export async function GET(request: Request) {
   // The sorted id list for these filters is cached for a minute: scrolling pages 2, 3, … and
   // other customers with the same filters reuse it instead of loading ~12k rows each time
   // (under load the price sort used to take seconds).
-  const sortKey = createHash("sha1").update(JSON.stringify([where, sort, prices.at, isAuthenticated])).digest("hex");
+  const sortKey = createHash("sha1").update(JSON.stringify([where, sort, prices.at, isAuthenticated, minStock])).digest("hex");
   let sortedIds = sortedMemo.get(sortKey);
   if (!sortedIds || Date.now() - sortedIds.at > 60_000) {
     const matched = await prisma.product.findMany({
@@ -255,8 +264,9 @@ export async function GET(request: Request) {
     const priceByGuid = priceList;
     // out of stock at the very end; products without a price (none or 0 ₽) after the priced ones
     matched.sort((a, b) => {
-      const sa = (a.stock ?? 0) > 0 ? 1 : 0;
-      const sb = (b.stock ?? 0) > 0 ? 1 : 0;
+      const inStock = (v: number | null) => (minStock > 0 ? (v ?? 0) >= minStock : (v ?? 0) > 0);
+      const sa = inStock(a.stock) ? 1 : 0;
+      const sb = inStock(b.stock) ? 1 : 0;
       if (sa !== sb) return sb - sa;
       const pa = priceByGuid.get(a.guid) ?? 0;
       const pb = priceByGuid.get(b.guid) ?? 0;
