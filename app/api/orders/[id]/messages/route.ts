@@ -37,6 +37,16 @@ export async function GET(
     select: { id: true, text: true, userId: true, isFromPicker: true, createdAt: true },
   });
 
+  // the customer has seen the chat (and the order) — on every device: the manager messages up to the
+  // newest are read, and so are the notifications that lead to this order
+  const lastManager = [...msgs].reverse().find((m) => m.userId !== null || m.isFromPicker)?.createdAt ?? null;
+  if (lastManager && (!order.customerChatSeenAt || order.customerChatSeenAt < lastManager)) {
+    await prisma.order.update({ where: { id: orderId }, data: { customerChatSeenAt: lastManager } }).catch(() => {});
+  }
+  await prisma.notification
+    .updateMany({ where: { customerId: customer.id, readAt: null, link: `/order/${orderId}` }, data: { readAt: new Date() } })
+    .catch(() => {});
+
   return NextResponse.json({
     messages: msgs.map((m) => ({
       id: m.id,

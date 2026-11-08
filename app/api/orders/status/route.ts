@@ -24,6 +24,7 @@ export async function GET() {
           status: true,
           confirmRequestedAt: true,
           customerConfirmed: true,
+          customerChatSeenAt: true,
           messages: {
             where: { isFromPicker: true, source: "customer" },
             orderBy: { createdAt: "desc" },
@@ -51,7 +52,8 @@ export async function GET() {
 
     // Orders that have at least one manager message — include latest timestamp
     const managerMessages = orders
-      .filter((o) => o.messages.length > 0)
+      // read on any of the customer's devices — not new any more
+      .filter((o) => o.messages.length > 0 && !(o.customerChatSeenAt && o.customerChatSeenAt >= o.messages[0].createdAt))
       .map((o) => ({
         orderId: o.id,
         latestAt: o.messages[0].createdAt.toISOString(),
