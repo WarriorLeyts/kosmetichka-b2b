@@ -4,6 +4,7 @@ import { jwtVerify } from "jose";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { productSearchWhere } from "@/lib/productSearch";
+import { warehouseStockByProductId } from "@/lib/warehouseStock";
 
 function getSecret() {
   return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
@@ -73,12 +74,15 @@ export async function GET(request: NextRequest) {
     },
   });
 
+  // staff only (admin / manager / picker): stock per 1С warehouse
+  const byWarehouse = await warehouseStockByProductId(products.map((p) => p.id));
   const result = products.map((p) => ({
     id: p.id,
     name: p.name,
     barcode: p.barcode ?? null,
     article: p.article ?? null,
     stock: p.stock ?? null,
+    stockByWarehouse: byWarehouse.get(p.id) ?? [],
     price: (
       p.prices.find((pr) => pr.priceType === "wholesale") ??
       p.prices.find((pr) => pr.priceType === "big_wholesale") ??

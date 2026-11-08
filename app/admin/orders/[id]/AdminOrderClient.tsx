@@ -118,6 +118,7 @@ type EditItem = {
   variantImageUrl?: string | null;
   imagePath?: string | null; // catalog photo for items added while editing
   stock?: number | null; // stock of items added while editing
+  stockByWarehouse?: WarehouseQty[];
 };
 
 type CatalogProductVariant = {
@@ -133,6 +134,7 @@ type CatalogProduct = {
   barcode: string | null;
   article: string | null;
   stock: number | null;
+  stockByWarehouse?: WarehouseQty[];
   price: number;
   prices: { priceType: string; price: number }[];
   imagePath: string | null;
@@ -643,6 +645,7 @@ export default function AdminOrderClient({
           variantImageUrl: variant?.imageUrl ?? null,
           imagePath: p.imagePath,
           stock: p.stock,
+          stockByWarehouse: p.stockByWarehouse,
         },
       ];
     });
@@ -1277,6 +1280,7 @@ export default function AdminOrderClient({
               setItems={setEditItems}
               productImages={images}
               stock={productStock}
+              stockByWarehouse={productStockByWarehouse}
               before={order.items.reduce((sum, i) => sum + i.total, 0)}
               saving={saving}
               error={editError}
@@ -2044,6 +2048,7 @@ export default function AdminOrderClient({
                               {p.stock > 0 ? `${p.stock} шт.` : "Нет"}
                             </p>
                           )}
+                          <WarehouseStock list={p.stockByWarehouse} className="text-[9px] leading-tight" />
                           <p className="text-[11px] font-bold">{p.price.toLocaleString("ru-RU")} ₽</p>
                         </div>
                       </button>
@@ -2100,13 +2105,14 @@ const NUM_INPUT =
  * Only local state here; saving is the caller's saveEdit (PUT /api/admin/orders/:id/items).
  */
 function OrderItemsEditor({
-  items, setItems, productImages, stock, before, saving, error,
+  items, setItems, productImages, stock, stockByWarehouse, before, saving, error,
   onAdd, onVariant, onCancel, onSave,
 }: {
   items: EditItem[];
   setItems: React.Dispatch<React.SetStateAction<EditItem[]>>;
   productImages: Record<number, string | null>;
   stock: Record<number, number | null>;
+  stockByWarehouse: Record<number, WarehouseQty[]>;
   before: number;
   saving: boolean;
   error: string;
@@ -2190,6 +2196,7 @@ function OrderItemsEditor({
                       {item.stock !== undefined || item.productId in stock ? (
                         <StockLine stock={item.stock !== undefined ? item.stock : stock[item.productId]} need={item.quantity} />
                       ) : null}
+                      <WarehouseStock list={item.stockByWarehouse ?? stockByWarehouse[item.productId]} className="mt-0.5" />
                     </div>
                     <button
                       onClick={() => patch(idx, { removed: true })}
