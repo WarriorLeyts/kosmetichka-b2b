@@ -3,7 +3,7 @@ import { XMLParser } from "fast-xml-parser";
 import nodemailer from "nodemailer";
 import fs from "fs";
 import nodePath from "path";
-import { hideMissing, offerTotalStock, offerWarehouseStock, toKopecks, warehouseNames } from "./onec-helpers.js";
+import { hideMissing, offerTotalStock, offerWarehouseStock, toKopecks, warehouseNames, wholesaleAvailable } from "./onec-helpers.js";
 // 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
 const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
 
@@ -270,7 +270,7 @@ async function main() {
 
     const product = await prisma.product.findUnique({
       where: { guid: productGuid },
-      select: { id: true, stock: true, prices: { select: { priceType: true, price: true } } },
+      select: { id: true, stock: true, wholesaleStock: true, prices: { select: { priceType: true, price: true } } },
     });
 
     if (!product) continue;
@@ -294,8 +294,10 @@ async function main() {
 
     const split = splits[offerIndex];
     const newStock = offerTotalStock(offer, split);
-    if (product.stock !== newStock) {
-      await prisma.product.update({ where: { guid: productGuid }, data: { stock: newStock } });
+    // wholesalers: the shop keeps 12, the warehouse gives everything (lib/utils.ts customerStock)
+    const newWholesale = wholesaleAvailable(newStock, split);
+    if (product.stock !== newStock || product.wholesaleStock !== newWholesale) {
+      await prisma.product.update({ where: { guid: productGuid }, data: { stock: newStock, wholesaleStock: newWholesale } });
       changedStock++;
     }
     // the package splits the stock, but this offer lists no warehouse → it is nowhere: clear its old split

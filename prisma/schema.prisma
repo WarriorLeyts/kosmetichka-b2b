@@ -55,6 +55,10 @@ model Product {
   description String? @db.Text
 
   stock       Float?
+
+  /// what a wholesaler may order: the shop («1. Мега Косметичка») minus the 12 it keeps + the warehouse (import-prices.js)
+
+  wholesaleStock Int @default(0)
   minOrderQty Int    @default(1)
   /// Pieces sold in the last 90 days (orders except cancelled), recounted hourly — «ходовые» go first in the catalogue
   salesCount  Int    @default(0)
@@ -81,6 +85,7 @@ model Product {
   @@index([updatedAt(sort: Desc)])
   @@index([salesCount(sort: Desc)])
   @@index([createdAt(sort: Desc)])
+  @@index([wholesaleStock])
   @@index([brandGuid])
   @@index([name])
   @@index([stock])

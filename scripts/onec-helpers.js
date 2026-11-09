@@ -30,7 +30,7 @@ export async function hideMissing(db, presentGuids, label) {
     return 0;
   }
   for (let i = 0; i < missing.length; i += 1000) {
-    await db.product.updateMany({ where: { guid: { in: missing.slice(i, i + 1000) } }, data: { stock: 0 } });
+    await db.product.updateMany({ where: { guid: { in: missing.slice(i, i + 1000) } }, data: { stock: 0, wholesaleStock: 0 } });
     await db.productWarehouseStock?.deleteMany({ where: { productGuid: { in: missing.slice(i, i + 1000) } } });
   }
   console.log(`[1c] ${label}: нет в полной выгрузке, остаток обнулён: ${missing.length}`);
@@ -94,6 +94,26 @@ export function offerWarehouseStock(offer) {
  * Total stock of an offer (what customers see): <Количество> as before; when 1C sends only the split,
  * the sum over the warehouses.
  */
+/** «1. Мега Косметичка» — the shop: at least 12 of each product stay on its shelves for wholesalers */
+export const SHOP_WAREHOUSE_GUID = process.env.ONEC_SHOP_WAREHOUSE || "bd887c46-1148-11f1-80cf-10ffe0cbb38c";
+export const WHOLESALE_SHOP_KEEP = 12;
+
+/**
+ * What a wholesaler may order (owner, 2026-11-09): the shop's stock minus the 12 it keeps, plus everything
+ * on the other warehouses («0. Склад»). Without the split the whole stock counts as the shop's.
+ */
+export function wholesaleAvailable(total, split, shopGuid = SHOP_WAREHOUSE_GUID) {
+  const free = (q) => Math.max(0, Math.floor(q) - WHOLESALE_SHOP_KEEP);
+  if (!split) return free(Number(total) || 0);
+  let shop = 0;
+  let other = 0;
+  for (const w of split) {
+    if (w.guid === shopGuid) shop += Math.max(0, w.qty);
+    else other += Math.max(0, w.qty);
+  }
+  return free(shop) + Math.floor(other);
+}
+
 export function offerTotalStock(offer, split) {
   const q = offer?.Количество;
   if (q !== undefined && q !== null && q !== "" && typeof q !== "object") return num(q);

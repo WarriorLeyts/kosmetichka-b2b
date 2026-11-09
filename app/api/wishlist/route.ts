@@ -31,6 +31,7 @@ export async function GET() {
             barcode: true,
             article: true,
             stock: true,
+            wholesaleStock: true,
             images: { select: { path: true }, take: 1 },
             prices: { select: { priceType: true, price: true } },
             brand: { select: { name: true } },
@@ -45,7 +46,7 @@ export async function GET() {
     productIds: items.map((i) => i.productId),
     products: items.map((i) => ({
       ...i.product,
-      stock: customerStock(i.product.stock, me?.priceType),
+      stock: customerStock(i.product.stock, me?.priceType, i.product.wholesaleStock),
       notified: i.notified,
       wishlistItemId: i.id,
     })),

@@ -44,6 +44,7 @@ const product = (id: number, prices: Record<string, number>) => ({
   barcode: null,
   minOrderQty: 1,
   stock: 500,
+  wholesaleStock: 500,
   prices: Object.entries(prices).map(([priceType, price]) => ({ priceType, price })),
 });
 const blush = product(1, { retail: 1120, discount: 1005, wholesale: 727, big_wholesale: 671 });
