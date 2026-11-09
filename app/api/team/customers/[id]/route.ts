@@ -37,6 +37,7 @@ export async function GET(
       manager: true,
       priceType: true,
       wholesaleAccess: true,
+      showRetailPrice: true,
       roleRequest: true,
       roleRequestStatus: true,
       roleRequestedAt: true,

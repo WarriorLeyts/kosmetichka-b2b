@@ -18,6 +18,7 @@ const SELECT = {
   priceType: true,
   pushPromo: true,
   wholesaleAccess: true,
+  showRetailPrice: true,
   roleRequest: true,
   roleRequestStatus: true,
   manager: true,

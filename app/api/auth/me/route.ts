@@ -28,6 +28,7 @@ export async function GET() {
       // wholesale accounts without the shop's address give it at checkout
       address: true,
       wholesaleAccess: true,
+      showRetailPrice: true,
       roleRequest: true,
       roleRequestStatus: true,
       loyaltyCard: true,
