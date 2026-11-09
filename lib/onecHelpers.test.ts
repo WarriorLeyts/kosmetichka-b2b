@@ -30,7 +30,7 @@ describe("products deleted in 1C (P2-09)", () => {
   it("a full upload hides (stock 0) the in-stock products it doesn't list", async () => {
     const d = db(["a", "b", "c", "d"]);
     expect(await hideMissing(d, ["a", "b", "c"], "test")).toBe(1);
-    expect(d.product.updateMany).toHaveBeenCalledWith({ where: { guid: { in: ["d"] } }, data: { stock: 0 } });
+    expect(d.product.updateMany).toHaveBeenCalledWith({ where: { guid: { in: ["d"] } }, data: { stock: 0, wholesaleStock: 0 } });
   });
 
   it("a «full» file with under half the products is taken as broken: nothing is hidden", async () => {

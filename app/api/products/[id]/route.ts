@@ -43,11 +43,11 @@ export async function GET(
   const signedIn = Boolean(customer?.id) || ["admin", "manager", "picker"].includes(String(staff?.role ?? ""));
   const flat = withFlatPrices(product);
   if (signedIn) {
-    // a wholesale customer: fewer than 12 in the shops = out of stock for him
+    // a wholesale customer sees what he may order: the shop minus its 12 + the warehouse
     const priceType = customer?.id
       ? (await prisma.customer.findUnique({ where: { id: Number(customer.id) }, select: { priceType: true } }))?.priceType ?? null
       : null;
-    return NextResponse.json(isWholesaleType(priceType) ? { ...flat, stock: customerStock(flat.stock, priceType) } : flat);
+    return NextResponse.json(isWholesaleType(priceType) ? { ...flat, stock: customerStock(flat.stock, priceType, product.wholesaleStock) } : flat);
   }
   const { wholesalePrice: _w, bigWholesalePrice: _b, prices: _p, ...guest } = flat; // eslint-disable-line @typescript-eslint/no-unused-vars
   return NextResponse.json({ ...guest, prices: [], stock: guestStock(flat.stock) });

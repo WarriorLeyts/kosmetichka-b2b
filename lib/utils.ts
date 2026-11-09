@@ -51,8 +51,10 @@ export function getStockLabel(stock: number | null | undefined) {
  * 10 for «мало» never limits a guest's cart below the real stock (which is at most 10 there).
  */
 /**
- * Wholesale customers are not sold a product the shops have fewer than this many of:
- * for them it is «Нет в наличии» (owner's rule). Staff and retail see the real stock.
+ * Wholesale customers (owner's rule, 2026-11-09): the shop «1. Мега Косметичка» keeps at least this many
+ * of each product on its shelves; the warehouse «0. Склад» gives everything. What a wholesaler may order
+ * is Product.wholesaleStock = (shop − 12, not below 0) + warehouse, counted by the 1С import
+ * (scripts/onec-helpers.js wholesaleAvailable). Staff and retail see the real stock.
  */
 export const WHOLESALE_MIN_STOCK = 12;
 
@@ -60,10 +62,10 @@ export function isWholesaleType(priceType: string | null | undefined): boolean {
   return priceType === "wholesale" || priceType === "big_wholesale";
 }
 
-/** The stock a customer of this price type sees: 0 for a wholesaler when the shops have fewer than 12. */
-export function customerStock<T extends number | null | undefined>(stock: T, priceType: string | null | undefined): T | 0 {
+/** The stock a customer of this price type sees: a wholesaler — what he may order (Product.wholesaleStock). */
+export function customerStock(stock: number | null | undefined, priceType: string | null | undefined, wholesaleStock: number | null | undefined): number | null | undefined {
   if (!isWholesaleType(priceType)) return stock;
-  return Number(stock ?? 0) >= WHOLESALE_MIN_STOCK ? stock : 0;
+  return Math.max(0, Number(wholesaleStock ?? 0));
 }
 
 export function guestStock(stock: number | null | undefined): number {
