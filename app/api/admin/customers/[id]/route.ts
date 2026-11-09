@@ -49,6 +49,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     data.wholesaleAccess = maxAccess(isWholesaleRole(raw) ? raw : null, priceType);
   }
   if (body.isActive !== undefined) data.isActive = !!body.isActive;
+  // the retail price in the app's product card for a wholesale customer (admin only, as this whole route)
+  if (body.showRetailPrice !== undefined) data.showRetailPrice = !!body.showRetailPrice;
   if (body.isApproved !== undefined) data.isApproved = !!body.isApproved;
 
   const password = typeof body.password === "string" ? body.password.trim() : "";
