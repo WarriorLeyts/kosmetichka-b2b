@@ -28,6 +28,11 @@ export function orderNumber(id) {
   return "СА-" + String(id).padStart(6, "0");
 }
 
+/** «СК-000209» — the second document of a wholesale order: its part from «0. Склад» (lib/orderWarehouses.ts). */
+export function stockOrderNumber(id) {
+  return "СК-" + String(id).padStart(6, "0");
+}
+
 /** Moscow wall-clock time as 1С wants it: 2026-11-08T15:14:11 */
 export function moscowLocal(d) {
   const p = Object.fromEntries(
@@ -43,14 +48,16 @@ const round2 = (n) => Math.round(n * 100) / 100;
 /**
  * The document body. Pure: everything 1С-side is passed in.
  * order: { id, createdAt, comment (already with promo / bonuses), items: [{ guid, quantity, price, total, discount, bonusDiscount }] }
- * ctx: { template, counterpartyRef, contractRef, units: Map(guid → unit ref), customerName, phone }
+ * ctx: { template, counterpartyRef, contractRef, units: Map(guid → unit ref), customerName, phone,
+ *        number? (default СА-…), warehouse? (1С structural unit for the reserve; default — the template's) }
  */
 export function buildOrderBody(order, ctx) {
   const tpl = ctx.template || {};
   const body = {};
   for (const k of HEADER_COPY) if (tpl[k] !== undefined && tpl[k] !== null && tpl[k] !== "") body[k] = tpl[k];
   body.ВидОперации = "ЗаказНаПродажу";
-  body.Number = orderNumber(order.id);
+  body.Number = ctx.number || orderNumber(order.id);
+  if (ctx.warehouse) body.СтруктурнаяЕдиницаРезерв_Key = ctx.warehouse;
   body.Date = moscowLocal(order.createdAt);
   body.Контрагент_Key = ctx.counterpartyRef;
   body.Договор_Key = ctx.contractRef;
@@ -218,8 +225,10 @@ export async function prepareOrder(order, env = process.env, { createMissingCont
   for (const it of order.items) if (!isGuid(it.guid)) problems.push(`Товар «${it.productName}» без кода 1С`);
   if (!order.items.length) problems.push("В заказе нет товаров");
   const units = await productUnits(order.items.map((i) => i.guid), env);
-  const body = buildOrderBody(order, { template, counterpartyRef, contractRef, units, customerName: c.companyName || c.name, phone: c.phone });
-  return { body, problems, counterpartyRef };
+  const ctx = { template, counterpartyRef, contractRef, units, customerName: c.companyName || c.name, phone: c.phone };
+  const body = buildOrderBody(order, ctx);
+  // ctx: to build more documents of the same order (wholesale: the part from the warehouse)
+  return { body, problems, counterpartyRef, ctx };
 }
 
 /** Creates the document (unposted). */

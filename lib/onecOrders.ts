@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { MAXMA_ORDER_WHERE, onOrderStatus } from "@/lib/maxmaOrders";
 import { notifyOrderStatus } from "@/lib/notify";
-import { createOrderDoc, findOrderDoc, loadOrder, orderNumber, prepareOrder } from "../scripts/onec-orders.js";
+import { buildOrderBody, createOrderDoc, findOrderDoc, loadOrder, orderNumber, prepareOrder, stockOrderNumber } from "../scripts/onec-orders.js";
+import { SHOP_WAREHOUSE, STOCK_WAREHOUSE, orderSplits, splitsWarehouses } from "@/lib/orderWarehouses";
 
 /**
  * Site orders → «Заказ покупателя» in 1С over OData, right when the order becomes «Заказ оформлен» (payment).
@@ -47,6 +48,8 @@ export async function sendOrderTo1C(id: number): Promise<Outcome> {
   try {
     const order = await loadOrder(prisma, id);
     if (!order) return "skipped";
+    // wholesale: two documents — the shop's part and the warehouse's part (lib/orderWarehouses.ts)
+    if (splitsWarehouses(order.customer?.priceType)) return await sendSplitOrder(id, order);
     const number = orderNumber(id);
     // already in 1С (an earlier try whose answer was lost, or the old exchange) — just link it
     let doc = await findOrderDoc(number, order.createdAt);
@@ -91,6 +94,61 @@ export async function sendOrderTo1C(id: number): Promise<Outcome> {
       .catch(() => {});
     return "error";
   }
+}
+
+type LoadedOrder = NonNullable<Awaited<ReturnType<typeof loadOrder>>>;
+type Line = LoadedOrder["items"][number];
+
+/** A part of a line: q of its quantity, money in proportion */
+function partOf(it: Line, q: number): Line {
+  const f = it.quantity > 0 ? q / it.quantity : 0;
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  return { ...it, quantity: q, total: r2((Number(it.total) || 0) * f), discount: r2((Number(it.discount) || 0) * f), bonusDiscount: r2((Number(it.bonusDiscount) || 0) * f) };
+}
+
+/**
+ * A wholesale order → «Заказ покупателя» СА-… from «1. Мега Косметичка» and СК-… from «0. Склад» (each only
+ * if it has lines). Each document is looked up by its number first, so a retry never makes a second copy.
+ */
+async function sendSplitOrder(id: number, order: LoadedOrder): Promise<Outcome> {
+  const { problems, ctx } = await prepareOrder(order, process.env, { createMissingContract: true });
+  if (problems.length) {
+    await prisma.order.update({
+      where: { id },
+      data: { oneCError: problems.join("\n"), oneCNextTryAt: new Date(Date.now() + RETRY_MS), oneCSendingAt: null },
+    });
+    console.warn(`[1c-orders] №${id} не отправлен: ${problems.join("; ")}`);
+    return "problem";
+  }
+  const splits = await orderSplits(order.items);
+  const lines = (which: "shop" | "stock") =>
+    order.items.flatMap((it: Line) => {
+      const q = splits.get(it.id)?.[which] ?? (which === "shop" ? it.quantity : 0);
+      return q > 0 ? [partOf(it, q)] : [];
+    });
+  const parts = [
+    { lines: lines("shop"), number: orderNumber(id), warehouse: SHOP_WAREHOUSE, field: "shop" as const },
+    { lines: lines("stock"), number: stockOrderNumber(id), warehouse: STOCK_WAREHOUSE, field: "stock" as const },
+  ].filter((p) => p.lines.length);
+  let created = false;
+  for (const p of parts) {
+    // by the number only: both documents have the same customer and date
+    let doc = await findOrderDoc(p.number, order.createdAt);
+    if (!doc) {
+      const comment = p.field === "stock" ? `Со склада. ${order.comment || ""}`.trim() : order.comment;
+      doc = await createOrderDoc(buildOrderBody({ ...order, comment, items: p.lines }, { ...ctx, number: p.number, warehouse: p.warehouse }));
+      created = true;
+    }
+    const num = String(doc.Number || p.number).trim();
+    await prisma.order.update({
+      where: { id },
+      data: p.field === "shop" ? { oneCRef: doc.Ref_Key, oneCNumber: num } : { oneCStockRef: doc.Ref_Key, oneCStockNumber: num },
+    });
+    console.log(`[1c-orders] №${id} → 1С ${num} (${p.field === "shop" ? "магазин" : "склад"})`);
+  }
+  await prisma.order.update({ where: { id }, data: { oneCError: null, oneCNextTryAt: null, oneCSendingAt: null } });
+  await markExported([id]);
+  return created ? "created" : "linked";
 }
 
 /** Orders ready for 1С whose time has come. */
