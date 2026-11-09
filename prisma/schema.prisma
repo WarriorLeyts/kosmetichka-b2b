@@ -253,6 +253,9 @@ model Order {
   /// «Заказ покупателя» created in 1С over OData (lib/onecOrders.ts, ORDERS_TO_1C=odata): its ref and number
   oneCRef           String?
   oneCNumber        String?
+  /// wholesale: the second 1C document — the part from «0. Склад» («СК-…»); oneCRef / oneCNumber — the shop part («СА-…»)
+  oneCStockRef    String?
+  oneCStockNumber String?
   /// why it couldn't go to 1С (shown in the admin); retried at oneCNextTryAt
   oneCError         String?   @db.Text
   oneCNextTryAt     DateTime?
@@ -295,6 +298,8 @@ model OrderItem {
   productName String
   barcode     String?
   quantity    Int
+  /// wholesale: how many come from which 1C warehouse { "<warehouse guid>": qty } (picker's choice; null = the 12-piece rule, lib/orderWarehouses.ts)
+  warehouseQty Json?
   price       Int
   total       Int
   // Promo-code discount for this line, whole roubles (line sum to pay = total - discount)

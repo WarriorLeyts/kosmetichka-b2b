@@ -6,6 +6,7 @@ import { parseCheckStatuses } from "@/lib/checkStatus";
 import { ANY_STAFF, requireStaff } from "../../../_auth";
 import { badId, notFound, parseId, productImageUrl } from "../../../_shared";
 import { staffSeesOrder } from "@/lib/staffScope";
+import { SHOP_LABEL, STOCK_LABEL, orderSplits, splitsWarehouses } from "@/lib/orderWarehouses";
 
 // GET /api/team/picker/orders/:id — what app/picker/[orderId]/page.tsx passes to PickerOrderClient
 // The page only works for orders in "assembly"; otherwise → 409 { error, status }.
@@ -32,7 +33,7 @@ export async function GET(
       pickerId: true,
       createdAt: true,
       picker: { select: { id: true, name: true } },
-      customer: { select: { companyName: true, name: true, phone: true } },
+      customer: { select: { companyName: true, name: true, phone: true, priceType: true } },
       items: {
         include: {
           check: true,
@@ -74,6 +75,10 @@ export async function GET(
   // staff only: stock per 1C warehouse (empty when 1C doesn't split the stock)
   const byWarehouse = await warehouseStockByProductId(order.items.map((i) => i.productId));
 
+  // wholesale: how many from «0. Склад» and from «1. Мега Косметичка» (the picker's choice or the 12-piece rule)
+  const twoWarehouses = splitsWarehouses(order.customer?.priceType);
+  const splits = twoWarehouses ? await orderSplits(order.items) : null;
+
   // what the customer / staff changed (the picker must see it: added, changed, removed lines)
   const changes = await orderChanges(order.id, order.items);
 
@@ -87,7 +92,9 @@ export async function GET(
       createdAt: order.createdAt.toISOString(),
       pickerId: order.pickerId ?? null,
       picker: order.picker ?? null,
-      customer: order.customer,
+      customer: { companyName: order.customer?.companyName ?? null, name: order.customer?.name ?? null, phone: order.customer?.phone ?? null },
+      // wholesale: the picker chooses the warehouse of each line — 1С gets two documents
+      warehouses: twoWarehouses ? { shop: SHOP_LABEL, stock: STOCK_LABEL } : null,
       items: order.items.map((item) => ({
         id: item.id,
         productId: item.productId,
@@ -101,6 +108,7 @@ export async function GET(
         imageUrl: imageMap.get(item.productId) ?? null,
         stock: stockMap.get(item.productId) ?? null,
         stockByWarehouse: byWarehouse.get(item.productId) ?? [],
+        warehouseSplit: splits?.get(item.id) ?? null,
         customerChange: changes.lines[item.id]?.customer ?? null,
         staffChange: changes.lines[item.id]?.staff ?? null,
         check: item.check
