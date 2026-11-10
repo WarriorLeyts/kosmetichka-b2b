@@ -20,6 +20,7 @@ const SELECT = {
   pushPromo: true,
   wholesaleAccess: true,
   showRetailPrice: true,
+  surveyAt: true,
   roleRequest: true,
   roleRequestStatus: true,
   manager: true,
