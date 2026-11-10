@@ -22,20 +22,24 @@ export function splitsWarehouses(priceType: string | null | undefined): boolean 
 }
 
 /**
- * The 12-piece rule: take from the shop only what leaves ≥ 12 there, the rest from the warehouse; if the
- * warehouse hasn't got it, the shop gives the remainder anyway (better than nothing — the picker sees it).
+ * The 12-piece rule: take from the shop only what leaves ≥ 12 there, the rest from the warehouse. What neither
+ * has is a shortage («Не хватает» at the picking) — the shop never goes below 12 (a wholesaler can only order
+ * Product.wholesaleStock = shop − 12 + warehouse anyway).
  */
-export function suggestSplit(qty: number, shopQty: number, stockQty: number): Split {
+export function suggestSplit(qty: number, shopQty: number, _stockQty: number): Split {
   const q = Math.max(0, Math.round(qty));
-  const shopFree = Math.max(0, Math.floor(shopQty) - WHOLESALE_MIN_STOCK);
-  let shop = Math.min(q, shopFree);
-  let stock = q - shop;
-  const stockHave = Math.max(0, Math.floor(stockQty));
-  if (stock > stockHave) {
-    shop += stock - stockHave;
-    stock = stockHave;
-  }
-  return { shop, stock };
+  const shop = Math.min(q, shopFree(shopQty));
+  return { shop, stock: q - shop };
+}
+
+/** what the shop may give: everything above its 12 */
+export function shopFree(shopQty: number): number {
+  return Math.max(0, Math.floor(shopQty) - WHOLESALE_MIN_STOCK);
+}
+
+/** 12 or fewer in the shop: only the warehouse, no choice at the picking (owner, 2026-11-11) */
+export function onlyStock(shopQty: number): boolean {
+  return shopFree(shopQty) === 0;
 }
 
 /** The picker's choice for a line, if it still adds up to the line's quantity */
@@ -74,12 +78,15 @@ export async function shopAndStock(productIds: number[]): Promise<Map<number, { 
 /** Each line's split: the picker's, or the rule's (`suggested`) */
 export async function orderSplits(items: { id: number; productId: number; quantity: number; warehouseQty?: unknown }[]) {
   const have = await shopAndStock(items.map((i) => i.productId));
-  const out = new Map<number, Split & { suggested: boolean; shopQty: number; stockQty: number }>();
+  const out = new Map<number, Split & { suggested: boolean; shopQty: number; stockQty: number; onlyStock: boolean }>();
   for (const it of items) {
     const h = have.get(it.productId) ?? { shop: 0, stock: 0 };
-    const saved = savedSplit(it.warehouseQty, it.quantity);
+    const locked = onlyStock(h.shop);
+    // a saved choice that takes from a shop with ≤ 12 doesn't count any more
+    const saved0 = savedSplit(it.warehouseQty, it.quantity);
+    const saved = saved0 && !(locked && saved0.shop > 0) ? saved0 : null;
     const s = saved ?? suggestSplit(it.quantity, h.shop, h.stock);
-    out.set(it.id, { ...s, suggested: !saved, shopQty: h.shop, stockQty: h.stock });
+    out.set(it.id, { ...s, suggested: !saved, shopQty: h.shop, stockQty: h.stock, onlyStock: locked });
   }
   return out;
 }
