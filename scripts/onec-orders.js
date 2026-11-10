@@ -49,7 +49,8 @@ const round2 = (n) => Math.round(n * 100) / 100;
  * The document body. Pure: everything 1С-side is passed in.
  * order: { id, createdAt, comment (already with promo / bonuses), items: [{ guid, quantity, price, total, discount, bonusDiscount }] }
  * ctx: { template, counterpartyRef, contractRef, units: Map(guid → unit ref), customerName, phone,
- *        number? (default СА-…), warehouse? (1С structural unit for the reserve; default — the template's) }
+ *        number? (default СА-…), warehouse? (1С structural unit for the reserve; default — the template's),
+ *        commentPrefix? (the common «Покупатель с сайта»: who the customer is) }
  */
 export function buildOrderBody(order, ctx) {
   const tpl = ctx.template || {};
@@ -61,7 +62,7 @@ export function buildOrderBody(order, ctx) {
   body.Date = moscowLocal(order.createdAt);
   body.Контрагент_Key = ctx.counterpartyRef;
   body.Договор_Key = ctx.contractRef;
-  body.Комментарий = order.comment || "";
+  body.Комментарий = [ctx.commentPrefix, order.comment].filter(Boolean).join(" | ");
   const name = String(ctx.customerName || "").trim();
   body.КонтактноеЛицо = name;
   body.ИнформацияПоКонтрагенту = [
@@ -159,6 +160,19 @@ export async function findCounterparty(oneCId, phone, env = process.env) {
 }
 
 /**
+ * One counterparty in 1С for site customers that 1С hasn't got and who have no loyalty card (owner,
+ * 2026-11-10): no counterparty is made per customer — the order goes to «Покупатель с сайта», the
+ * customer's name and phone go to the document (contact person, comment).
+ */
+export const SITE_BUYER_NAME = "Покупатель с сайта";
+
+export async function findSiteBuyer(env = process.env) {
+  const name = env.ONEC_SITE_BUYER || SITE_BUYER_NAME;
+  const rows = (await odataGet("Catalog_Контрагенты", { $select: "Ref_Key,DeletionMark,IsFolder", $filter: `Description eq ${q(name)}` }, env)).filter((r) => !r.DeletionMark && !r.IsFolder);
+  return rows[0]?.Ref_Key ?? null;
+}
+
+/**
  * Contract: the one of the counterparty's latest «Заказ покупателя» / «Расходная накладная» (what the 1С integration
  * did — checked on all site orders since September); without history — «С покупателем» of the template's
  * organisation, «Основной договор» and valid ones first.
@@ -219,8 +233,19 @@ export async function prepareOrder(order, env = process.env, { createMissingCont
   const problems = [];
   const template = await orderTemplate(env);
   const c = order.customer || {};
-  const counterpartyRef = await findCounterparty(c.oneCId, c.phone, env);
-  if (!counterpartyRef) problems.push(`Покупатель «${c.companyName || c.name || c.phone}» не найден в 1С (ни по коду, ни по телефону ${c.phone || "—"})`);
+  let counterpartyRef = await findCounterparty(c.oneCId, c.phone, env);
+  // not in 1С and no loyalty card → the common «Покупатель с сайта» (a card holder must be in 1С)
+  let siteBuyer = false;
+  if (!counterpartyRef && !String(c.loyaltyCard || "").trim()) {
+    counterpartyRef = await findSiteBuyer(env);
+    siteBuyer = Boolean(counterpartyRef);
+  }
+  if (!counterpartyRef)
+    problems.push(
+      String(c.loyaltyCard || "").trim()
+        ? `Покупатель «${c.companyName || c.name || c.phone}» с картой не найден в 1С (ни по коду, ни по телефону ${c.phone || "—"})`
+        : `Покупатель «${c.companyName || c.name || c.phone}» не найден в 1С, и в 1С нет контрагента «${env.ONEC_SITE_BUYER || SITE_BUYER_NAME}»`
+    );
   let contractRef = counterpartyRef ? await findContract(counterpartyRef, template.Организация_Key, moscowLocal(order.createdAt), env) : null;
   // no contract with our organisation (e.g. only with another one) — make «Основной договор», as the integration did
   if (counterpartyRef && !contractRef && createMissingContract) contractRef = (await createContract(counterpartyRef, c.priceType, template, env)).Ref_Key;
@@ -229,9 +254,11 @@ export async function prepareOrder(order, env = process.env, { createMissingCont
   if (!order.items.length) problems.push("В заказе нет товаров");
   const units = await productUnits(order.items.map((i) => i.guid), env);
   const ctx = { template, counterpartyRef, contractRef, units, customerName: c.companyName || c.name, phone: c.phone };
+  // the common buyer: who it really is — first thing in the comment (both documents of a wholesale order)
+  if (siteBuyer) ctx.commentPrefix = `Клиент: ${[c.companyName || c.name, c.phone].filter(Boolean).join(", ")}`;
   const body = buildOrderBody(order, ctx);
   // ctx: to build more documents of the same order (wholesale: the part from the warehouse)
-  return { body, problems, counterpartyRef, ctx };
+  return { body, problems, counterpartyRef, ctx, siteBuyer };
 }
 
 /** Creates the document (unposted). */
