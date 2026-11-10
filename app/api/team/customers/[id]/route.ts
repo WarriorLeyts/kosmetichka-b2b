@@ -38,6 +38,8 @@ export async function GET(
       priceType: true,
       wholesaleAccess: true,
       showRetailPrice: true,
+      referralSource: true,
+      orderedBefore: true,
       roleRequest: true,
       roleRequestStatus: true,
       roleRequestedAt: true,

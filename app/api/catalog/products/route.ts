@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { productSearchWhere } from "@/lib/productSearch";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { relatedIds } from "@/lib/related";
 import { customerStock, guestStock, isWholesaleType, withFlatPrices } from "@/lib/utils";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { verifyToken } from "@/lib/auth";
@@ -195,6 +196,17 @@ export async function GET(request: Request) {
       .map((x) => ({ guid: x.brandGuid as string, name: names.get(x.brandGuid as string)!.trim(), count: x._count._all }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ru"));
     return NextResponse.json({ brands });
+  }
+
+  // ?related=ID&kind=together|similar: the strip under a product («С этим берут» / «Похожие», lib/related.ts)
+  const relatedParam = Number(searchParams.get("related"));
+  if (Number.isInteger(relatedParam) && relatedParam > 0) {
+    const kind = searchParams.get("kind") === "similar" ? "similar" : "together";
+    const ids = await relatedIds(relatedParam, kind, wholesale);
+    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids } }, include, omit }) : [];
+    const order = new Map(ids.map((id, i) => [id, i]));
+    found.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    return NextResponse.json({ products: found.map(applyPrices), total: found.length, page: 1, hasMore: false });
   }
 
   // ?ids=1,2,3 (the cart, up to 120): these products as they are now, in one request instead of one

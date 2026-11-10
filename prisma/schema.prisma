@@ -186,6 +186,12 @@ model Customer {
   loyaltyCard String?
   /// the card's owner is in the 1С group «Максма Скидка» (lib/discountCard.ts, refreshed from 1С)
   maxmaDiscount Boolean @default(false)
+  /// asked once right after signing up (app, owner 2026-11-10): «Как вы узнали о нас?»
+  referralSource String?
+  /// «Вы уже заказывали у нас?» (null — not answered)
+  orderedBefore Boolean?
+  /// when the two questions were answered or skipped (null — not asked yet)
+  surveyAt DateTime?
   isApproved Boolean @default(false)
   /// a wholesale sign-up waiting for approval that staff set aside as «Неактуальные» (the customer changed
   /// his mind); registering again with the same phone brings it back to «Ожидают»
