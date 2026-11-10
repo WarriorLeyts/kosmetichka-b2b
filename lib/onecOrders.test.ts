@@ -36,10 +36,11 @@ describe("site orders → «Заказ покупателя» in 1С over OData"
           { guid: "g2", quantity: 1, price: 50, total: 50, discount: 0, bonusDiscount: 0 },
         ],
       },
-      { template, counterpartyRef: "cp", contractRef: "ct", units: new Map([["g2", "box"]]), customerName: " Милана ", phone: "89280000000" }
+      { template, counterpartyRef: "cp", contractRef: "ct", units: new Map([["g2", "box"]]), customerName: " Милана ", phone: "89280000000", at: new Date("2026-11-10T10:45:00Z") }
     );
     expect(body.Number).toBe("СА-000209");
-    expect(body.Date).toBe("2026-11-08T15:14:11");
+    // the upload moment, not the order's createdAt
+    expect(body.Date).toBe("2026-11-10T13:45:00");
     expect(body.ВидОперации).toBe("ЗаказНаПродажу");
     expect(body.Организация_Key).toBe("org");
     expect(body).not.toHaveProperty("Ответственный_Key"); // only the listed service fields are copied
