@@ -151,8 +151,11 @@ export async function findCounterparty(oneCId, phone, env = process.env) {
   if (d.length === 11 && d.startsWith("7")) d = "8" + d.slice(1);
   if (d.length === 10) d = "8" + d;
   if (d.length !== 11) return null;
-  const rows = (await odataGet("Catalog_Контрагенты", { $select: "Ref_Key,DeletionMark,IsFolder", $filter: `НомерТелефонаДляПоиска eq ${q(d)}` }, env)).filter((r) => !r.DeletionMark && !r.IsFolder);
-  return rows.length === 1 ? rows[0].Ref_Key : null;
+  // 1С keeps the search number as typed: «8967…» or «7967…» (a contact entered as +7 …) — look for both
+  const seven = "7" + d.slice(1);
+  const rows = (await odataGet("Catalog_Контрагенты", { $select: "Ref_Key,DeletionMark,IsFolder", $filter: `НомерТелефонаДляПоиска eq ${q(d)} or НомерТелефонаДляПоиска eq ${q(seven)}` }, env)).filter((r) => !r.DeletionMark && !r.IsFolder);
+  const refs = [...new Set(rows.map((r) => r.Ref_Key))];
+  return refs.length === 1 ? refs[0] : null;
 }
 
 /**
