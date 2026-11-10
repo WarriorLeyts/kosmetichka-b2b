@@ -1,7 +1,7 @@
 // Site order → «Заказ покупателя» in 1С over OData (instead of 1С fetching orders by the standard exchange).
 // Same document the 1С integration made: number «СА-000209», unposted, the service fields copied from the
 // latest site order in 1С (СА-…). No database client here: lib/onecOrders.ts claims, retries and acks.
-import { odataCreate, odataGet } from "./onec-odata.js";
+import { odataCreate, odataGet, odataPatch } from "./onec-odata.js";
 import { cmlComment } from "./onec-order-comment.js";
 
 export const EMPTY = "00000000-0000-0000-0000-000000000000";
@@ -161,6 +161,45 @@ export async function findCounterparty(oneCId, phone, env = process.env) {
 }
 
 /**
+ * Settlement accounts of a counterparty (owner, 2026-11-10). Counterparties made in 1С lately often have them
+ * empty, and the «Расходная накладная» based on the order then fails: «Не заполнен счет дебета». Not fixed in
+ * bulk — when an order of such a customer goes to 1С, the empty ones get 62.01 / 62.02 / 60.01 / 60.02 (what
+ * every counterparty with posted sales has). Filled accounts are never touched.
+ */
+export const COUNTERPARTY_ACCOUNTS = {
+  СчетУчетаРасчетовСПокупателем_Key: "62.01",
+  СчетУчетаАвансовПокупателя_Key: "62.02",
+  СчетУчетаРасчетовСПоставщиком_Key: "60.01",
+  СчетУчетаАвансовПоставщику_Key: "60.02",
+};
+const ZERO_REF = "00000000-0000-0000-0000-000000000000";
+let accountsCache = null;
+
+async function accountRefs(env) {
+  if (accountsCache && Date.now() - accountsCache.at < 24 * 3600_000) return accountsCache.map;
+  const rows = await odataGet("ChartOfAccounts_Управленческий", { $select: "Ref_Key,Code,DeletionMark" }, env);
+  const map = new Map(rows.filter((r) => !r.DeletionMark).map((r) => [String(r.Code).trim(), r.Ref_Key]));
+  accountsCache = { at: Date.now(), map };
+  return map;
+}
+
+/** Fills the counterparty's empty settlement accounts → the field names it filled ([] — nothing to do). */
+export async function ensureCounterpartyAccounts(ref, env = process.env) {
+  if (!isGuid(ref)) return [];
+  const fields = Object.keys(COUNTERPARTY_ACCOUNTS);
+  const cur = (await odataGet("Catalog_Контрагенты", { $select: fields.join(","), $filter: `Ref_Key eq guid'${ref}'` }, env))[0];
+  if (!cur) return [];
+  const empty = fields.filter((f) => !cur[f] || cur[f] === ZERO_REF);
+  if (!empty.length) return [];
+  const refs = await accountRefs(env);
+  const patch = {};
+  for (const f of empty) if (refs.get(COUNTERPARTY_ACCOUNTS[f])) patch[f] = refs.get(COUNTERPARTY_ACCOUNTS[f]);
+  if (!Object.keys(patch).length) return [];
+  await odataPatch("Catalog_Контрагенты", ref, patch, env);
+  return Object.keys(patch);
+}
+
+/**
  * One counterparty in 1С for site customers that 1С hasn't got and who have no loyalty card (owner,
  * 2026-11-10): no counterparty is made per customer — the order goes to «Покупатель с сайта», the
  * customer's name and phone go to the document (contact person, comment).
@@ -230,7 +269,7 @@ export async function productUnits(guids, env = process.env) {
  * Everything 1С-side for an order → { body, problems }. problems (Russian, for the admin) — the order can't go yet.
  * order: { id, createdAt, comment, customer: { oneCId, phone, name, companyName }, items: [{ guid, productName, … }] }
  */
-export async function prepareOrder(order, env = process.env, { createMissingContract = false } = {}) {
+export async function prepareOrder(order, env = process.env, { createMissingContract = false, fillAccounts = false } = {}) {
   const problems = [];
   const template = await orderTemplate(env);
   const c = order.customer || {};
@@ -251,6 +290,14 @@ export async function prepareOrder(order, env = process.env, { createMissingCont
   // no contract with our organisation (e.g. only with another one) — make «Основной договор», as the integration did
   if (counterpartyRef && !contractRef && createMissingContract) contractRef = (await createContract(counterpartyRef, c.priceType, template, env)).Ref_Key;
   if (counterpartyRef && !contractRef) problems.push("У покупателя в 1С нет договора «С покупателем» нашей организации");
+  // empty settlement accounts → the «Расходная накладная» would not post; fill them now (only when really sending)
+  if (counterpartyRef && fillAccounts) {
+    const filled = await ensureCounterpartyAccounts(counterpartyRef, env).catch((e) => {
+      console.warn("[1c-orders] счета учёта контрагента:", e instanceof Error ? e.message : e);
+      return [];
+    });
+    if (filled.length) console.log(`[1c-orders] заказ ${order.id}: контрагенту проставлены счета учёта (${filled.length})`);
+  }
   for (const it of order.items) if (!isGuid(it.guid)) problems.push(`Товар «${it.productName}» без кода 1С`);
   if (!order.items.length) problems.push("В заказе нет товаров");
   const units = await productUnits(order.items.map((i) => i.guid), env);
