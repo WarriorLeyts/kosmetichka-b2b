@@ -93,6 +93,8 @@ export async function GET(
       pickerId: order.pickerId ?? null,
       picker: order.picker ?? null,
       customer: { companyName: order.customer?.companyName ?? null, name: order.customer?.name ?? null, phone: order.customer?.phone ?? null },
+      // the customer's prices: what «Добавить товар» in the picking shows first
+      priceType: order.customer?.priceType ?? null,
       // wholesale: the picker chooses the warehouse of each line — 1С gets two documents
       warehouses: twoWarehouses ? { shop: SHOP_LABEL, stock: STOCK_LABEL } : null,
       items: order.items.map((item) => ({
