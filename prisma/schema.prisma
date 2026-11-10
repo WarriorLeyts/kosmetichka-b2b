@@ -184,6 +184,8 @@ model Customer {
   isActive   Boolean @default(true)
   /// MAXMA loyalty card number linked in the app (confirmed by an SMS code from MAXMA)
   loyaltyCard String?
+  /// the card's owner is in the 1С group «Максма Скидка» (lib/discountCard.ts, refreshed from 1С)
+  maxmaDiscount Boolean @default(false)
   isApproved Boolean @default(false)
   /// a wholesale sign-up waiting for approval that staff set aside as «Неактуальные» (the customer changed
   /// his mind); registering again with the same phone brings it back to «Ожидают»

@@ -39,6 +39,6 @@ export async function GET() {
 export async function DELETE() {
   const id = await currentCustomerId();
   if (!id) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
-  await prisma.customer.update({ where: { id }, data: { loyaltyCard: null } });
+  await prisma.customer.update({ where: { id }, data: { loyaltyCard: null, maxmaDiscount: false } });
   return NextResponse.json({ ok: true });
 }

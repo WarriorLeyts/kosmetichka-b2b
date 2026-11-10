@@ -1,3 +1,4 @@
+import { cardGivesDiscount } from "@/lib/discountCard";
 /** Retail customers («Розница») can register on the website too (was wholesale-only). */
 export const SITE_RETAIL_ENABLED = true;
 
@@ -15,9 +16,12 @@ export function fromSite(request: Request): boolean {
   return request.headers.get("x-kosmetichka-client") === "web";
 }
 
-/** The customer as the prices see him: «Розница» with a linked card → «Скидка по карте». */
-export function pricingCustomer<T extends { priceType?: string | null; loyaltyCard?: string | null }>(customer: T, request: Request): T {
-  const card = Boolean(customer.loyaltyCard?.trim());
+/**
+ * The customer as the prices see him: «Розница» with a discount card → «Скидка по карте». A discount card:
+ * number «900…» or its owner in the 1С group «Максма Скидка» (lib/discountCard.ts).
+ */
+export function pricingCustomer<T extends { priceType?: string | null; loyaltyCard?: string | null; maxmaDiscount?: boolean | null }>(customer: T, request: Request): T {
+  const card = cardGivesDiscount(customer);
   const here = APPS_TOO || fromSite(request);
   return SITE_RETAIL_DISCOUNT && here && customer.priceType === "retail" && card ? { ...customer, priceType: "discount" } : customer;
 }

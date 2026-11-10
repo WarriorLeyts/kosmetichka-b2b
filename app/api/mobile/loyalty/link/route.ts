@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../../_auth";
 import { findCard, maskPhone, MaxmaError, maxmaConfigured, maxmaPhone, publicCard, sendCode } from "@/lib/maxma";
 import { RateLimiter } from "@/lib/rateLimit";
+import { refreshMaxmaDiscount } from "@/lib/discountCard";
 
 /**
  * Linking a MAXMA card in the app («Добавить карту»):
@@ -48,7 +49,9 @@ export async function POST(request: Request) {
       return bad("Программа лояльности недоступна, попробуйте позже", 502);
     }
     if (!card) return bad("Карта не найдена", 404);
-    await prisma.customer.update({ where: { id }, data: { loyaltyCard: card.number } });
+    await prisma.customer.update({ where: { id }, data: { loyaltyCard: card.number, maxmaDiscount: false } });
+    // the discount price: «900…» or the card's owner in 1С «Максма Скидка» (checked now, refreshed every 6 h)
+    await refreshMaxmaDiscount(id).catch(() => false);
     return NextResponse.json({ card: publicCard(card) });
   }
 

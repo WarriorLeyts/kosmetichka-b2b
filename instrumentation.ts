@@ -27,4 +27,9 @@ export async function register() {
     const { startOrdersTo1C } = await import("./lib/onecOrders");
     startOrdersTo1C();
   }
+  // Which linked MAXMA cards give the discount price: owner in the 1С group «Максма Скидка» (every 6 h)
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { startDiscountCards } = await import("./lib/discountCard");
+    startDiscountCards();
+  }
 }
