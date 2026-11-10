@@ -55,7 +55,7 @@ export async function sendOrderTo1C(id: number): Promise<Outcome> {
     let doc = await findOrderDoc(number, order.createdAt);
     let outcome: Outcome = "linked";
     if (!doc) {
-      const { body, problems, counterpartyRef } = await prepareOrder(order, process.env, { createMissingContract: true });
+      const { body, problems, counterpartyRef } = await prepareOrder(order, process.env, { createMissingContract: true, fillAccounts: true });
       if (problems.length) {
         await prisma.order.update({
           where: { id },
@@ -111,7 +111,7 @@ function partOf(it: Line, q: number): Line {
  * if it has lines). Each document is looked up by its number first, so a retry never makes a second copy.
  */
 async function sendSplitOrder(id: number, order: LoadedOrder): Promise<Outcome> {
-  const { problems, ctx } = await prepareOrder(order, process.env, { createMissingContract: true });
+  const { problems, ctx } = await prepareOrder(order, process.env, { createMissingContract: true, fillAccounts: true });
   if (problems.length) {
     await prisma.order.update({
       where: { id },
