@@ -50,7 +50,7 @@ const round2 = (n) => Math.round(n * 100) / 100;
  * order: { id, createdAt, comment (already with promo / bonuses), items: [{ guid, quantity, price, total, discount, bonusDiscount }] }
  * ctx: { template, counterpartyRef, contractRef, units: Map(guid → unit ref), customerName, phone,
  *        number? (default СА-…), warehouse? (1С structural unit for the reserve; default — the template's),
- *        commentPrefix? (the common «Покупатель с сайта»: who the customer is) }
+ *        commentPrefix? (the common «Покупатель с сайта»: who the customer is), at? (document date; default — now) }
  */
 export function buildOrderBody(order, ctx) {
   const tpl = ctx.template || {};
@@ -59,7 +59,8 @@ export function buildOrderBody(order, ctx) {
   body.ВидОперации = "ЗаказНаПродажу";
   body.Number = ctx.number || orderNumber(order.id);
   if (ctx.warehouse) body.СтруктурнаяЕдиницаРезерв_Key = ctx.warehouse;
-  body.Date = moscowLocal(order.createdAt);
+  // the moment it goes to 1С, not when the customer ordered (owner, 2026-11-10: the 1С list goes by upload time)
+  body.Date = moscowLocal(ctx.at ?? Date.now());
   body.Контрагент_Key = ctx.counterpartyRef;
   body.Договор_Key = ctx.contractRef;
   body.Комментарий = [ctx.commentPrefix, order.comment].filter(Boolean).join(" | ");
