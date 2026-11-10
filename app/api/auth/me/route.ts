@@ -1,3 +1,4 @@
+import { cardGivesDiscount } from "@/lib/discountCard";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -32,10 +33,11 @@ export async function GET() {
       roleRequest: true,
       roleRequestStatus: true,
       loyaltyCard: true,
+      maxmaDiscount: true,
     },
   });
   if (!customer) return NextResponse.json({ customer: null });
-  // hasCard instead of the number: the site / app only need to know a card is linked
-  const { loyaltyCard, ...rest } = customer;
-  return NextResponse.json({ customer: { ...rest, hasCard: Boolean(loyaltyCard?.trim()) } });
+  // hasCard: the card gives the discount price (lib/discountCard.ts); cardLinked: any card is linked
+  const { loyaltyCard, maxmaDiscount, ...rest } = customer;
+  return NextResponse.json({ customer: { ...rest, hasCard: cardGivesDiscount({ loyaltyCard, maxmaDiscount }), cardLinked: Boolean(loyaltyCard?.trim()) } });
 }
