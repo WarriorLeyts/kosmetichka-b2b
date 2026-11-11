@@ -6,7 +6,7 @@ import { WHOLESALE_MIN_STOCK, isWholesaleType } from "@/lib/utils";
  *  - «1. Мега Косметичка» — the shop: at least 12 of each product must stay on its shelves;
  *  - «0. Склад» — the warehouse.
  * The picker chooses per line how many come from each (OrderItem.warehouseQty); until then the order's main
- * source (by the majority of lines) and the 12-piece rule suggest it. The order goes to 1С as two «Заказ покупателя»: СА-000241 (shop) and СК-000241 (warehouse).
+ * source (the shop when it has the whole order, otherwise the warehouse) and the 12-piece rule suggest it. The order goes to 1С as two «Заказ покупателя»: СА-000241 (shop) and СК-000241 (warehouse).
  * Retail orders: as before, one document from the shop.
  */
 export const SHOP_WAREHOUSE = process.env.ONEC_SHOP_WAREHOUSE || "bd887c46-1148-11f1-80cf-10ffe0cbb38c"; // 1. Мега Косметичка
@@ -25,19 +25,11 @@ export function splitsWarehouses(priceType: string | null | undefined): boolean 
 export type Primary = "shop" | "stock";
 
 /**
- * By the majority of the order's lines: the source that has more of them in full. A tie goes to the
- * warehouse. So the warehouse isn't asked for 2–3 lines while the shop gives the rest (and the other way round).
+ * The shop has the whole order (every line, keeping its 12) → all from the shop, the warehouse isn't bothered.
+ * Otherwise the warehouse is needed anyway → it gives everything it has, the shop only what it hasn't.
  */
 export function orderPrimary(lines: { qty: number; shopQty: number; stockQty: number }[]): Primary {
-  let shop = 0;
-  let stock = 0;
-  for (const l of lines) {
-    const q = Math.max(0, Math.round(l.qty));
-    if (!q) continue;
-    if (Math.floor(l.stockQty) >= q) stock++;
-    if (shopFree(l.shopQty) >= q) shop++;
-  }
-  return shop > stock ? "shop" : "stock";
+  return lines.every((l) => shopFree(l.shopQty) >= Math.max(0, Math.round(l.qty))) ? "shop" : "stock";
 }
 
 /**
