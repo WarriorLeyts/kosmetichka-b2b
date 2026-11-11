@@ -39,17 +39,23 @@ describe("12 or fewer in the shop — only the warehouse", () => {
   });
 });
 
-describe("the order's main source — by the majority of lines", () => {
-  // 10 lines: the warehouse has 8 in full, the shop 7 → the warehouse
-  const lines = [
-    ...Array.from({ length: 5 }, () => ({ qty: 3, shopQty: 40, stockQty: 50 })),
-    ...Array.from({ length: 2 }, () => ({ qty: 3, shopQty: 40, stockQty: 0 })),
-    ...Array.from({ length: 3 }, () => ({ qty: 3, shopQty: 5, stockQty: 20 })),
-  ];
-  it("more lines on the warehouse → the warehouse", () => {
+describe("the order's main source", () => {
+  it("the shop has 9 of 10 lines, the warehouse 8 → the warehouse: 8 from it, 2 from the shop", () => {
+    const lines = [
+      ...Array.from({ length: 7 }, () => ({ qty: 3, shopQty: 40, stockQty: 50 })),
+      ...Array.from({ length: 2 }, () => ({ qty: 3, shopQty: 40, stockQty: 0 })),
+      { qty: 3, shopQty: 5, stockQty: 20 },
+    ];
     expect(orderPrimary(lines)).toBe("stock");
+    expect(lines.map((l) => suggestSplit(l.qty, l.shopQty, l.stockQty, "stock")).filter((s) => s.shop > 0)).toHaveLength(2);
   });
-  it("then the warehouse gives what it has, the shop only the rest", () => {
+  it("the shop has the whole order → all from the shop", () => {
+    expect(orderPrimary([{ qty: 2, shopQty: 30, stockQty: 50 }, { qty: 5, shopQty: 17, stockQty: 9 }])).toBe("shop");
+  });
+  it("one line short in the shop (12 must stay) → the warehouse", () => {
+    expect(orderPrimary([{ qty: 2, shopQty: 30, stockQty: 50 }, { qty: 6, shopQty: 17, stockQty: 9 }])).toBe("stock");
+  });
+  it("the warehouse gives what it has, the shop only the rest", () => {
     expect(suggestSplit(3, 40, 50, "stock")).toEqual({ shop: 0, stock: 3 });
     expect(suggestSplit(3, 40, 0, "stock")).toEqual({ shop: 3, stock: 0 });
     expect(suggestSplit(10, 40, 6, "stock")).toEqual({ shop: 4, stock: 6 });
@@ -57,11 +63,5 @@ describe("the order's main source — by the majority of lines", () => {
   it("still keeps 12 in the shop", () => {
     expect(suggestSplit(10, 15, 4, "stock")).toEqual({ shop: 3, stock: 7 });
     expect(suggestSplit(3, 11, 0, "stock")).toEqual({ shop: 0, stock: 3 });
-  });
-  it("more lines in the shop → the shop", () => {
-    expect(orderPrimary([{ qty: 2, shopQty: 30, stockQty: 0 }, { qty: 2, shopQty: 30, stockQty: 0 }, { qty: 2, shopQty: 30, stockQty: 9 }])).toBe("shop");
-  });
-  it("a tie → the warehouse", () => {
-    expect(orderPrimary([{ qty: 2, shopQty: 30, stockQty: 0 }, { qty: 2, shopQty: 5, stockQty: 9 }])).toBe("stock");
   });
 });
