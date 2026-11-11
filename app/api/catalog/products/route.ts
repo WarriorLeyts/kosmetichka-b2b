@@ -7,6 +7,8 @@ import { customerStock, guestStock, isWholesaleType, withFlatPrices } from "@/li
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { verifyToken } from "@/lib/auth";
 import { createHash } from "crypto";
+import { resolveCustomerPriceType, type PriceType } from "@/lib/pricing";
+import { pricingCustomer } from "@/lib/siteMode";
 
 const SORTS = ["popularity", "price_asc", "price_desc", "name"] as const;
 type Sort = (typeof SORTS)[number];
@@ -22,7 +24,16 @@ function maskGuestPrices(product: any) {
  * Price sort / price range / sale used to send IN-lists of ~12k guids to the DB
  * on every page; one cached pass over ProductPrice is far cheaper.
  */
-type PriceIndex = { at: number; wholesale: Map<string, number>; retail: Map<string, number>; sale: Set<string> };
+type PriceIndex = {
+  at: number;
+  wholesale: Map<string, number>;
+  retail: Map<string, number>;
+  discount: Map<string, number>;
+  big: Map<string, number>;
+  sale: Set<string>;
+  /** the price each kind of viewer sees (see shownPrices), built on first use */
+  shown: Map<PriceType, Map<string, number>>;
+};
 let priceMemo: PriceIndex | null = null;
 /** Price-sorted product ids per filter set (see the price sort below), max 100 entries, 1 min. */
 const sortedMemo = new Map<string, { at: number; ids: number[] }>();
@@ -31,17 +42,23 @@ async function priceIndex(): Promise<PriceIndex> {
   if (priceMemo && Date.now() - priceMemo.at < 120_000) return priceMemo;
   if (!priceMemoLoading) {
     priceMemoLoading = prisma.productPrice
-      .findMany({ where: { priceType: { in: ["wholesale", "discount", "retail"] } }, select: { productGuid: true, priceType: true, price: true } })
+      .findMany({ where: { priceType: { in: ["wholesale", "discount", "retail", "big_wholesale"] } }, select: { productGuid: true, priceType: true, price: true } })
       .then((rows) => {
         const wholesale = new Map<string, number>();
         const retail = new Map<string, number>();
+        const discount = new Map<string, number>();
+        const big = new Map<string, number>();
         const sale = new Set<string>();
         for (const r of rows) {
           if (r.priceType === "wholesale") wholesale.set(r.productGuid, r.price);
           else if (r.priceType === "retail") retail.set(r.productGuid, r.price);
-          else sale.add(r.productGuid);
+          else if (r.priceType === "big_wholesale") big.set(r.productGuid, r.price);
+          else {
+            sale.add(r.productGuid);
+            discount.set(r.productGuid, r.price);
+          }
         }
-        const next: PriceIndex = { at: Date.now(), wholesale, retail, sale };
+        const next: PriceIndex = { at: Date.now(), wholesale, retail, discount, big, sale, shown: new Map() };
         priceMemo = next;
         return next;
       })
@@ -75,6 +92,27 @@ async function pageInStockFirst(where: any, orderBy: any[], page: number, limit:
   return { products: [...first, ...rest], total: inCount + outCount };
 }
 
+/**
+ * The price a viewer sees on the cards — the same chain as priceFor (lib/pricing.ts): the price range
+ * and the price sort go by it, so «до 500 ₽» shows what costs up to 500 ₽ for him. Guests see the
+ * card price (discount → retail), never the wholesale one.
+ */
+function shownPrices(idx: PriceIndex, type: PriceType): Map<string, number> {
+  const hit = idx.shown.get(type);
+  if (hit) return hit;
+  const chain =
+    type === "retail" ? [idx.retail]
+    : type === "guest" || type === "discount" ? [idx.discount, idx.retail]
+    : type === "big_wholesale" ? [idx.big, idx.wholesale, idx.retail]
+    : [idx.wholesale, idx.retail];
+  const out = new Map<string, number>();
+  for (const m of chain) {
+    for (const [guid, price] of m) if (!out.has(guid) && price > 0) out.set(guid, price);
+  }
+  idx.shown.set(type, out);
+  return out;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
@@ -87,10 +125,13 @@ export async function GET(request: Request) {
   const staff = staffToken ? await verifyToken(staffToken) : null;
   const isAuthenticated = Boolean(payload?.id) || ["admin", "manager", "picker"].includes(String(staff?.role ?? ""));
   // a wholesale customer sees what he may order: the shop minus its 12 + the warehouse (Product.wholesaleStock)
-  const priceType = payload?.id
-    ? (await prisma.customer.findUnique({ where: { id: Number(payload.id) }, select: { priceType: true } }))?.priceType ?? null
+  const viewer = payload?.id
+    ? await prisma.customer.findUnique({ where: { id: Number(payload.id) }, select: { priceType: true, loyaltyCard: true, maxmaDiscount: true } })
     : null;
+  const priceType = viewer?.priceType ?? null;
   const wholesale = isWholesaleType(priceType);
+  // whose prices the range and the price sort go by (staff — wholesale, as before)
+  const shownType: PriceType = viewer ? resolveCustomerPriceType(pricingCustomer(viewer, request)) : isAuthenticated ? "wholesale" : "guest";
 
   // ?page=abc / 0 / -5 → page 1 (it was a 500 from the database)
   const pageRaw = Math.floor(Number(searchParams.get("page") || 1));
@@ -163,9 +204,9 @@ export async function GET(request: Request) {
   async function priceFilterGuids(): Promise<string[] | null> {
     if (priceMin === null && priceMax === null && !quick.includes("sale")) return null;
     const prices = await priceIndex();
-    // guests see retail prices: they filter and sort by them too — by wholesale prices a guest could
-    // narrow the range down and work out the hidden wholesale price of any product
-    const priceList = isAuthenticated ? prices.wholesale : prices.retail;
+    // by the prices this viewer sees — a guest never by wholesale ones (he could narrow the range down
+    // and work out the hidden wholesale price of any product)
+    const priceList = shownPrices(prices, shownType);
     const merged: string[] = [];
     for (const [guid, price] of priceList) {
       if (priceMin !== null && price < priceMin) continue;
@@ -260,7 +301,7 @@ export async function GET(request: Request) {
 
   // ── Steps 1–3: price range / sale → guid constraint (from the cached index) ──
   const prices = await priceIndex();
-  const priceList = isAuthenticated ? prices.wholesale : prices.retail;
+  const priceList = shownPrices(prices, shownType);
   const priceGuids = await priceFilterGuids();
   if (priceGuids) where.guid = { in: priceGuids };
 
@@ -288,7 +329,7 @@ export async function GET(request: Request) {
   // The sorted id list for these filters is cached for a minute: scrolling pages 2, 3, … and
   // other customers with the same filters reuse it instead of loading ~12k rows each time
   // (under load the price sort used to take seconds).
-  const sortKey = createHash("sha1").update(JSON.stringify([where, sort, prices.at, isAuthenticated, wholesale])).digest("hex");
+  const sortKey = createHash("sha1").update(JSON.stringify([where, sort, prices.at, shownType, wholesale])).digest("hex");
   let sortedIds = sortedMemo.get(sortKey);
   if (!sortedIds || Date.now() - sortedIds.at > 60_000) {
     const matched = await prisma.product.findMany({
