@@ -53,7 +53,7 @@ export function shopFree(shopQty: number): number {
   return Math.max(0, Math.floor(shopQty) - WHOLESALE_MIN_STOCK);
 }
 
-/** 12 or fewer in the shop: only the warehouse, no choice at the picking (owner, 2026-11-11) */
+/** 12 or fewer in the shop: the suggestion takes nothing from there (the picker still may, agreed with the administrator) */
 export function onlyStock(shopQty: number): boolean {
   return shopFree(shopQty) === 0;
 }
@@ -98,10 +98,10 @@ export async function orderSplits(items: { id: number; productId: number; quanti
   const primary = orderPrimary(items.map((it) => ({ qty: it.quantity, shopQty: have.get(it.productId)?.shop ?? 0, stockQty: have.get(it.productId)?.stock ?? 0 })));
   for (const it of items) {
     const h = have.get(it.productId) ?? { shop: 0, stock: 0 };
+    // 12 or fewer in the shop: the suggestion takes nothing from there, but the picker may (agreed with
+    // the administrator — owner, 2026-11-11); `onlyStock` only tells the app to warn
     const locked = onlyStock(h.shop);
-    // a saved choice that takes from a shop with ≤ 12 doesn't count any more
-    const saved0 = savedSplit(it.warehouseQty, it.quantity);
-    const saved = saved0 && !(locked && saved0.shop > 0) ? saved0 : null;
+    const saved = savedSplit(it.warehouseQty, it.quantity);
     const s = saved ?? suggestSplit(it.quantity, h.shop, h.stock, primary);
     out.set(it.id, { ...s, suggested: !saved, shopQty: h.shop, stockQty: h.stock, onlyStock: locked, primary });
   }
