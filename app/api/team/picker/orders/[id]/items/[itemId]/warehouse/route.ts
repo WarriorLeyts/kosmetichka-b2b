@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ADMIN_MANAGER, requireStaff } from "../../../../../../_auth";
 import { badId, notFound, parseId } from "../../../../../../_shared";
 import { staffSeesOrder } from "@/lib/staffScope";
-import { onlyStock, shopAndStock, splitsWarehouses, toWarehouseQty } from "@/lib/orderWarehouses";
+import { splitsWarehouses, toWarehouseQty } from "@/lib/orderWarehouses";
 
 // PUT /api/team/picker/orders/:id/items/:itemId/warehouse { stock: n } — wholesale assembly: n pieces of the
 // line come from «0. Склад», the rest from «1. Мега Косметичка». { stock: null } — back to the 12-piece rule.
@@ -36,11 +36,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const stock = Number(raw);
   if (!Number.isInteger(stock) || stock < 0 || stock > item.quantity) {
     return NextResponse.json({ error: `Со склада можно взять от 0 до ${item.quantity} шт.` }, { status: 400 });
-  }
-  // 12 or fewer in the shop: nothing from there (owner, 2026-11-11)
-  if (stock < item.quantity) {
-    const have = (await shopAndStock([item.productId])).get(item.productId);
-    if (have && onlyStock(have.shop)) return NextResponse.json({ error: `В магазине ${have.shop} шт. — меньше 12, берём только со склада` }, { status: 400 });
   }
   await prisma.orderItem.update({ where: { id: lineId }, data: { warehouseQty: toWarehouseQty({ stock, shop: item.quantity - stock }) } });
   return NextResponse.json({ ok: true, stock, shop: item.quantity - stock });
