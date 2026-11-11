@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SHOP_WAREHOUSE, STOCK_WAREHOUSE, onlyStock, savedSplit, suggestSplit, toWarehouseQty } from "./orderWarehouses";
+import { SHOP_WAREHOUSE, STOCK_WAREHOUSE, onlyStock, orderPrimary, savedSplit, suggestSplit, toWarehouseQty } from "./orderWarehouses";
 
 describe("the 12-piece rule", () => {
   it("shop has plenty: all from the shop", () => {
@@ -36,5 +36,32 @@ describe("12 or fewer in the shop — only the warehouse", () => {
   });
   it("shop 11, warehouse 3, need 5 → all from the warehouse (2 will be «Не хватает»)", () => {
     expect(suggestSplit(5, 11, 3)).toEqual({ shop: 0, stock: 5 });
+  });
+});
+
+describe("the order's main source — by the majority of lines", () => {
+  // 10 lines: the warehouse has 8 in full, the shop 7 → the warehouse
+  const lines = [
+    ...Array.from({ length: 5 }, () => ({ qty: 3, shopQty: 40, stockQty: 50 })),
+    ...Array.from({ length: 2 }, () => ({ qty: 3, shopQty: 40, stockQty: 0 })),
+    ...Array.from({ length: 3 }, () => ({ qty: 3, shopQty: 5, stockQty: 20 })),
+  ];
+  it("more lines on the warehouse → the warehouse", () => {
+    expect(orderPrimary(lines)).toBe("stock");
+  });
+  it("then the warehouse gives what it has, the shop only the rest", () => {
+    expect(suggestSplit(3, 40, 50, "stock")).toEqual({ shop: 0, stock: 3 });
+    expect(suggestSplit(3, 40, 0, "stock")).toEqual({ shop: 3, stock: 0 });
+    expect(suggestSplit(10, 40, 6, "stock")).toEqual({ shop: 4, stock: 6 });
+  });
+  it("still keeps 12 in the shop", () => {
+    expect(suggestSplit(10, 15, 4, "stock")).toEqual({ shop: 3, stock: 7 });
+    expect(suggestSplit(3, 11, 0, "stock")).toEqual({ shop: 0, stock: 3 });
+  });
+  it("more lines in the shop → the shop", () => {
+    expect(orderPrimary([{ qty: 2, shopQty: 30, stockQty: 0 }, { qty: 2, shopQty: 30, stockQty: 0 }, { qty: 2, shopQty: 30, stockQty: 9 }])).toBe("shop");
+  });
+  it("a tie → the warehouse", () => {
+    expect(orderPrimary([{ qty: 2, shopQty: 30, stockQty: 0 }, { qty: 2, shopQty: 5, stockQty: 9 }])).toBe("stock");
   });
 });
