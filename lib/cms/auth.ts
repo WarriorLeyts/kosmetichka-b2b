@@ -44,7 +44,7 @@ export async function getCmsUser(): Promise<CmsUser | null> {
 export async function cmsGuard(request: Request, perm: Permission): Promise<{ user: CmsUser; ip: string } | NextResponse> {
   if (request.method !== "GET" && request.method !== "HEAD") {
     const origin = request.headers.get("origin");
-    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+    const host = request.headers.get("host");
     if (origin && host) {
       let ok = false;
       try {

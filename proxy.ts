@@ -7,8 +7,9 @@ const secret = new TextEncoder().encode(resolveJwtSecret());
 /** Admin panel host (admin.kosmetichka-opt.ru): its pages live in app/cms, its API in app/api/cms */
 const CMS_HOST = (process.env.CMS_HOST || "admin.kosmetichka-opt.ru").toLowerCase();
 
+// only Host: nginx sets it itself for every site (an X-Forwarded-Host sent by a client is not trusted)
 function requestHost(request: NextRequest): string {
-  return (request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "").split(",")[0].trim().split(":")[0].toLowerCase();
+  return (request.headers.get("host") ?? "").trim().split(":")[0].toLowerCase();
 }
 
 function isCmsHost(host: string): boolean {
