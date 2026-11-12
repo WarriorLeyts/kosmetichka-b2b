@@ -26,7 +26,9 @@ type Version = { id: number; note: string | null; createdBy: string; createdAt: 
 
 const blockTitle = (b: HomeBlock) => ("title" in b && b.title ? b.title : BLOCK_LABELS[b.type]);
 
-export function HomeEditor() {
+export function HomeEditor({ page = "home" }: { page?: "home" | "catalog" }) {
+  const q = page === "home" ? "" : `?page=${page}`;
+  const isHome = page === "home";
   const [content, setContent] = useState<PageContent | null>(null);
   const [saved, setSaved] = useState<string>("");
   const [published, setPublished] = useState<string>("");
@@ -39,13 +41,13 @@ export function HomeEditor() {
   const { confirm, dialog } = useConfirm();
 
   const load = useCallback(async () => {
-    const r = await cmsApi<{ draft: PageContent; published: PageContent | null } & Meta>("/api/cms/home");
+    const r = await cmsApi<{ draft: PageContent; published: PageContent | null } & Meta>(`/api/cms/home${q}`);
     setContent(r.draft);
     setSaved(JSON.stringify(r.draft));
     setPublished(r.published ? JSON.stringify(r.published) : "");
     setMeta(r);
     setSelected((s) => s ?? r.draft.blocks[0]?.id ?? null);
-  }, []);
+  }, [q]);
   useEffect(() => {
     load().catch((e) => toast.error(e.message));
   }, [load]);
@@ -59,7 +61,7 @@ export function HomeEditor() {
   useEffect(() => {
     if (!content) return;
     const t = setTimeout(() => {
-      cmsApi<{ blocks: ResolvedBlock[] }>("/api/cms/home/preview", { body: { blocks: content.blocks.map((b) => ({ ...b, visible: true })) } })
+      cmsApi<{ blocks: ResolvedBlock[] }>(`/api/cms/home/preview${q}`, { body: { blocks: content.blocks.map((b) => ({ ...b, visible: true })) } })
         .then((r) => setPreview(r.blocks))
         .catch(() => {});
     }, 500);
@@ -88,7 +90,7 @@ export function HomeEditor() {
     }
     setBusy("save");
     try {
-      const r = await cmsApi<{ draftUpdatedAt: string; draftUpdatedBy: string }>("/api/cms/home", { method: "PUT", body: { content, baseUpdatedAt: meta?.draftUpdatedAt } });
+      const r = await cmsApi<{ draftUpdatedAt: string; draftUpdatedBy: string }>(`/api/cms/home${q}`, { method: "PUT", body: { content, baseUpdatedAt: meta?.draftUpdatedAt } });
       setSaved(JSON.stringify(content));
       setMeta((m) => (m ? { ...m, draftUpdatedAt: r.draftUpdatedAt, draftUpdatedBy: r.draftUpdatedBy } : m));
       toast.success("Черновик сохранён. На сайте ничего не изменилось — нажмите «Опубликовать».");
@@ -114,13 +116,13 @@ export function HomeEditor() {
 
   const publish = async () => {
     if (dirty && !(await save())) return;
-    if (!(await confirm("Опубликовать главную?\nСайт и приложения покажут её в течение минуты.", false))) return;
+    if (!(await confirm(isHome ? "Опубликовать главную?\nСайт и приложения покажут её в течение минуты." : "Опубликовать блоки каталога?\nСайт и приложения покажут их в течение минуты.", false))) return;
     setBusy("publish");
     try {
-      const r = await cmsApi<{ publishedAt: string; publishedBy: string }>("/api/cms/home/publish", { body: {} });
+      const r = await cmsApi<{ publishedAt: string; publishedBy: string }>(`/api/cms/home/publish${q}`, { body: {} });
       setPublished(JSON.stringify(content));
       setMeta((m) => (m ? { ...m, publishedAt: r.publishedAt, publishedBy: r.publishedBy } : m));
-      toast.success("Главная опубликована");
+      toast.success(isHome ? "Главная опубликована" : "Блоки каталога опубликованы");
       if (versions) openHistory();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Ошибка");
@@ -131,7 +133,7 @@ export function HomeEditor() {
 
   const openHistory = async () => {
     try {
-      setVersions((await cmsApi<{ versions: Version[] }>("/api/cms/home/versions")).versions);
+      setVersions((await cmsApi<{ versions: Version[] }>(`/api/cms/home/versions${q}`)).versions);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Ошибка");
     }
@@ -144,7 +146,7 @@ export function HomeEditor() {
         : `Открыть версию от ${fmtDate(v.createdAt)} в черновике?${dirty ? "\nНесохранённые правки пропадут." : ""}`;
     if (!(await confirm(text, action === "publish"))) return;
     try {
-      await cmsApi(`/api/cms/home/versions/${v.id}`, { body: { action } });
+      await cmsApi(`/api/cms/home/versions/${v.id}${q}`, { body: { action } });
       await load();
       toast.success(action === "publish" ? "Сайт откатили на выбранную версию" : "Версия открыта в черновике");
       openHistory();
@@ -211,10 +213,10 @@ export function HomeEditor() {
       {dialog}
       {/* панель действий */}
       <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 bg-white px-4 py-3 pl-14 md:pl-4">
-        <h1 className="mr-2 text-lg font-semibold">Главная страница</h1>
+        <h1 className="mr-2 text-lg font-semibold">{isHome ? "Главная страница" : "Каталог: блоки над товарами"}</h1>
         {dirty ? <Badge tone="amber">Есть несохранённые правки</Badge> : unpublished ? <Badge tone="accent">Черновик не опубликован</Badge> : <Badge tone="green">Опубликовано</Badge>}
         <span className="hidden text-xs text-neutral-500 lg:inline">
-          На сайте: {meta.publishedAt ? `${fmtDate(meta.publishedAt)}, ${meta.publishedBy}` : "прежняя главная (ещё не публиковали)"}
+          На сайте: {meta.publishedAt ? `${fmtDate(meta.publishedAt)}, ${meta.publishedBy}` : isHome ? "прежняя главная (ещё не публиковали)" : "ничего (ещё не публиковали)"}
         </span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg border border-neutral-200 p-0.5">
@@ -423,7 +425,7 @@ function BlockSettings({ b, onChange }: { b: HomeBlock; onChange: (p: Partial<Ho
             </Field>
           ) : b.source === "new" || b.source === "back" ? (
             <p className="text-xs text-neutral-500">
-              По приходам из 1С за 10 дней, свежие первыми. Каждый покупатель видит то, что может купить: розница — пришедшее в магазин, опт — на склад и в
+              По приходам из 1С, свежие первыми; сколько дней держатся «Новинка» и «Снова в наличии» — в разделе «Настройки». Каждый покупатель видит то, что может купить: розница — пришедшее в магазин, опт — на склад и в
               магазин. Только с фото и в наличии, обновляются сами.
             </p>
           ) : (

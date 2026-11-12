@@ -181,7 +181,7 @@ export function ProductsTable() {
             <option value="">Метки: все</option>
             <option value="new">«Новинка»</option>
             <option value="hit">«Хит»</option>
-            <option value="arr_new">«Новинка» из 1С (10 дней)</option>
+            <option value="arr_new">«Новинка» из 1С</option>
             <option value="arr_back">«Снова в наличии» из 1С</option>
           </Select>
           {anyFilter ? (

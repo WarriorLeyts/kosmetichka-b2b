@@ -1,28 +1,23 @@
 import { prisma } from "@/lib/prisma";
-import { ARRIVAL_DAYS } from "@/lib/arrivals";
+import { arrivalKindOf, arrivalWindows, getArrivalSettings } from "@/lib/arrivalSettings";
 
 /**
  * «Новинка» / «Снова в наличии» as the admin panel shows them: the same rule as the site (lib/arrivals.ts —
- * a receipt / transfer from 1С in the last ARRIVAL_DAYS days; «new» if the product's first receipt ever is
- * in that period), but for every product, also those the site doesn't show yet (no photo, hidden, sold out) —
+ * a receipt / transfer from 1С within the periods of Настройки → Поступления), but for every product, also those the site doesn't show yet (no photo, hidden, sold out) —
  * the panel says why.
  */
 export type ArrivalKind = "new" | "back";
 
-export function arrivalSince(now = Date.now()) {
-  return new Date(now - ARRIVAL_DAYS * 86400_000);
-}
-
 /** productId → kind, for the products that came in the period (a cheap query: ProductArrival is small) */
 export async function arrivalKinds(): Promise<Map<number, ArrivalKind>> {
-  const since = arrivalSince();
+  const w = arrivalWindows(await getArrivalSettings());
   const rows = await prisma.productArrival
-    .findMany({ where: { docDate: { gte: since } }, select: { firstReceiptAt: true, product: { select: { id: true } } } })
+    .findMany({ where: { docDate: { gte: w.since } }, select: { docDate: true, firstReceiptAt: true, product: { select: { id: true } } } })
     .catch(() => []);
   const out = new Map<number, ArrivalKind>();
   for (const r of rows) {
-    const isNew = Boolean(r.firstReceiptAt && r.firstReceiptAt >= since);
-    if (isNew || !out.has(r.product.id)) out.set(r.product.id, isNew ? "new" : "back");
+    const kind = arrivalKindOf(r, w);
+    if (kind && (kind === "new" || !out.has(r.product.id))) out.set(r.product.id, kind);
   }
   return out;
 }
@@ -39,13 +34,15 @@ export const PLACE_LABELS: Record<string, string> = { stock: "Склад (пос
  * to buy, «Новые поступления» skip it (lib/arrivals.ts listArrivals).
  */
 export async function productArrivalInfo(p: { guid: string; hidden: boolean; stock: number | null; wholesaleStock: number; photos: number }) {
-  const since = arrivalSince();
+  const s = await getArrivalSettings();
+  const w = arrivalWindows(s);
   const rows = await prisma.productArrival
     .findMany({ where: { productGuid: p.guid }, orderBy: { docDate: "desc" }, take: 15, select: { place: true, docNumber: true, docDate: true, qty: true, firstReceiptAt: true } })
     .catch(() => []);
-  const recent = rows.filter((r) => r.docDate >= since);
+  const kinds = rows.map((r) => arrivalKindOf(r, w));
+  const recent = rows.filter((_, i) => kinds[i]);
   const firstReceiptAt = rows.find((r) => r.firstReceiptAt)?.firstReceiptAt ?? null;
-  const kind: ArrivalKind | null = recent.length ? (recent.some((r) => r.firstReceiptAt && r.firstReceiptAt >= since) ? "new" : "back") : null;
+  const kind: ArrivalKind | null = kinds.includes("new") ? "new" : kinds.includes("back") ? "back" : null;
   const why: string[] = [];
   if (kind) {
     if (p.hidden) why.push("товар скрыт");
@@ -58,8 +55,10 @@ export async function productArrivalInfo(p: { guid: string; hidden: boolean; sto
     why,
     firstReceiptAt,
     /** «Новинка» until (the first receipt + the period), the label at all until (the last arrival + the period) */
-    newUntil: kind === "new" && firstReceiptAt ? new Date(firstReceiptAt.getTime() + ARRIVAL_DAYS * 86400_000) : null,
-    until: recent.length ? new Date(recent[0].docDate.getTime() + ARRIVAL_DAYS * 86400_000) : null,
+    newUntil: kind === "new" && firstReceiptAt ? new Date(firstReceiptAt.getTime() + s.newDays * 86400_000) : null,
+    until: recent.length ? new Date(recent[0].docDate.getTime() + s.backDays * 86400_000) : null,
+    newDays: s.newDays,
+    backDays: s.backDays,
     rows,
   };
 }

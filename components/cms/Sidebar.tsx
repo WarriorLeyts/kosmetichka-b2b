@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { History, Home, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Package, ShoppingBag, Search, Upload, X, ExternalLink } from "lucide-react";
+import { History, Home, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Package, ShoppingBag, Settings, LayoutGrid, FileText, Search, Upload, X, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ROLE: Record<string, string> = { admin: "Администратор", manager: "Менеджер" };
@@ -16,11 +16,14 @@ export function CmsSidebar({ user, canAudit }: { user: { name: string; role: str
   const items = [
     { href: "/", label: "Дашборд", icon: LayoutDashboard },
     { href: "/home", label: "Главная страница", icon: Home },
+    { href: "/catalog", label: "Каталог", icon: LayoutGrid },
+    { href: "/pages", label: "Страницы", icon: FileText },
     { href: "/banners", label: "Баннеры", icon: ImageIcon },
     { href: "/products", label: "Товары", icon: Package },
     { href: "/products/images", label: "Загрузка фото", icon: Upload },
     { href: "/seo", label: "Массовое SEO", icon: Search },
     { href: "/orders", label: "Заказы", icon: ShoppingBag },
+    { href: "/settings", label: "Настройки", icon: Settings },
     ...(canAudit ? [{ href: "/history", label: "Журнал действий", icon: History }] : []),
   ];
   const active = (href: string) => (href === "/" ? cur === "/" : cur === href || (cur.startsWith(href + "/") && !items.some((i) => i.href !== href && i.href.startsWith(href) && cur.startsWith(i.href))));

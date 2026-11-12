@@ -8,6 +8,7 @@ import { can } from "@/lib/cms/auth";
 import { getHomePage } from "@/lib/cms/home";
 import { syncWhere } from "@/lib/cms/orderSync";
 import { arrivalKinds } from "@/lib/cms/arrivalInfo";
+import { getArrivalSettings } from "@/lib/arrivalSettings";
 import { orderScopeWhere, staffScope } from "@/lib/staffScope";
 
 export const metadata = { title: "Дашборд" };
@@ -41,6 +42,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     can(user, "orders.view") ? prisma.order.count({ where: { AND: [scope, syncWhere("unsynced")] } }) : Promise.resolve(0),
     arrivalKinds(),
   ]);
+  const periods = await getArrivalSettings();
   const draftChanged = !home.publishedAt || home.draftUpdatedAt > home.publishedAt;
 
   const tiles: { label: string; value: number | string; href?: string; warn?: boolean }[] = [
@@ -50,8 +52,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     { label: "В наличии без описания", value: noDesc.toLocaleString("ru-RU"), href: "/products?stock=in&desc=none", warn: noDesc > 0 },
     { label: "Скрыто с сайта", value: hidden.toLocaleString("ru-RU"), href: "/products?hidden=1" },
     { label: "Активных баннеров", value: banners, href: "/banners" },
-    { label: "Новинки из 1С (10 дней)", value: [...arrivals.values()].filter((k) => k === "new").length, href: "/products?label=arr_new" },
-    { label: "Снова в наличии (10 дней)", value: [...arrivals.values()].filter((k) => k === "back").length, href: "/products?label=arr_back" },
+    { label: `Новинки (${periods.newDays} дн.)`, value: [...arrivals.values()].filter((k) => k === "new").length, href: "/products?label=arr_new" },
+    { label: `Снова в наличии (${periods.backDays} дн.)`, value: [...arrivals.values()].filter((k) => k === "back").length, href: "/products?label=arr_back" },
     { label: "Заказов сегодня", value: ordersToday, href: "/orders" },
     { label: "Не передано в 1С", value: unsynced, href: "/orders?sync=unsynced", warn: unsynced > 0 },
   ];

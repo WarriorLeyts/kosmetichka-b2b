@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { can, cmsGuard, isGuardError } from "@/lib/cms/auth";
 import { logAction } from "@/lib/cms/audit";
 import { parseBody } from "@/lib/cms/validate";
-import { getHomePage, HOME_KEY, readContent } from "@/lib/cms/home";
+import { BLOCK_PAGES, blockPageOf, getHomePage, readContent } from "@/lib/cms/home";
 import { pageContentSchema } from "@/lib/cms/homeSchema";
 
 export const dynamic = "force-dynamic";
@@ -14,10 +14,11 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const g = await cmsGuard(request, "home.edit");
   if (isGuardError(g)) return g;
-  const page = await getHomePage();
+  const key = blockPageOf(request);
+  const page = await getHomePage(key);
   return NextResponse.json({
-    draft: readContent(page.draft),
-    published: page.published ? readContent(page.published) : null,
+    draft: readContent(page.draft, key),
+    published: page.published ? readContent(page.published, key) : null,
     draftUpdatedAt: page.draftUpdatedAt,
     draftUpdatedBy: page.draftUpdatedBy,
     publishedAt: page.publishedAt,
@@ -34,7 +35,8 @@ export async function PUT(request: Request) {
   if (isGuardError(g)) return g;
   const body = await parseBody(request, putSchema);
   if (body instanceof NextResponse) return body;
-  const page = await getHomePage();
+  const key = blockPageOf(request);
+  const page = await getHomePage(key);
   const who = g.user.name || g.user.login;
   // кто-то другой сохранил черновик, пока этот редактор был открыт — не затираем молча
   if (body.baseUpdatedAt && page.draftUpdatedBy && page.draftUpdatedBy !== who && new Date(body.baseUpdatedAt) < page.draftUpdatedAt) {
@@ -44,9 +46,9 @@ export async function PUT(request: Request) {
     );
   }
   const saved = await prisma.sitePage.update({
-    where: { key: HOME_KEY },
+    where: { key },
     data: { draft: body.content as unknown as Prisma.InputJsonValue, draftUpdatedAt: new Date(), draftUpdatedBy: who },
   });
-  await logAction(g.user, g.ip, { action: "home.draft", entity: "page", entityId: HOME_KEY, summary: "Главная: сохранён черновик", after: body.content });
+  await logAction(g.user, g.ip, { action: "home.draft", entity: "page", entityId: key, summary: `${BLOCK_PAGES[key].short}: сохранён черновик`, after: body.content });
   return NextResponse.json({ ok: true, draftUpdatedAt: saved.draftUpdatedAt, draftUpdatedBy: saved.draftUpdatedBy });
 }

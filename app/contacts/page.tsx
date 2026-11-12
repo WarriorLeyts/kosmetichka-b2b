@@ -1,14 +1,12 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { DocPageView } from "@/components/DocPageView";
+import { publishedDoc } from "@/lib/cms/docs";
 import { AppBar } from "@/components/app/AppBar";
 
-export const metadata: Metadata = {
-  alternates: { canonical: "/contacts" },
-  title: "Контакты",
-  robots: { index: true, follow: true },
-};
 
-export default function ContactsPage() {
+/** the text the site had before the admin panel — shown until the page is published there */
+function LegacyContactsPage() {
   return (
     <main className="min-h-screen">
       <AppBar backHref="/" />
@@ -102,4 +100,24 @@ export default function ContactsPage() {
       </div>
     </main>
   );
+}
+
+// the text is edited in the admin panel (Страницы); a minute of cache on the server
+export const revalidate = 60;
+
+const BASE: Metadata = {
+  alternates: { canonical: "/contacts" },
+  title: "Контакты",
+  robots: { index: true, follow: true },
+};
+
+export async function generateMetadata(): Promise<Metadata> {
+  const doc = await publishedDoc("contacts");
+  if (!doc) return BASE;
+  return { ...BASE, title: doc.seoTitle || doc.title, ...(doc.seoDescription ? { description: doc.seoDescription } : {}) };
+}
+
+export default async function ContactsPage() {
+  const doc = await publishedDoc("contacts");
+  return doc ? <DocPageView doc={doc} slug="contacts" /> : <LegacyContactsPage />;
 }

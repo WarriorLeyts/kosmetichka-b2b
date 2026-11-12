@@ -1,14 +1,12 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { DocPageView } from "@/components/DocPageView";
+import { publishedDoc } from "@/lib/cms/docs";
 import { AppBar } from "@/components/app/AppBar";
 
-export const metadata: Metadata = {
-  alternates: { canonical: "/agreement" },
-  title: "Пользовательское соглашение",
-  robots: { index: true, follow: true },
-};
 
-export default function AgreementPage() {
+/** the text the site had before the admin panel — shown until the page is published there */
+function LegacyAgreementPage() {
   return (
     <main className="min-h-screen">
       <AppBar backHref="/" />
@@ -133,4 +131,24 @@ export default function AgreementPage() {
       </div>
     </main>
   );
+}
+
+// the text is edited in the admin panel (Страницы); a minute of cache on the server
+export const revalidate = 60;
+
+const BASE: Metadata = {
+  alternates: { canonical: "/agreement" },
+  title: "Пользовательское соглашение",
+  robots: { index: true, follow: true },
+};
+
+export async function generateMetadata(): Promise<Metadata> {
+  const doc = await publishedDoc("agreement");
+  if (!doc) return BASE;
+  return { ...BASE, title: doc.seoTitle || doc.title, ...(doc.seoDescription ? { description: doc.seoDescription } : {}) };
+}
+
+export default async function AgreementPage() {
+  const doc = await publishedDoc("agreement");
+  return doc ? <DocPageView doc={doc} slug="agreement" /> : <LegacyAgreementPage />;
 }
