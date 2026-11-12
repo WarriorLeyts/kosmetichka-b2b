@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ExternalLink, ImagePlus, Lock, Plus, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, GripVertical, ImagePlus, Lock, Plus, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cmsApi, fmtDate } from "@/lib/cms/client";
 import { PRICE_LABELS } from "@/lib/cms/productSchema";
 import { Badge, Btn, Card, Field, Input, Textarea, Toggle, useConfirm } from "@/components/cms/ui";
 import { ProductPicker } from "@/components/cms/Pickers";
+import { useSortable } from "@/components/cms/useSortable";
 
 type Img = { id: number; path: string; url: string; full: string; fromAdmin: boolean; usedByVariants: number };
 type Product = {
@@ -50,7 +51,6 @@ export function ProductEditor({ id }: { id: number }) {
   const [base, setBase] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [dragImg, setDragImg] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { confirm, dialog } = useConfirm();
 
@@ -147,6 +147,21 @@ export function ProductEditor({ id }: { id: number }) {
     }
   };
 
+  // порядок фото перетаскиванием (мышью и пальцем); сохраняется, когда фото отпущено
+  const imgsRef = useRef<Img[]>([]);
+  imgsRef.current = p?.images ?? [];
+  const photoSort = useSortable(
+    (from, to) =>
+      setP((cur) => {
+        if (!cur) return cur;
+        const next = [...cur.images];
+        const [x] = next.splice(from, 1);
+        next.splice(to, 0, x);
+        return { ...cur, images: next };
+      }),
+    () => saveOrder(imgsRef.current)
+  );
+
   if (!p || !form) return <div className="text-sm text-neutral-500">Загрузка…</div>;
   const set = (patch: Partial<Form>) => setForm({ ...form, ...patch });
   const seoTitle = form.seoTitle || p.name;
@@ -196,31 +211,18 @@ export function ProductEditor({ id }: { id: number }) {
               {p.images.map((img, i) => (
                 <div
                   key={img.id}
-                  draggable
-                  onDragStart={() => setDragImg(img.id)}
-                  onDragEnd={() => setDragImg(null)}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    if (dragImg == null || dragImg === img.id) return;
-                    const from = p.images.findIndex((x) => x.id === dragImg);
-                    const next = [...p.images];
-                    const [x] = next.splice(from, 1);
-                    next.splice(i, 0, x);
-                    setP({ ...p, images: next });
-                  }}
-                  onDrop={(e) => {
-                    if (dragImg != null) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      saveOrder(p.images);
-                    }
-                  }}
-                  className={`group relative aspect-square cursor-grab overflow-hidden rounded-lg border bg-white ${i === 0 ? "border-[#8E1B47]" : "border-neutral-200"} ${dragImg === img.id ? "opacity-40" : ""}`}
+                  ref={photoSort.itemRef(i)}
+                  className={`group relative aspect-square overflow-hidden rounded-lg border bg-white ${i === 0 ? "border-[#8E1B47]" : "border-neutral-200"} ${photoSort.dragging === i ? "opacity-60 shadow-lg" : ""}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={img.url} alt="" className="h-full w-full object-contain" />
                   {i === 0 ? <span className="absolute left-1 top-1 rounded bg-[#8E1B47] px-1 text-[10px] text-white">Главное</span> : null}
                   <span className="absolute bottom-1 left-1 rounded bg-white/90 px-1 text-[10px] text-neutral-600">{img.fromAdmin ? "панель" : "1С"}</span>
+                  {p.images.length > 1 ? (
+                    <span {...photoSort.handleProps(i)} className="absolute bottom-1 right-1 rounded bg-white/90 p-1 shadow" title="Перетащите, чтобы поменять порядок" aria-label="Перетащить">
+                      <GripVertical className="size-3.5 text-neutral-600" />
+                    </span>
+                  ) : null}
                   <div className="absolute right-1 top-1 hidden gap-1 group-hover:flex">
                     {i > 0 ? (
                       <button onClick={() => saveOrder([img, ...p.images.filter((x) => x.id !== img.id)])} className="rounded bg-white/90 p-1 shadow" title="Сделать главным">
@@ -241,7 +243,7 @@ export function ProductEditor({ id }: { id: number }) {
                 </button>
               ) : null}
             </div>
-            <p className="mt-2 text-xs text-neutral-500">Перетаскивайте фото, чтобы поменять порядок. Первое — главное (в каталоге). Фото из панели обмен с 1С не стирает.</p>
+            <p className="mt-2 text-xs text-neutral-500">Перетаскивайте фото за значок в углу, чтобы поменять порядок. Первое — главное (в каталоге). Фото из панели обмен с 1С не стирает.</p>
           </Card>
 
           <Card className="p-5">

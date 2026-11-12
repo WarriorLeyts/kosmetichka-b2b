@@ -37,7 +37,7 @@ export type PreviewProduct = { id: number; name: string; image: string | null; p
 /** What the apps get for one block: the block itself + the data it needs. */
 export type ResolvedBlock =
   | (Extract<HomeBlock, { type: "hero" }> & { banners: ResolvedBanner[] })
-  | (Extract<HomeBlock, { type: "categories" }> & { categories: { guid: string; name: string }[] | null })
+  | (Extract<HomeBlock, { type: "categories" }> & { categories: { guid: string; name: string }[] | null; auto?: boolean })
   | (Extract<HomeBlock, { type: "products" }> & {
       /** the catalogue request that lists the block's products (GET /api/catalog/products) */
       query: { quick?: string[]; sort?: string; categoryGuid?: string; ids?: number[]; onlyStock?: boolean };
@@ -79,6 +79,13 @@ export async function resolveBlocks(content: PageContent, opts: { withPreview?: 
     ? new Set((await prisma.product.findMany({ where: { id: { in: manualIds }, hidden: false }, select: { id: true } })).map((p) => p.id))
     : new Set<number>();
 
+  // предпросмотр: «основные категории автоматически» — показываем, какие именно (как в приложении)
+  let autoCats: { guid: string; name: string }[] = [];
+  if (opts.keepEmpty && blocks.some((b) => b.type === "categories" && !b.categoryGuids.length)) {
+    const root = await prisma.category.findFirst({ where: { name: { equals: "Каталог", mode: "insensitive" } }, select: { guid: true } });
+    autoCats = await prisma.category.findMany({ where: root ? { parentGuid: root.guid } : { parentGuid: null }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { guid: true, name: true } });
+  }
+
   const out: ResolvedBlock[] = [];
   for (const b of blocks) {
     if (b.type === "hero") {
@@ -97,7 +104,8 @@ export async function resolveBlocks(content: PageContent, opts: { withPreview?: 
       if (list.length || opts.keepEmpty) out.push({ ...b, banners: list });
     } else if (b.type === "categories") {
       const list = b.categoryGuids.map((g) => catByGuid.get(g)).filter((x): x is { guid: string; name: string } => !!x);
-      out.push({ ...b, categories: b.categoryGuids.length ? list.slice(0, b.limit) : null });
+      if (b.categoryGuids.length) out.push({ ...b, categories: list.slice(0, b.limit) });
+      else out.push({ ...b, categories: opts.keepEmpty ? autoCats.slice(0, b.limit) : null, auto: true });
     } else if (b.type === "products") {
       const query: Extract<ResolvedBlock, { type: "products" }>["query"] =
         b.source === "new"

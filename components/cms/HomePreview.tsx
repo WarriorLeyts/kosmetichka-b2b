@@ -139,7 +139,7 @@ export function HomePreview({ blocks, device, selectedId, onSelect, onEdit, hidd
                     </div>
                   ))}
                 </div>
-                {!b.categories ? <div className="mt-1 text-[11px] text-neutral-400">Основные категории каталога — автоматически</div> : null}
+                {b.auto ? <div className="mt-1 text-[11px] text-neutral-400">Основные категории каталога — автоматически</div> : null}
               </div>
             ) : null}
 

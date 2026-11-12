@@ -19,6 +19,7 @@ import { Badge, Btn, Field, Input, Select, Textarea, Toggle, useConfirm } from "
 import { ImageUpload } from "@/components/cms/ImageUpload";
 import { BannerPicker, CategoryPicker, CategorySelect, ProductPicker } from "@/components/cms/Pickers";
 import { HomePreview } from "@/components/cms/HomePreview";
+import { useSortable } from "@/components/cms/useSortable";
 
 type Meta = { draftUpdatedAt: string; draftUpdatedBy: string | null; publishedAt: string | null; publishedBy: string | null; canPublish: boolean };
 type Version = { id: number; note: string | null; createdBy: string; createdAt: string };
@@ -35,7 +36,6 @@ export function HomeEditor() {
   const [preview, setPreview] = useState<ResolvedBlock[]>([]);
   const [busy, setBusy] = useState<"" | "save" | "publish">("");
   const [versions, setVersions] = useState<Version[] | null>(null);
-  const [dragId, setDragId] = useState<string | null>(null);
   const { confirm, dialog } = useConfirm();
 
   const load = useCallback(async () => {
@@ -194,6 +194,12 @@ export function HomeEditor() {
     setBlocks(blocks);
   };
 
+  const sortable = useSortable((from, to) => {
+    if (!content) return;
+    const id = content.blocks[from]?.id;
+    if (id) move(id, to);
+  });
+
   if (!content || !meta) return <div className="text-sm text-neutral-500">Загрузка…</div>;
   const cur = content.blocks.find((b) => b.id === selected) ?? null;
   const hiddenIds = new Set(content.blocks.filter((b) => !b.visible).map((b) => b.id));
@@ -201,7 +207,7 @@ export function HomeEditor() {
   const shown = [...preview].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)).filter((b) => order.has(b.id));
 
   return (
-    <div className="-mx-4 -my-5 flex h-[calc(100vh)] flex-col md:-mx-8 md:-my-7">
+    <div className="-mx-4 -mb-5 -mt-16 flex h-[calc(100vh)] flex-col md:-mx-8 md:-my-7">
       {dialog}
       {/* панель действий */}
       <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 bg-white px-4 py-3 pl-14 md:pl-4">
@@ -262,21 +268,17 @@ export function HomeEditor() {
               {content.blocks.map((b, i) => (
                 <li
                   key={b.id}
-                  draggable
-                  onDragStart={() => setDragId(b.id)}
-                  onDragEnd={() => setDragId(null)}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    if (dragId && dragId !== b.id) move(dragId, i);
-                  }}
+                  ref={sortable.itemRef(i)}
                   onClick={() => setSelected(b.id)}
                   className={cn(
                     "group flex cursor-pointer items-center gap-1.5 rounded-lg border px-2 py-1.5 text-sm",
                     selected === b.id ? "border-[#8E1B47]/50 bg-[#FBEFF3]" : "border-transparent hover:bg-neutral-50",
-                    dragId === b.id && "opacity-50"
+                    sortable.dragging === i && "opacity-60 shadow-md"
                   )}
                 >
-                  <GripVertical className="size-4 shrink-0 cursor-grab text-neutral-400" />
+                  <span {...sortable.handleProps(i)} className="-m-1 p-1" title="Перетащите, чтобы поменять порядок" aria-label="Перетащить">
+                    <GripVertical className="size-4 shrink-0 text-neutral-400" />
+                  </span>
                   <span className={cn("min-w-0 flex-1", !b.visible && "text-neutral-400 line-through")}>
                     <span className="block truncate font-medium">{blockTitle(b)}</span>
                     <span className="block truncate text-[11px] text-neutral-500">{BLOCK_LABELS[b.type]}</span>
