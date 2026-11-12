@@ -91,7 +91,7 @@ export async function GET(
     }),
     prisma.product.findMany({
       where: { id: { in: productIds } },
-      select: { id: true, barcode: true, stock: true },
+      select: { id: true, barcode: true, stock: true, barcodes: { select: { barcode: true, unitName: true }, orderBy: { barcode: "asc" } } },
     }),
     maxmaStuckByOrder([order.id]),
   ]);
@@ -102,7 +102,10 @@ export async function GET(
   }
   const productBarcodes = new Map<number, string | null>();
   const productStock = new Map<number, number | null>();
+  // every barcode of the product in 1С (ProductBarcode), shown with the order line
+  const productAllBarcodes = new Map<number, { barcode: string; unitName: string | null }[]>();
   for (const p of productRows) {
+    productAllBarcodes.set(p.id, p.barcodes);
     productBarcodes.set(p.id, p.barcode ?? null);
     productStock.set(p.id, p.stock ?? null);
   }
@@ -190,6 +193,7 @@ export async function GET(
           productId: item.productId,
           productName: item.productName,
           barcode: item.barcode ?? productBarcodes.get(item.productId) ?? null,
+          barcodes: productAllBarcodes.get(item.productId) ?? [],
           quantity: item.quantity,
           price: item.price,
           total: item.total,

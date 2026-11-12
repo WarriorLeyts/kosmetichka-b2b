@@ -27,6 +27,8 @@ export async function GET(
         include: { image: true },
         orderBy: { sortOrder: "asc" },
       },
+      // every barcode of the product in 1С (a box has its own) — shown on the product page
+      barcodes: { select: { barcode: true, unitName: true }, orderBy: { barcode: "asc" } },
     },
   });
 
