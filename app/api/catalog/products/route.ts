@@ -164,8 +164,9 @@ export async function GET(request: Request) {
     ? (sortParam as Sort)
     : "popularity";
 
-  const newSince = new Date();
-  newSince.setDate(newSince.getDate() - 30);
+  // «Новинки»: products that came to the company for the first time in the last 10 days (the first receipt in
+  // 1С, lib/arrivals.ts) and this customer can buy now — not «appeared on the site», which mixed in old goods
+  const novelIds = quick.includes("new") ? (await listArrivals({ wholesale, limit: 2000 })).filter((a) => a.isNew).map((a) => a.productId) : [];
 
   const where: any = {
     // скрытые в админ-панели товары покупатели не видят (корзина — ?ids= ниже — их ещё показывает)
@@ -173,7 +174,7 @@ export async function GET(request: Request) {
     ...(categoryGuids.length > 0 ? { categoryGuid: { in: categoryGuids } } : {}),
     ...(brandGuids.length > 0 ? { brandGuid: { in: brandGuids } } : {}),
     ...(onlyStock ? (wholesale ? { wholesaleStock: { gt: 0 } } : { stock: { gt: 0 } }) : {}),
-    ...(quick.includes("new") ? { createdAt: { gte: newSince } } : {}),
+    ...(quick.includes("new") ? { id: { in: novelIds } } : {}),
     // «Со скидкой»: a flag kept by import-prices.js (was an IN-list of thousands of guids — audit PERF-02)
     ...(quick.includes("sale") ? { hasDiscount: true } : {}),
     ...(quick.includes("gift")
