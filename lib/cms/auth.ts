@@ -52,7 +52,8 @@ export async function cmsGuard(request: Request, perm: Permission): Promise<{ us
     if (origin && host) {
       let ok = false;
       try {
-        ok = new URL(origin).host === host;
+        // по имени хоста (порт не важен: за nginx Host приходит без него)
+        ok = new URL(origin).hostname === host.split(":")[0];
       } catch {
         ok = false;
       }
