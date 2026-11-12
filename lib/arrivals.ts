@@ -44,3 +44,33 @@ export async function listArrivals({ wholesale, limit = 40, staff = false }: { w
   const all = [...out.values()];
   return [...all.filter((a) => a.isNew), ...all.filter((a) => !a.isNew)].slice(0, limit);
 }
+
+/**
+ * Labels for catalog cards: «new» («Новинка», came for the first time) / «back» («Снова в наличии») for the
+ * products of «Новые поступления» this customer can buy. Cached 5 minutes per kind of customer.
+ */
+type ArrivalLabel = "new" | "back";
+const labelCache = new Map<string, { at: number; map: Map<number, ArrivalLabel> }>();
+
+export async function arrivalLabels(wholesale: boolean): Promise<Map<number, ArrivalLabel>> {
+  const key = wholesale ? "w" : "r";
+  const hit = labelCache.get(key);
+  if (hit && Date.now() - hit.at < 5 * 60_000) return hit.map;
+  let list: Arrival[] = [];
+  try {
+    list = await listArrivals({ wholesale, limit: 5000 });
+  } catch (e) {
+    console.error("[arrivals] labels:", e instanceof Error ? e.message : e); // no labels — the catalog works on
+  }
+  const map = new Map<number, ArrivalLabel>(list.map((a) => [a.productId, a.isNew ? "new" : "back"]));
+  labelCache.set(key, { at: Date.now(), map });
+  return map;
+}
+
+/** the product with its arrival label added to its labels (the admin's «Новинка» / «Хит» stay) */
+export function withArrivalLabel<T extends { id: number; labels?: string[] | null }>(p: T, map: Map<number, ArrivalLabel>): T {
+  const l = map.get(p.id);
+  if (!l) return p;
+  const labels = p.labels ?? [];
+  return labels.includes(l) ? p : { ...p, labels: [...labels, l] };
+}
