@@ -43,4 +43,9 @@ export async function onRequestError(
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { recordServerError, serverErrorLine } = await import("./lib/serverErrors");
   await recordServerError(serverErrorLine(err, request, context));
+  // All barcodes from 1С: the full check every hour (after each exchange — the products of the exchange)
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { startBarcodesSync } = await import("./lib/barcodesSync");
+    startBarcodesSync();
+  }
 }

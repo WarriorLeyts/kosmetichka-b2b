@@ -35,5 +35,9 @@ export async function GET(
   if (!product) return NextResponse.json({ error: "Не найден" }, { status: 404 });
   // staff only: stock per 1C warehouse (empty when 1C doesn't split the stock)
   const stockByWarehouse = (await warehouseStockByProductId([product.id])).get(product.id) ?? [];
-  return NextResponse.json({ product: { ...product, stockByWarehouse } });
+  // every barcode of the product in 1С (the exchange carries one)
+  const barcodes = await prisma.productBarcode
+    .findMany({ where: { productGuid: product.guid }, select: { barcode: true, unitName: true }, orderBy: { barcode: "asc" } })
+    .catch(() => []);
+  return NextResponse.json({ product: { ...product, stockByWarehouse, barcodes } });
 }
