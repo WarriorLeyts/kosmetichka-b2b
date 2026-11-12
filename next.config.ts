@@ -35,6 +35,15 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // the old Next pages were removed (audit ARCH-04): their addresses lead to the apps
+  async redirects() {
+    return [
+      { source: "/compare", destination: "/catalog", permanent: true },
+      { source: "/picker/:id(\\d+)", destination: "/admin/pick/:id", permanent: false },
+      { source: "/picker/:path*", destination: "/admin/picker", permanent: false },
+      { source: "/picker", destination: "/admin/picker", permanent: false },
+    ];
+  },
   async rewrites() {
     const rules = [];
 
