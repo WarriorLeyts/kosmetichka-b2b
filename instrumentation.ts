@@ -32,6 +32,11 @@ export async function register() {
     const { startDiscountCards } = await import("./lib/discountCard");
     startDiscountCards();
   }
+  // All barcodes from 1С: the full check every hour (after each exchange — the products of the exchange)
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { startBarcodesSync } = await import("./lib/barcodesSync");
+    startBarcodesSync();
+  }
 }
 
 // Uncaught server errors → DATA_DIR/server-errors.log → Telegram via ~/ops/monitor.mjs (audit ARCH-07)
@@ -43,9 +48,4 @@ export async function onRequestError(
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const { recordServerError, serverErrorLine } = await import("./lib/serverErrors");
   await recordServerError(serverErrorLine(err, request, context));
-  // All barcodes from 1С: the full check every hour (after each exchange — the products of the exchange)
-  if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { startBarcodesSync } = await import("./lib/barcodesSync");
-    startBarcodesSync();
-  }
 }
