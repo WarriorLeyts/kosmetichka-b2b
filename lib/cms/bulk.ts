@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { fitLength, lengthIssue, renderTemplate, SEO_LIMITS, unknownVars, type SeoProduct } from "./seoTemplate";
+import { lengthIssue, renderFit, renderTemplate, SEO_LIMITS, unknownVars, type SeoProduct } from "./seoTemplate";
 
 /**
  * Bulk changes of products (admin panel): the same code computes the preview (what will change, how
@@ -157,8 +157,8 @@ export async function computeChanges(ids: number[], action: BulkAction): Promise
         continue;
       }
       const v = vars(r);
-      const title = action.titleTemplate ? fitLength(renderTemplate(action.titleTemplate, v), SEO_LIMITS.title.max) : r.seoTitle;
-      const desc = action.descriptionTemplate ? fitLength(renderTemplate(action.descriptionTemplate, v), SEO_LIMITS.description.max) : r.seoDescription;
+      const title = action.titleTemplate ? renderFit(action.titleTemplate, v, SEO_LIMITS.title.max) : r.seoTitle;
+      const desc = action.descriptionTemplate ? renderFit(action.descriptionTemplate, v, SEO_LIMITS.description.max) : r.seoDescription;
       const keepTitle = action.overwrite === "empty" || (action.overwrite === "template" && manual) ? r.seoTitle?.trim() || title : title;
       const keepDesc = action.overwrite === "empty" || (action.overwrite === "template" && manual) ? r.seoDescription?.trim() || desc : desc;
       if (keepTitle === r.seoTitle && keepDesc === r.seoDescription) {

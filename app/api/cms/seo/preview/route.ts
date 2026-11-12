@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { cmsGuard, isGuardError } from "@/lib/cms/auth";
 import { parseBody } from "@/lib/cms/validate";
-import { fitLength, lengthIssue, renderTemplate, SEO_LIMITS, unknownVars } from "@/lib/cms/seoTemplate";
+import { lengthIssue, renderFit, SEO_LIMITS, unknownVars } from "@/lib/cms/seoTemplate";
 
 // POST /api/cms/seo/preview {title, description, ids?} — как шаблоны лягут на товары (8 примеров)
 export async function POST(request: Request) {
@@ -22,8 +22,8 @@ export async function POST(request: Request) {
   return NextResponse.json({
     examples: rows.map((r) => {
       const v = { name: r.name, brand: r.brand?.name?.trim() || null, category: r.category?.name ?? null, article: r.article, price: r.prices[0]?.price ?? null, country: r.country };
-      const title = fitLength(renderTemplate(body.title, v), SEO_LIMITS.title.max);
-      const description = fitLength(renderTemplate(body.description, v), SEO_LIMITS.description.max);
+      const title = renderFit(body.title, v, SEO_LIMITS.title.max);
+      const description = renderFit(body.description, v, SEO_LIMITS.description.max);
       return { id: r.id, name: r.name, title, description, titleIssue: lengthIssue("title", title), descIssue: lengthIssue("description", description) };
     }),
   });

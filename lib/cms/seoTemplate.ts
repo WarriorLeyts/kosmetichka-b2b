@@ -62,3 +62,20 @@ export function lengthIssue(kind: "title" | "description", s: string | null | un
   if (n > L.max) return `длинный (${n} > ${L.max})`;
   return null;
 }
+
+/**
+ * Renders and fits into `max`: a long product name is shortened (by words, with «…») so the rest of
+ * the template — «— купить оптом | Косметичка» — stays; only if that is not enough, the end is cut.
+ */
+export function renderFit(tpl: string, p: SeoProduct, max: number): string {
+  const full = renderTemplate(tpl, p);
+  if (full.length <= max || !p.name || !/\{name\}/.test(tpl)) return fitLength(full, max);
+  const name = String(p.name);
+  const room = name.length - (full.length - max) - 1;
+  if (room >= 15) {
+    const short = name.slice(0, room).replace(/[\s,.;:–—-]+\S*$/, "").replace(/[\s,.;:–—-]+$/, "") + "…";
+    const out = renderTemplate(tpl, { ...p, name: short });
+    if (out.length <= max) return out;
+  }
+  return fitLength(full, max);
+}

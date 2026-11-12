@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_TEMPLATES, fitLength, lengthIssue, renderTemplate, unknownVars } from "./seoTemplate";
+import { DEFAULT_TEMPLATES, fitLength, lengthIssue, renderFit, renderTemplate, unknownVars } from "./seoTemplate";
 
 describe("SEO templates", () => {
   it("fills variables", () => {
@@ -21,5 +21,18 @@ describe("SEO templates", () => {
     expect(lengthIssue("title", "")).toBe("пусто");
     expect(lengthIssue("description", "x".repeat(200))).toMatch(/длинный/);
     expect(lengthIssue("title", "Нормальный заголовок товара")).toBeNull();
+  });
+});
+
+describe("renderFit", () => {
+  it("shortens the name, keeps the template's tail", () => {
+    const name = "Vivienne Sabo Устойчивая жидкая матовая помада для губ с плампингом и гиалуроном тон 05";
+    const out = renderFit(DEFAULT_TEMPLATES.title, { name }, 70);
+    expect(out.length).toBeLessThanOrEqual(70);
+    expect(out.endsWith("— купить оптом | Косметичка")).toBe(true);
+    expect(out).toMatch(/^Vivienne Sabo .*… — купить/);
+  });
+  it("short names unchanged", () => {
+    expect(renderFit(DEFAULT_TEMPLATES.title, { name: "Тушь" }, 70)).toBe("Тушь — купить оптом | Косметичка");
   });
 });
