@@ -1,4 +1,4 @@
-import { cardGivesDiscount } from "@/lib/discountCard";
+import { cardGivesDiscount } from "@/lib/discountCardRule";
 /** Retail customers («Розница») can register on the website too (was wholesale-only). */
 export const SITE_RETAIL_ENABLED = true;
 
