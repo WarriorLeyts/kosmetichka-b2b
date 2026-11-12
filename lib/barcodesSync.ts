@@ -20,7 +20,10 @@ export function runBarcodesSync(): void {
   });
 }
 
+let started = false;
 export function startBarcodesSync(): void {
+  if (started) return;
+  started = true;
   if (!(process.env.ODATA_BASE_URL && process.env.ODATA_USER && process.env.ODATA_PASSWORD) || process.env.BARCODES_SYNC === "off") return;
   setTimeout(runBarcodesSync, 3 * 60_000);
   setInterval(runBarcodesSync, 60 * 60_000).unref?.();
