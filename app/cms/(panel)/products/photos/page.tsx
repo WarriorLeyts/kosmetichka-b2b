@@ -1,9 +1,6 @@
-import { requireCmsPage } from "@/lib/cms/page";
-import { ZipPhotos } from "./ZipPhotos";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "Фото из ZIP" };
-
-export default async function ZipPhotosPage() {
-  await requireCmsPage("products.photos");
-  return <ZipPhotos />;
+// старый адрес раздела (этап 1)
+export default function OldPhotosPage() {
+  redirect("/products/images");
 }

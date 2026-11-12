@@ -1,3 +1,4 @@
+import { productPath } from "@/lib/productSlug";
 import { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 
@@ -44,13 +45,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Product pages
   try {
     const products = await prisma.product.findMany({
-      select: { id: true, updatedAt: true },
+      select: { id: true, slug: true, updatedAt: true },
       // products that can be bought now; the ones out of stock come back with the next stock
       where: { stock: { gt: 0 }, hidden: false },
     });
 
     const productPages: MetadataRoute.Sitemap = products.map((p) => ({
-      url: `${baseUrl}/product/${p.id}`,
+      url: `${baseUrl}${productPath(p)}`,
       lastModified: p.updatedAt,
       changeFrequency: "weekly" as const,
       priority: 0.7,
