@@ -51,3 +51,16 @@ describe("arrival labels on cards", async () => {
     expect(withArrivalLabel({ id: 3, labels: [] }, map).labels).toEqual([]);
   });
 });
+
+describe("«Новинка» looks at the whole history of goods coming in", async () => {
+  const { mergeFirst } = await import("../scripts/onec-arrivals.js");
+  it("the earliest of receipts / оприходования / ввод остатков wins", () => {
+    const receipts = new Map([["a", "2026-11-05T10:00:00"]]);
+    const writeOns = new Map([["a", "2026-06-01T10:00:00"], ["b", "2026-11-06T10:00:00"]]);
+    const opening = new Map([["c", "2025-12-31T00:00:00"]]);
+    const f = mergeFirst(receipts, writeOns, opening);
+    expect(f.get("a")).toBe("2026-06-01T10:00:00"); // came by оприходование long ago → not new
+    expect(f.get("b")).toBe("2026-11-06T10:00:00");
+    expect(f.get("c")).toBe("2025-12-31T00:00:00");
+  });
+});

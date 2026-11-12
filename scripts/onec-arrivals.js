@@ -12,7 +12,7 @@ export function fromOneC(s) {
   return new Date(String(s).slice(0, 19) + "+03:00");
 }
 
-/** first posted receipt of every product, at any warehouse: guid → 1С date string */
+/** first posted document of every product among these (receipts, оприходования…), any warehouse: guid → 1С date */
 export function firstReceipts(heads, lines) {
   const date = new Map(heads.filter((h) => h.Posted && !h.DeletionMark).map((h) => [h.Ref_Key, h.Date]));
   const first = new Map();
@@ -23,6 +23,13 @@ export function firstReceipts(heads, lines) {
     if (!first.has(g) || d < first.get(g)) first.set(g, d);
   }
   return first;
+}
+
+/** the earliest of several «first» maps (guid → 1С date string) */
+export function mergeFirst(...maps) {
+  const out = new Map();
+  for (const m of maps) for (const [g, d] of m) if (!out.has(g) || d < out.get(g)) out.set(g, d);
+  return out;
 }
 
 /** document lines → one row per (document, product): quantities summed */
@@ -77,10 +84,16 @@ export async function fetchArrivals(since, env = process.env) {
   const shop = ref(SHOP_NAME);
   if (!stock || !shop) throw new Error(`В 1С нет склада «${!stock ? STOCK_NAME : SHOP_NAME}»`);
 
-  // the whole history of receipts (≈1 000 documents, ≈20 000 lines): when each product came first
+  // when each product came to the company first — the whole history of everything that brings goods in:
+  // receipts (about 1 000 documents / 20 000 lines), «Оприходование запасов» (1 600 / 45 000) and «Ввод
+  // начальных остатков» (stock section, 17 000 lines). A product that came by any of them before is not «Новинка».
   const rHeads = await all("Document_ПриходнаяНакладная", { $select: "Ref_Key,Number,Date,Posted,DeletionMark,СтруктурнаяЕдиница_Key", $orderby: "Ref_Key" }, 5000, env);
   const rLines = await all("Document_ПриходнаяНакладная_Запасы", { $select: "Ref_Key,Номенклатура_Key,Количество" }, 50000, env);
-  const first = firstReceipts(rHeads, rLines);
+  const pHeads = await all("Document_ОприходованиеЗапасов", { $select: "Ref_Key,Date,Posted,DeletionMark", $orderby: "Ref_Key" }, 5000, env);
+  const pLines = await all("Document_ОприходованиеЗапасов_Запасы", { $select: "Ref_Key,Номенклатура_Key" }, 50000, env);
+  const oHeads = await all("Document_ВводНачальныхОстатков", { $select: "Ref_Key,Date,Posted,DeletionMark", $orderby: "Ref_Key" }, 5000, env);
+  const oLines = await all("Document_ВводНачальныхОстатков_Запасы", { $select: "Ref_Key,Номенклатура_Key" }, 50000, env);
+  const first = mergeFirst(firstReceipts(rHeads, rLines), firstReceipts(pHeads, pLines), firstReceipts(oHeads, oLines));
 
   const receipts = rHeads.filter((h) => h.Posted && !h.DeletionMark && h.Date >= since && h.СтруктурнаяЕдиница_Key === stock);
   const rRefs = new Set(receipts.map((h) => h.Ref_Key));
