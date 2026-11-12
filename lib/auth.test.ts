@@ -14,7 +14,15 @@ describe("staff tokens are checked against the account", () => {
     db.user.findUnique.mockResolvedValue({ role: "manager" });
     const t = await createToken({ id: 3, email: "anna", role: "manager" });
     expect((await verifyToken(t))?.id).toBe(3);
-    expect(db.user.findUnique).toHaveBeenCalledWith({ where: { id: 3 }, select: { role: true } });
+    expect(db.user.findUnique).toHaveBeenCalledWith({ where: { id: 3 }, select: { role: true, passwordChangedAt: true } });
+  });
+
+  it("password changed after the login → that session ends; a login after the change works", async () => {
+    const t = await createToken({ id: 3, email: "anna", role: "manager" });
+    db.user.findUnique.mockResolvedValue({ role: "manager", passwordChangedAt: new Date(Date.now() + 5000) });
+    expect(await verifyToken(t)).toBeNull();
+    db.user.findUnique.mockResolvedValue({ role: "manager", passwordChangedAt: new Date(Date.now() - 5000) });
+    expect((await verifyToken(t))?.id).toBe(3);
   });
 
   it("deleted employee → rejected at once", async () => {

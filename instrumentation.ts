@@ -33,3 +33,14 @@ export async function register() {
     startDiscountCards();
   }
 }
+
+// Uncaught server errors → DATA_DIR/server-errors.log → Telegram via ~/ops/monitor.mjs (audit ARCH-07)
+export async function onRequestError(
+  err: unknown,
+  request: { path: string; method: string },
+  context: { routePath: string; routeType: string }
+) {
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  const { recordServerError, serverErrorLine } = await import("./lib/serverErrors");
+  await recordServerError(serverErrorLine(err, request, context));
+}
