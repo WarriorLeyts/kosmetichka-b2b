@@ -19,6 +19,7 @@ type Row = {
   stock: number | null;
   hidden: boolean;
   labels: string[];
+  arrival: "new" | "back" | null;
   salesCount: number;
   updatedAt: string;
   hasDescription: boolean;
@@ -180,6 +181,8 @@ export function ProductsTable() {
             <option value="">Метки: все</option>
             <option value="new">«Новинка»</option>
             <option value="hit">«Хит»</option>
+            <option value="arr_new">«Новинка» из 1С (10 дней)</option>
+            <option value="arr_back">«Снова в наличии» из 1С</option>
           </Select>
           {anyFilter ? (
             <Btn
@@ -309,7 +312,8 @@ export function ProductsTable() {
                     <Link href={`/products/${r.id}`} className="line-clamp-2 font-medium text-neutral-900 hover:text-[#8E1B47]">
                       {r.name}
                     </Link>
-                    <div className="mt-0.5 flex gap-1">
+                    <div className="mt-0.5 flex flex-wrap gap-1">
+                      {r.arrival === "new" ? <Badge tone="green">Новинка · 1С</Badge> : r.arrival === "back" ? <Badge tone="green">Снова в наличии</Badge> : null}
                       {r.labels.includes("new") ? <Badge tone="accent">Новинка</Badge> : null}
                       {r.labels.includes("hit") ? <Badge tone="accent">Хит</Badge> : null}
                       {r.overridden ? <Badge tone="amber">изменено на сайте</Badge> : null}

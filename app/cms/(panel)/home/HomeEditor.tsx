@@ -421,6 +421,11 @@ function BlockSettings({ b, onChange }: { b: HomeBlock; onChange: (p: Partial<Ho
             <Field label="Товары" hint="Скрытые и закончившиеся на сайте не показываются.">
               <ProductPicker value={b.productIds} onChange={(v) => onChange({ productIds: v })} />
             </Field>
+          ) : b.source === "new" || b.source === "back" ? (
+            <p className="text-xs text-neutral-500">
+              По приходам из 1С за 10 дней, свежие первыми. Каждый покупатель видит то, что может купить: розница — пришедшее в магазин, опт — на склад и в
+              магазин. Только с фото и в наличии, обновляются сами.
+            </p>
           ) : (
             <p className="text-xs text-neutral-500">Только товары в наличии, обновляются сами.</p>
           )}

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { cmsGuard, isGuardError } from "@/lib/cms/auth";
 import { productWhere, SORTS } from "@/lib/cms/productFilter";
 import { resolveImageUrl } from "@/lib/image";
+import { arrivalKinds } from "@/lib/cms/arrivalInfo";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
   const sortKey = SORTS[sp.get("sort") ?? ""] ? (sp.get("sort") as string) : "updated";
   const dir: Prisma.SortOrder = sp.get("dir") === "asc" ? "asc" : "desc";
 
-  const [rows, total] = await Promise.all([
+  const [rows, total, arrivals] = await Promise.all([
     prisma.product.findMany({
       where,
       orderBy: [...SORTS[sortKey](dir), { id: "desc" }],
@@ -49,6 +50,7 @@ export async function GET(request: Request) {
       },
     }),
     prisma.product.count({ where }),
+    arrivalKinds(),
   ]);
 
   return NextResponse.json({
@@ -65,6 +67,7 @@ export async function GET(request: Request) {
       stock: r.stock,
       hidden: r.hidden,
       labels: r.labels,
+      arrival: arrivals.get(r.id) ?? null,
       salesCount: r.salesCount,
       updatedAt: r.updatedAt,
       hasDescription: !!r.description?.trim(),

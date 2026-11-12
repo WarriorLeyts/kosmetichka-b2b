@@ -6,6 +6,7 @@ import { can, cmsGuard, isGuardError } from "@/lib/cms/auth";
 import { logAction } from "@/lib/cms/audit";
 import { parseBody } from "@/lib/cms/validate";
 import { productPatchSchema } from "@/lib/cms/productSchema";
+import { productArrivalInfo } from "@/lib/cms/arrivalInfo";
 import { resolveImageUrl } from "@/lib/image";
 import { productPath, slugify } from "@/lib/productSlug";
 
@@ -34,12 +35,13 @@ export async function GET(request: Request, ctx: Ctx) {
       })
     : null;
   if (!p) return NextResponse.json({ error: "Товар не найден" }, { status: 404 });
-  const [related, cat1C, brand1C] = await Promise.all([
+  const [related, cat1C, brand1C, arrivals] = await Promise.all([
     p.relatedIds.length
       ? prisma.product.findMany({ where: { id: { in: p.relatedIds } }, select: { id: true, name: true, article: true, hidden: true, images: { take: 1, orderBy: [{ sortOrder: "asc" }, { id: "asc" }], select: { path: true } } } })
       : Promise.resolve([]),
     p.categoryGuid1C ? prisma.category.findUnique({ where: { guid: p.categoryGuid1C }, select: { name: true } }) : Promise.resolve(null),
     p.brandGuid1C ? prisma.brand.findUnique({ where: { guid: p.brandGuid1C }, select: { name: true } }) : Promise.resolve(null),
+    productArrivalInfo({ guid: p.guid, hidden: p.hidden, stock: p.stock, wholesaleStock: p.wholesaleStock, photos: p.images.length }),
   ]);
   const relById = new Map(related.map((r) => [r.id, r]));
   return NextResponse.json({
@@ -74,6 +76,7 @@ export async function GET(request: Request, ctx: Ctx) {
       path: productPath(p),
       hidden: p.hidden,
       labels: p.labels,
+      arrivals,
       stock: p.stock,
       wholesaleStock: p.wholesaleStock,
       salesCount: p.salesCount,
