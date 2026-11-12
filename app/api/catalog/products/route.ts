@@ -3,7 +3,7 @@ import { productSearchWhere } from "@/lib/productSearch";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { relatedIds } from "@/lib/related";
-import { listArrivals } from "@/lib/arrivals";
+import { arrivalLabels, listArrivals, withArrivalLabel } from "@/lib/arrivals";
 import { customerStock, guestStock, isWholesaleType, withFlatPrices } from "@/lib/utils";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { verifyToken } from "@/lib/auth";
@@ -200,8 +200,10 @@ export async function GET(request: Request) {
   // ?lite=1 (mobile apps): no description — it is ~65% of the page and cards don't show it
   const omit = searchParams.get("lite") === "1" ? { description: true } : undefined;
 
+  // «Новинка» / «Снова в наличии» on the cards (lib/arrivals.ts): what came in 10 days and this customer can buy
+  const arrLabels = await arrivalLabels(wholesale);
   const applyPrices = (product: any) => {
-    const flat = withFlatPrices(product);
+    const flat = withArrivalLabel(withFlatPrices(product), arrLabels);
     if (!isAuthenticated) return maskGuestPrices(flat);
     return wholesale ? { ...flat, stock: customerStock(flat.stock, priceType, product.wholesaleStock) } : flat;
   };

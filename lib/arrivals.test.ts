@@ -40,3 +40,14 @@ describe("«Новые поступления» from 1С documents", () => {
     expect(rows[0].firstReceiptAt?.toISOString()).toBe("2026-11-10T06:00:00.000Z");
   });
 });
+
+describe("arrival labels on cards", async () => {
+  const { withArrivalLabel } = await import("./arrivals");
+  it("adds «new» / «back», keeps the admin's labels, no repeats", () => {
+    const map = new Map<number, "new" | "back">([[1, "new"], [2, "back"]]);
+    expect(withArrivalLabel({ id: 1, labels: ["hit"] }, map).labels).toEqual(["hit", "new"]);
+    expect(withArrivalLabel({ id: 1, labels: ["new"] }, map).labels).toEqual(["new"]);
+    expect(withArrivalLabel({ id: 2, labels: null }, map).labels).toEqual(["back"]);
+    expect(withArrivalLabel({ id: 3, labels: [] }, map).labels).toEqual([]);
+  });
+});

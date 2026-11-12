@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { customerStock, guestStock, isWholesaleType, withFlatPrices } from "@/lib/utils";
 import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
+import { arrivalLabels, withArrivalLabel } from "@/lib/arrivals";
 import { verifyToken } from "@/lib/auth";
 
 export async function GET(
@@ -47,12 +48,13 @@ export async function GET(
   if (product.hidden && !staff) {
     return NextResponse.json({ error: "Товар не найден — возможно, его убрали из каталога" }, { status: 404 });
   }
-  const flat = withFlatPrices(product);
+  const priceType = customer?.id
+    ? (await prisma.customer.findUnique({ where: { id: Number(customer.id) }, select: { priceType: true } }))?.priceType ?? null
+    : null;
+  // «Новинка» / «Снова в наличии» (lib/arrivals.ts) — as on the catalog card
+  const flat = withArrivalLabel(withFlatPrices(product), await arrivalLabels(isWholesaleType(priceType)));
   if (signedIn) {
     // a wholesale customer sees what he may order: the shop minus its 12 + the warehouse
-    const priceType = customer?.id
-      ? (await prisma.customer.findUnique({ where: { id: Number(customer.id) }, select: { priceType: true } }))?.priceType ?? null
-      : null;
     return NextResponse.json(isWholesaleType(priceType) ? { ...flat, stock: customerStock(flat.stock, priceType, product.wholesaleStock) } : flat);
   }
   const { wholesalePrice: _w, bigWholesalePrice: _b, prices: _p, ...guest } = flat; // eslint-disable-line @typescript-eslint/no-unused-vars
