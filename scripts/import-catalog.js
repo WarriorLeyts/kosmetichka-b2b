@@ -118,6 +118,10 @@ async function main() {
   const manualDescription = new Set(
     (await prisma.product.findMany({ where: { descriptionManual: true }, select: { guid: true } })).map((p) => p.guid)
   );
+  // категория / бренд, изменённые в админ-панели: значение из 1С пишем в *1C, сами поля не трогаем
+  const manualCat = new Map(
+    (await prisma.product.findMany({ where: { OR: [{ categoryManual: true }, { brandManual: true }] }, select: { guid: true, categoryManual: true, brandManual: true } })).map((p) => [p.guid, p])
+  );
 
   for (const product of products) {
     if (isDeletedIn1C(product)) deleted.push(String(product.Ид));
@@ -137,6 +141,9 @@ async function main() {
       ]) ||
       null;
     const description = manualDescription.has(String(product.Ид)) ? null : description1C;
+    const man = manualCat.get(String(product.Ид));
+    const cat1C = categoryGuid ? String(categoryGuid) : null;
+    const brand1C = brandGuid ? String(brandGuid) : null;
 
     try {
       await prisma.product.upsert({
@@ -149,8 +156,10 @@ async function main() {
           // Обновляем описание только если 1С прислала непустое значение
           ...(description !== null ? { description } : {}),
           barcode: String(product.Штрихкод || ""),
-          categoryGuid: categoryGuid ? String(categoryGuid) : null,
-          brandGuid: brandGuid ? String(brandGuid) : null,
+          ...(man?.categoryManual ? {} : { categoryGuid: cat1C }),
+          ...(man?.brandManual ? {} : { brandGuid: brand1C }),
+          categoryGuid1C: cat1C,
+          brandGuid1C: brand1C,
         },
         create: {
           guid: String(product.Ид),
@@ -158,8 +167,10 @@ async function main() {
           name: String(product.Наименование || ""),
           description,
           barcode: String(product.Штрихкод || ""),
-          categoryGuid: categoryGuid ? String(categoryGuid) : null,
-          brandGuid: brandGuid ? String(brandGuid) : null,
+          categoryGuid: cat1C,
+          brandGuid: brand1C,
+          categoryGuid1C: cat1C,
+          brandGuid1C: brand1C,
         },
       });
     } catch (err) {
@@ -173,8 +184,8 @@ async function main() {
               name: String(product.Наименование || ""),
               ...(description !== null ? { description } : {}),
               barcode: String(product.Штрихкод || ""),
-              categoryGuid: null,
-              brandGuid: null,
+              ...(man?.categoryManual ? {} : { categoryGuid: null }),
+              ...(man?.brandManual ? {} : { brandGuid: null }),
             },
             create: {
               guid: String(product.Ид),

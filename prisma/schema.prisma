@@ -14,6 +14,10 @@ model ProductImage {
   hash String?
   /// order in the gallery (0 = main photo), set in the admin panel (admin.kosmetichka-opt.ru)
   sortOrder Int @default(0)
+  /// alt text of the photo (admin panel); empty — the product name
+  alt       String?
+  /// the uploaded original kept next to the optimised WebP (admin panel uploads)
+  original  String?
 
   productId Int
   product   Product @relation(fields: [productId], references: [id])
@@ -69,6 +73,26 @@ model Product {
   specs           Json?
   /// «Сопутствующие товары» chosen by hand, shown first in the «С этим берут» strip
   relatedIds      Int[]   @default([])
+  /// SEO filled by a template (admin panel «Массовое SEO»); "manual" — typed by hand, templates don't overwrite it without asking
+  seoSource       String?
+  /// address of the product page: /product/<id>-<slug> (the id stays the key; slug only for people and search engines)
+  slug            String?
+  /// canonical URL set by hand (empty — the product's own address)
+  canonicalUrl    String?
+  /// marketing sections of the product card (admin panel), not from 1C
+  shortDescription String? @db.Text
+  features         String? @db.Text
+  usage            String? @db.Text
+  composition      String? @db.Text
+  skinType         String?
+  country          String?
+  /// site labels: "new" («Новинка»), "hit» («Хит»)
+  labels          String[] @default([])
+  /// category / brand changed in the admin panel: the 1C import keeps writing *1C below but not these
+  categoryManual  Boolean @default(false)
+  brandManual     Boolean @default(false)
+  categoryGuid1C  String?
+  brandGuid1C     String?
 
   /// what a wholesaler may order: the shop («1. Мега Косметичка») minus the 12 it keeps + the warehouse (import-prices.js)
 
@@ -113,6 +137,7 @@ model Product {
   @@index([name])
   @@index([stock])
   @@index([hidden])
+  @@index([slug])
   // trigram indexes for the «contains» search (pg_trgm) live in prisma/manual/2026-10-31-search-trigram.sql
 }
 
@@ -835,4 +860,50 @@ model Banner {
   deletedAt    DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+/// Admin panel: a background job (big photo imports): progress, retries, error log. SQL: prisma/manual/2026-11-12-cms-stage2.sql
+model CmsJob {
+  id          Int       @id @default(autoincrement())
+  type        String
+  status      String    @default("queued") // queued | running | done | failed | cancelled
+  title       String
+  payload     Json
+  total       Int       @default(0)
+  done        Int       @default(0)
+  failed      Int       @default(0)
+  result      Json?
+  errors      Json?
+  attempts    Int       @default(0)
+  lockedUntil DateTime?
+  createdBy   String
+  userId      Int?
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  @@index([status, createdAt])
+}
+
+/// Admin panel: a bulk change of products with the values before it (undo)
+model CmsBulkOperation {
+  id        Int       @id @default(autoincrement())
+  type      String
+  summary   String
+  count     Int
+  changes   Json
+  userName  String
+  createdAt DateTime  @default(now())
+  undoneAt  DateTime?
+  undoneBy  String?
+
+  @@index([createdAt(sort: Desc)])
+}
+
+/// Admin panel settings (SEO templates, …)
+model CmsSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+  updatedBy String?
 }

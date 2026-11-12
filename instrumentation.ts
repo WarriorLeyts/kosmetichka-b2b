@@ -1,5 +1,11 @@
 // Next.js instrumentation hook: register() runs once per server instance before it serves requests.
 export async function register() {
+  // Admin panel background jobs (big photo imports, lib/cms/jobs.ts); CMS_JOBS=off disables
+  if (process.env.NEXT_RUNTIME === "nodejs" && process.env.CMS_JOBS !== "off") {
+    await import("./lib/cms/photoImport"); // registers its job handler
+    const { startCmsJobWorker } = await import("./lib/cms/jobs");
+    startCmsJobWorker();
+  }
   // The MAXMA queue worker (lib/maxmaQueue.ts) uses Prisma and timers: Node.js runtime only.
   // MAXMA_QUEUE_WORKER=off disables it (e.g. when several instances run and one worker is enough;
   // running it on several instances is safe anyway: tasks are leased).

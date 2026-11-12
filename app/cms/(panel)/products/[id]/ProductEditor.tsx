@@ -1,29 +1,48 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ExternalLink, GripVertical, ImagePlus, Lock, Plus, Star, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, GripVertical, ImagePlus, Lock, Plus, RefreshCw, RotateCcw, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cmsApi, fmtDate } from "@/lib/cms/client";
-import { PRICE_LABELS } from "@/lib/cms/productSchema";
-import { Badge, Btn, Card, Field, Input, Textarea, Toggle, useConfirm } from "@/components/cms/ui";
-import { ProductPicker } from "@/components/cms/Pickers";
+import { LABELS, PRICE_LABELS, SECTIONS } from "@/lib/cms/productSchema";
+import { SEO_LIMITS, lengthIssue } from "@/lib/cms/seoTemplate";
+import { Badge, Btn, Card, Field, Input, Select, Textarea, Toggle, useConfirm } from "@/components/cms/ui";
+import { CategorySelect, ProductPicker } from "@/components/cms/Pickers";
+import { useBrands } from "@/components/cms/BulkDialog";
 import { useSortable } from "@/components/cms/useSortable";
 
-type Img = { id: number; path: string; url: string; full: string; fromAdmin: boolean; usedByVariants: number };
+type Img = { id: number; path: string; url: string; full: string; alt: string | null; original: string | null; fromAdmin: boolean; usedByVariants: number };
 type Product = {
   id: number;
   guid: string;
   article: string | null;
   barcode: string | null;
+  barcodes: { barcode: string; unitName: string | null }[];
   name: string;
-  brand: string | null;
-  category: string | null;
+  brand: { name: string; guid: string } | null;
+  category: { name: string; guid: string } | null;
+  categoryManual: boolean;
+  brandManual: boolean;
+  category1C: string | null;
+  brand1C: string | null;
   description: string | null;
   descriptionManual: boolean;
+  shortDescription: string | null;
+  features: string | null;
+  usage: string | null;
+  composition: string | null;
+  skinType: string | null;
+  country: string | null;
   specs: { name: string; value: string }[];
   seoTitle: string | null;
   seoDescription: string | null;
+  seoSource: string | null;
+  slug: string | null;
+  suggestedSlug: string;
+  canonicalUrl: string | null;
+  path: string;
   hidden: boolean;
+  labels: string[];
   stock: number | null;
   wholesaleStock: number;
   salesCount: number;
@@ -35,15 +54,48 @@ type Product = {
   related: { id: number; name: string }[];
 };
 
-type Form = { description: string; specs: { name: string; value: string }[]; seoTitle: string; seoDescription: string; hidden: boolean; relatedIds: number[] };
+type Form = {
+  description: string;
+  shortDescription: string;
+  features: string;
+  usage: string;
+  composition: string;
+  skinType: string;
+  country: string;
+  specs: { name: string; value: string }[];
+  seoTitle: string;
+  seoDescription: string;
+  slug: string;
+  canonicalUrl: string;
+  hidden: boolean;
+  labels: string[];
+  relatedIds: number[];
+  categoryGuid: string;
+  brandGuid: string;
+  alts: Record<number, string>;
+};
 const toForm = (p: Product): Form => ({
   description: p.description ?? "",
+  shortDescription: p.shortDescription ?? "",
+  features: p.features ?? "",
+  usage: p.usage ?? "",
+  composition: p.composition ?? "",
+  skinType: p.skinType ?? "",
+  country: p.country ?? "",
   specs: p.specs,
   seoTitle: p.seoTitle ?? "",
   seoDescription: p.seoDescription ?? "",
+  slug: p.slug ?? "",
+  canonicalUrl: p.canonicalUrl ?? "",
   hidden: p.hidden,
+  labels: p.labels,
   relatedIds: p.related.map((r) => r.id),
+  categoryGuid: p.category?.guid ?? "",
+  brandGuid: p.brand?.guid ?? "",
+  alts: Object.fromEntries(p.images.map((i) => [i.id, i.alt ?? ""])),
 });
+
+const SKIN = ["Для всех типов кожи", "Сухая", "Нормальная", "Жирная", "Комбинированная", "Чувствительная", "Для всех типов волос", "Сухие волосы", "Жирные волосы", "Окрашенные волосы", "Повреждённые волосы"];
 
 export function ProductEditor({ id }: { id: number }) {
   const [p, setP] = useState<Product | null>(null);
@@ -52,6 +104,9 @@ export function ProductEditor({ id }: { id: number }) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const replaceRef = useRef<HTMLInputElement>(null);
+  const replaceId = useRef<number | null>(null);
+  const brands = useBrands();
   const { confirm, dialog } = useConfirm();
 
   const load = useCallback(async () => {
@@ -82,13 +137,20 @@ export function ProductEditor({ id }: { id: number }) {
     if (!form || !p) return;
     const b = JSON.parse(base) as Form;
     const patch: Record<string, unknown> = {};
-    if (form.description !== b.description) patch.description = form.description || null;
-    if (JSON.stringify(form.specs) !== JSON.stringify(b.specs)) patch.specs = form.specs.filter((s) => s.name.trim() || s.value.trim());
-    if (form.seoTitle !== b.seoTitle) patch.seoTitle = form.seoTitle || null;
-    if (form.seoDescription !== b.seoDescription) patch.seoDescription = form.seoDescription || null;
+    for (const k of ["description", "shortDescription", "features", "usage", "composition", "skinType", "country", "seoTitle", "seoDescription", "slug", "canonicalUrl"] as const)
+      if (form[k] !== b[k]) patch[k] = form[k] || null;
+    if (JSON.stringify(form.specs) !== JSON.stringify(b.specs)) patch.specs = form.specs.filter((s) => s.name.trim() && s.value.trim());
     if (form.hidden !== b.hidden) patch.hidden = form.hidden;
+    if (JSON.stringify(form.labels) !== JSON.stringify(b.labels)) patch.labels = form.labels;
     if (JSON.stringify(form.relatedIds) !== JSON.stringify(b.relatedIds)) patch.relatedIds = form.relatedIds;
+    if (form.categoryGuid !== b.categoryGuid && form.categoryGuid) patch.categoryGuid = form.categoryGuid;
+    if (form.brandGuid !== b.brandGuid) patch.brandGuid = form.brandGuid || null;
+    const alts = Object.entries(form.alts)
+      .filter(([k, v]) => b.alts[Number(k)] !== v)
+      .map(([k, v]) => ({ id: Number(k), alt: v }));
+    if (alts.length) patch.imageAlts = alts;
     if (patch.hidden === true && !(await confirm("Скрыть товар с сайта? Покупатели перестанут его видеть в каталоге и поиске."))) return;
+    if ((patch.categoryGuid || "brandGuid" in patch) && !(await confirm("Категория/бренд станут «изменёнными на сайте»: обмен с 1С перестанет их менять у этого товара. Продолжить?", false))) return;
     setSaving(true);
     try {
       await cmsApi(`/api/cms/products/${p.id}`, { method: "PATCH", body: patch });
@@ -101,27 +163,29 @@ export function ProductEditor({ id }: { id: number }) {
     }
   };
 
-  const backTo1C = async () => {
-    if (!p || !(await confirm("Вернуть описание из 1С? Ваше описание заменится при следующем обмене с 1С."))) return;
-    await cmsApi(`/api/cms/products/${p.id}`, { method: "PATCH", body: { descriptionFrom1C: true } }).catch((e) => toast.error(e.message));
-    toast.success("Описание снова приходит из 1С");
+  const from1C = async (what: "descriptionFrom1C" | "categoryFrom1C" | "brandFrom1C", text: string) => {
+    if (!p || !(await confirm(text))) return;
+    await cmsApi(`/api/cms/products/${p.id}`, { method: "PATCH", body: { [what]: true } }).catch((e) => toast.error(e.message));
+    toast.success("Готово");
     load();
   };
 
-  const upload = async (files: FileList | File[] | null) => {
+  const upload = async (files: FileList | File[] | null, replace?: number) => {
     if (!p || !files || !files.length) return;
     setUploading(true);
     try {
       const fd = new FormData();
-      for (const f of Array.from(files)) fd.append("files", f);
-      const r = await cmsApi<{ added: number }>(`/api/cms/products/${p.id}/photos`, { form: fd });
-      toast.success(`Добавлено фото: ${r.added}`);
+      for (const f of Array.from(files).slice(0, replace ? 1 : 20)) fd.append("files", f);
+      if (replace) fd.append("replaceId", String(replace));
+      const r = await cmsApi<{ added?: number }>(`/api/cms/products/${p.id}/photos`, { form: fd });
+      toast.success(replace ? "Фото заменено" : `Добавлено фото: ${r.added}`);
       load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Ошибка");
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
+      if (replaceRef.current) replaceRef.current.value = "";
     }
   };
 
@@ -149,7 +213,9 @@ export function ProductEditor({ id }: { id: number }) {
 
   // порядок фото перетаскиванием (мышью и пальцем); сохраняется, когда фото отпущено
   const imgsRef = useRef<Img[]>([]);
-  imgsRef.current = p?.images ?? [];
+  useEffect(() => {
+    imgsRef.current = p?.images ?? [];
+  }, [p]);
   const photoSort = useSortable(
     (from, to) =>
       setP((cur) => {
@@ -165,10 +231,16 @@ export function ProductEditor({ id }: { id: number }) {
   if (!p || !form) return <div className="text-sm text-neutral-500">Загрузка…</div>;
   const set = (patch: Partial<Form>) => setForm({ ...form, ...patch });
   const seoTitle = form.seoTitle || p.name;
-  const seoDesc = form.seoDescription || (form.description || `Купить ${p.name} оптом в магазине Косметичка. Выгодные цены.`).replace(/[*_`#>~]+/g, "").replace(/\s+/g, " ").slice(0, 160);
+  const seoDesc = (form.seoDescription || form.shortDescription || form.description || `Купить ${p.name} оптом в магазине Косметичка. Выгодные цены.`)
+    .replace(/[*_`#>~]+/g, "")
+    .replace(/\s+/g, " ")
+    .slice(0, 160);
+  const shownPath = form.slug ? `/product/${p.id}-${form.slug}` : `/product/${p.id}`;
+  const tIssue = form.seoTitle ? lengthIssue("title", form.seoTitle) : null;
+  const dIssue = form.seoDescription ? lengthIssue("description", form.seoDescription) : null;
 
   return (
-    <div className="max-w-6xl pb-20">
+    <div className="max-w-6xl pb-24">
       {dialog}
       <Link href="/products" className="mb-3 inline-flex items-center gap-1 text-sm text-neutral-600 hover:text-[#8E1B47]">
         <ArrowLeft className="size-4" /> Все товары
@@ -178,18 +250,91 @@ export function ProductEditor({ id }: { id: number }) {
           <h1 className="text-xl font-semibold">{p.name}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-neutral-500">
             <span>Арт. {p.article ?? "—"}</span>
-            {p.brand ? <span>· {p.brand}</span> : null}
-            {p.category ? <span>· {p.category}</span> : null}
-            {p.hidden ? <Badge tone="red">Скрыт с сайта</Badge> : null}
+            {form.hidden ? <Badge tone="red">Скрыт с сайта</Badge> : <Badge tone="green">На сайте</Badge>}
+            {form.labels.map((l) => (
+              <Badge key={l} tone="accent">
+                {LABELS[l]}
+              </Badge>
+            ))}
           </div>
         </div>
-        <a href={`https://kosmetichka-opt.ru/product/${p.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-[#8E1B47] hover:underline">
+        <a href={`https://kosmetichka-opt.ru${p.path}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-[#8E1B47] hover:underline">
           Открыть на сайте <ExternalLink className="size-3.5" />
         </a>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="space-y-4">
+          {/* ── Основная информация ── */}
+          <Card className="p-5">
+            <div className="mb-3 font-medium">Основная информация</div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Название (из 1С)">
+                <Input value={p.name} disabled />
+              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Артикул 1С">
+                  <Input value={p.article ?? ""} disabled />
+                </Field>
+                <Field label="Штрихкод">
+                  <Input value={p.barcode || p.barcodes[0]?.barcode || ""} disabled title={p.barcodes.map((b) => b.barcode).join(", ")} />
+                </Field>
+              </div>
+              <Field
+                label="Категория"
+                hint={
+                  p.categoryManual ? (
+                    <span>
+                      Изменена на сайте (в 1С: {p.category1C ?? "—"}).{" "}
+                      <button className="text-[#8E1B47] underline" onClick={() => from1C("categoryFrom1C", `Вернуть категорию из 1С («${p.category1C ?? "—"}»)?`)}>
+                        Вернуть из 1С
+                      </button>
+                    </span>
+                  ) : (
+                    "Из 1С. Если поменять, обмен с 1С перестанет её менять"
+                  )
+                }
+              >
+                <CategorySelect value={form.categoryGuid} onChange={(v) => set({ categoryGuid: v })} />
+              </Field>
+              <Field
+                label="Бренд"
+                hint={
+                  p.brandManual ? (
+                    <span>
+                      Изменён на сайте (в 1С: {p.brand1C ?? "—"}).{" "}
+                      <button className="text-[#8E1B47] underline" onClick={() => from1C("brandFrom1C", `Вернуть бренд из 1С («${p.brand1C ?? "—"}»)?`)}>
+                        Вернуть из 1С
+                      </button>
+                    </span>
+                  ) : (
+                    "Из 1С. Если поменять, обмен с 1С перестанет его менять"
+                  )
+                }
+              >
+                <Select value={form.brandGuid} onChange={(e) => set({ brandGuid: e.target.value })}>
+                  <option value="">— Без бренда —</option>
+                  {brands.map((b) => (
+                    <option key={b.guid} value={b.guid}>
+                      {b.name}
+                    </option>
+                  ))}
+                  {p.brand && !brands.some((b) => b.guid === p.brand!.guid) ? <option value={p.brand.guid}>{p.brand.name}</option> : null}
+                </Select>
+              </Field>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-5">
+              <Toggle checked={!form.hidden} onChange={(v) => set({ hidden: !v })} label={form.hidden ? "Скрыт с сайта" : "Опубликован на сайте"} />
+              {(["new", "hit"] as const).map((l) => (
+                <label key={l} className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={form.labels.includes(l)} onChange={(e) => set({ labels: e.target.checked ? [...form.labels, l] : form.labels.filter((x) => x !== l) })} />
+                  Метка «{LABELS[l]}»
+                </label>
+              ))}
+            </div>
+          </Card>
+
+          {/* ── Фотографии ── */}
           <Card className="p-5">
             <div className="mb-3 flex items-center justify-between">
               <span className="font-medium">Фотографии</span>
@@ -197,9 +342,10 @@ export function ProductEditor({ id }: { id: number }) {
                 <ImagePlus className="size-4" /> Добавить
               </Btn>
               <input ref={fileRef} type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => upload(e.target.files)} />
+              <input ref={replaceRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => upload(e.target.files, replaceId.current ?? undefined)} />
             </div>
             <div
-              className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5"
+              className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4"
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 if (e.dataTransfer.files?.length) {
@@ -209,32 +355,53 @@ export function ProductEditor({ id }: { id: number }) {
               }}
             >
               {p.images.map((img, i) => (
-                <div
-                  key={img.id}
-                  ref={photoSort.itemRef(i)}
-                  className={`group relative aspect-square overflow-hidden rounded-lg border bg-white ${i === 0 ? "border-[#8E1B47]" : "border-neutral-200"} ${photoSort.dragging === i ? "opacity-60 shadow-lg" : ""}`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.url} alt="" className="h-full w-full object-contain" />
-                  {i === 0 ? <span className="absolute left-1 top-1 rounded bg-[#8E1B47] px-1 text-[10px] text-white">Главное</span> : null}
-                  <span className="absolute bottom-1 left-1 rounded bg-white/90 px-1 text-[10px] text-neutral-600">{img.fromAdmin ? "панель" : "1С"}</span>
-                  {p.images.length > 1 ? (
-                    <span {...photoSort.handleProps(i)} className="absolute bottom-1 right-1 rounded bg-white/90 p-1 shadow" title="Перетащите, чтобы поменять порядок" aria-label="Перетащить">
-                      <GripVertical className="size-3.5 text-neutral-600" />
-                    </span>
-                  ) : null}
-                  <div className="absolute right-1 top-1 hidden gap-1 group-hover:flex">
-                    {i > 0 ? (
-                      <button onClick={() => saveOrder([img, ...p.images.filter((x) => x.id !== img.id)])} className="rounded bg-white/90 p-1 shadow" title="Сделать главным">
-                        <Star className="size-3.5" />
-                      </button>
+                <div key={img.id} ref={photoSort.itemRef(i)} className={photoSort.dragging === i ? "opacity-60" : ""}>
+                  <div className={`group relative aspect-square overflow-hidden rounded-lg border bg-white ${i === 0 ? "border-[#8E1B47]" : "border-neutral-200"}`}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img.url} alt={form.alts[img.id] || p.name} className="h-full w-full object-contain" />
+                    {i === 0 ? <span className="absolute left-1 top-1 rounded bg-[#8E1B47] px-1 text-[10px] text-white">Главное</span> : null}
+                    <span className="absolute bottom-1 left-1 rounded bg-white/90 px-1 text-[10px] text-neutral-600">{img.fromAdmin ? "панель" : "1С"}</span>
+                    {p.images.length > 1 ? (
+                      <span {...photoSort.handleProps(i)} className="absolute bottom-1 right-1 rounded bg-white/90 p-1 shadow" title="Перетащите, чтобы поменять порядок" aria-label="Перетащить">
+                        <GripVertical className="size-3.5 text-neutral-600" />
+                      </span>
                     ) : null}
-                    {img.usedByVariants === 0 ? (
-                      <button onClick={() => removeImg(img)} className="rounded bg-white/90 p-1 text-red-600 shadow" title="Убрать">
-                        <Trash2 className="size-3.5" />
+                    <div className="absolute right-1 top-1 hidden gap-1 group-hover:flex">
+                      {i > 0 ? (
+                        <button onClick={() => saveOrder([img, ...p.images.filter((x) => x.id !== img.id)])} className="rounded bg-white/90 p-1 shadow" title="Сделать главным">
+                          <Star className="size-3.5" />
+                        </button>
+                      ) : null}
+                      <button
+                        onClick={() => {
+                          replaceId.current = img.id;
+                          replaceRef.current?.click();
+                        }}
+                        className="rounded bg-white/90 p-1 shadow"
+                        title="Заменить файл"
+                      >
+                        <RefreshCw className="size-3.5" />
                       </button>
-                    ) : null}
+                      {img.usedByVariants === 0 ? (
+                        <button onClick={() => removeImg(img)} className="rounded bg-white/90 p-1 text-red-600 shadow" title="Убрать">
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
+                  <input
+                    className="mt-1 w-full rounded border border-neutral-200 px-1.5 py-1 text-xs focus:border-[#8E1B47] focus:outline-none"
+                    placeholder={`Alt: ${p.name.slice(0, 40)}…`}
+                    value={form.alts[img.id] ?? ""}
+                    maxLength={200}
+                    onChange={(e) => set({ alts: { ...form.alts, [img.id]: e.target.value } })}
+                    aria-label="Alt-текст фото"
+                  />
+                  {img.original ? (
+                    <a href={img.original} target="_blank" rel="noreferrer" className="text-[10px] text-neutral-400 hover:text-[#8E1B47]">
+                      исходник
+                    </a>
+                  ) : null}
                 </div>
               ))}
               {p.images.length === 0 ? (
@@ -243,21 +410,50 @@ export function ProductEditor({ id }: { id: number }) {
                 </button>
               ) : null}
             </div>
-            <p className="mt-2 text-xs text-neutral-500">Перетаскивайте фото за значок в углу, чтобы поменять порядок. Первое — главное (в каталоге). Фото из панели обмен с 1С не стирает.</p>
+            <p className="mt-2 text-xs text-neutral-500">
+              Перетаскивайте за значок в углу, первое фото — главное. Фото автоматически сжимаются в WebP, исходники сохраняются. Alt-текст — для поисковиков и незрячих (пусто — название товара).
+            </p>
           </Card>
 
+          {/* ── Описание ── */}
           <Card className="p-5">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="font-medium">Описание</span>
-              {p.descriptionManual ? (
-                <button onClick={backTo1C} className="text-xs text-neutral-500 hover:text-[#8E1B47]">
-                  Изменено в панели — 1С его не перезаписывает. Вернуть из 1С
-                </button>
-              ) : (
-                <span className="text-xs text-neutral-500">Из 1С. После правки здесь 1С перестанет его менять</span>
-              )}
+            <div className="mb-3 font-medium">Описание</div>
+            <div className="space-y-4">
+              <Field label="Краткое описание" hint="1–2 предложения: под названием и в сниппете поиска">
+                <Textarea rows={2} value={form.shortDescription} onChange={(e) => set({ shortDescription: e.target.value })} maxLength={1000} />
+              </Field>
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-[13px] font-medium text-neutral-700">Полное описание</span>
+                  {p.descriptionManual ? (
+                    <button onClick={() => from1C("descriptionFrom1C", "Вернуть описание из 1С? Ваше описание заменится при следующем обмене с 1С.")} className="text-xs text-neutral-500 hover:text-[#8E1B47]">
+                      Изменено в панели — 1С не перезаписывает. Вернуть из 1С
+                    </button>
+                  ) : (
+                    <span className="text-xs text-neutral-500">Из 1С. После правки здесь 1С перестанет его менять</span>
+                  )}
+                </div>
+                <Textarea rows={8} value={form.description} onChange={(e) => set({ description: e.target.value })} maxLength={20000} placeholder="Можно **жирный** текст и списки через «- »." />
+              </div>
+              {SECTIONS.filter(([k]) => k !== "shortDescription").map(([k, label, max]) => (
+                <Field key={k} label={label}>
+                  <Textarea rows={3} value={form[k]} onChange={(e) => set({ [k]: e.target.value } as Partial<Form>)} maxLength={max} />
+                </Field>
+              ))}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Тип кожи или волос">
+                  <Input list="skin-types" value={form.skinType} onChange={(e) => set({ skinType: e.target.value })} maxLength={200} />
+                  <datalist id="skin-types">
+                    {SKIN.map((s) => (
+                      <option key={s} value={s} />
+                    ))}
+                  </datalist>
+                </Field>
+                <Field label="Страна производства">
+                  <Input value={form.country} onChange={(e) => set({ country: e.target.value })} maxLength={100} placeholder="Корея" />
+                </Field>
+              </div>
             </div>
-            <Textarea rows={10} value={form.description} onChange={(e) => set({ description: e.target.value })} maxLength={20000} placeholder="Описание товара. Можно **жирный** текст и списки через «- »." />
           </Card>
 
           <Card className="p-5">
@@ -286,34 +482,63 @@ export function ProductEditor({ id }: { id: number }) {
             <ProductPicker value={form.relatedIds} onChange={(v) => set({ relatedIds: v })} max={24} exclude={p.id} />
           </Card>
 
+          {/* ── SEO ── */}
           <Card className="p-5">
-            <div className="mb-3 font-medium">SEO</div>
+            <div className="mb-3 flex items-center gap-2 font-medium">
+              SEO {p.seoSource === "template" ? <Badge tone="accent">заполнено шаблоном</Badge> : p.seoSource === "manual" ? <Badge>вручную</Badge> : null}
+            </div>
             <div className="space-y-3">
-              <Field label="Заголовок страницы (title)" hint={`${form.seoTitle.length}/120. Пусто — название товара.`}>
+              <Field
+                label="SEO Title"
+                hint={<span className={tIssue ? "text-amber-700" : ""}>{`${form.seoTitle.length}/${SEO_LIMITS.title.max}${tIssue ? ` — ${tIssue}` : ""}. Пусто — название товара.`}</span>}
+              >
                 <Input value={form.seoTitle} onChange={(e) => set({ seoTitle: e.target.value })} maxLength={120} placeholder={p.name} />
               </Field>
-              <Field label="Описание для поисковиков (description)" hint={`${form.seoDescription.length}/300. Пусто — начало описания товара.`}>
+              <Field
+                label="Meta Description"
+                hint={<span className={dIssue ? "text-amber-700" : ""}>{`${form.seoDescription.length}/${SEO_LIMITS.description.max}${dIssue ? ` — ${dIssue}` : ""}. Пусто — краткое или полное описание.`}</span>}
+              >
                 <Textarea rows={3} value={form.seoDescription} onChange={(e) => set({ seoDescription: e.target.value })} maxLength={300} />
               </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field
+                  label="ЧПУ (адрес страницы)"
+                  hint={
+                    <span>
+                      {shownPath}
+                      {!form.slug ? (
+                        <>
+                          {" "}
+                          ·{" "}
+                          <button className="text-[#8E1B47] underline" onClick={() => set({ slug: p.suggestedSlug })}>
+                            подставить «{p.suggestedSlug.slice(0, 30)}…»
+                          </button>
+                        </>
+                      ) : null}
+                    </span>
+                  }
+                >
+                  <Input value={form.slug} onChange={(e) => set({ slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-") })} maxLength={80} placeholder={p.suggestedSlug} />
+                </Field>
+                <Field label="Canonical URL" hint="Пусто — собственный адрес товара. Укажите, если это дубль другой страницы.">
+                  <Input value={form.canonicalUrl} onChange={(e) => set({ canonicalUrl: e.target.value })} maxLength={300} placeholder={`https://kosmetichka-opt.ru${shownPath}`} />
+                </Field>
+              </div>
               <div className="rounded-lg border border-neutral-200 p-3">
-                <div className="text-xs text-emerald-700">kosmetichka-opt.ru › product › {p.id}</div>
-                <div className="truncate text-[17px] text-[#1a0dab]">{seoTitle} | Косметичка</div>
+                <div className="mb-1 text-[11px] text-neutral-400">Так страница может выглядеть в поиске</div>
+                <div className="text-xs text-emerald-700">kosmetichka-opt.ru › product › {shownPath.split("/").pop()}</div>
+                <div className="truncate text-[17px] text-[#1a0dab]">{seoTitle.includes("Косметичка") ? seoTitle : `${seoTitle} | Косметичка`}</div>
                 <div className="line-clamp-2 text-[13px] text-neutral-600">{seoDesc}</div>
               </div>
+              {form.hidden ? <p className="text-xs text-amber-700">Товар скрыт: страница не открывается и не попадает в карту сайта для поисковиков.</p> : null}
             </div>
           </Card>
         </div>
 
         <div className="space-y-4">
           <Card className="p-5">
-            <div className="mb-3 font-medium">Видимость</div>
-            <Toggle checked={!form.hidden} onChange={(v) => set({ hidden: !v })} label={form.hidden ? "Скрыт с сайта" : "Показывается на сайте"} />
-            <p className="mt-2 text-xs text-neutral-500">Скрытый товар не виден в каталоге, поиске, подборках и по прямой ссылке. В 1С и в заказах ничего не меняется.</p>
-          </Card>
-
-          <Card className="p-5">
             <div className="mb-3 flex items-center gap-1.5 font-medium">
-              <Lock className="size-4 text-neutral-400" /> Из 1С (только просмотр)
+              <Lock className="size-4 text-neutral-400" /> Цены и остатки (из 1С)
             </div>
             <dl className="space-y-1.5 text-sm">
               {p.prices.map((pr) => (
@@ -336,11 +561,13 @@ export function ProductEditor({ id }: { id: number }) {
                   <dd className="tabular-nums">{w.qty}</dd>
                 </div>
               ))}
+              {p.barcodes.length > 1 ? (
+                <div className="border-t border-neutral-100 pt-1.5 text-xs">
+                  <dt className="text-neutral-500">Все штрихкоды</dt>
+                  <dd>{p.barcodes.map((b) => b.barcode + (b.unitName ? ` (${b.unitName})` : "")).join(", ")}</dd>
+                </div>
+              ) : null}
               <div className="flex justify-between border-t border-neutral-100 pt-1.5 text-xs">
-                <dt className="text-neutral-500">Штрихкод</dt>
-                <dd>{p.barcode || "—"}</dd>
-              </div>
-              <div className="flex justify-between text-xs">
                 <dt className="text-neutral-500">Продано за 90 дней</dt>
                 <dd>{p.salesCount}</dd>
               </div>
@@ -348,9 +575,28 @@ export function ProductEditor({ id }: { id: number }) {
                 <dt className="text-neutral-500">Обновлён</dt>
                 <dd>{fmtDate(p.updatedAt)}</dd>
               </div>
+              <div className="flex justify-between text-xs">
+                <dt className="text-neutral-500">GUID 1С</dt>
+                <dd className="max-w-40 truncate" title={p.guid}>
+                  {p.guid}
+                </dd>
+              </div>
             </dl>
-            <p className="mt-3 text-xs text-neutral-500">Цены и остатки меняются только в 1С и приходят с обменом.</p>
+            <p className="mt-3 text-xs text-neutral-500">Название, артикул, штрихкод, цены и остатки меняются только в 1С и приходят с обменом.</p>
           </Card>
+          {p.categoryManual || p.brandManual || p.descriptionManual ? (
+            <Card className="p-5 text-sm">
+              <div className="mb-2 flex items-center gap-1.5 font-medium">
+                <RotateCcw className="size-4 text-neutral-400" /> Изменено на сайте
+              </div>
+              <ul className="list-inside list-disc text-neutral-600">
+                {p.categoryManual ? <li>категория</li> : null}
+                {p.brandManual ? <li>бренд</li> : null}
+                {p.descriptionManual ? <li>полное описание</li> : null}
+              </ul>
+              <p className="mt-2 text-xs text-neutral-500">Эти поля обмен с 1С не перезаписывает.</p>
+            </Card>
+          ) : null}
         </div>
       </div>
 
