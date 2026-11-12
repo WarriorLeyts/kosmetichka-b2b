@@ -24,6 +24,8 @@ export async function GET(request: Request) {
       OR: [
         { article: { equals: code, mode: "insensitive" } },
         { barcode: code },
+        // any barcode of the product in 1С
+        { barcodes: { some: { barcode: code } } },
         ...(/^\d{1,9}$/.test(code) ? [{ id: Number(code) }] : []),
       ],
     },

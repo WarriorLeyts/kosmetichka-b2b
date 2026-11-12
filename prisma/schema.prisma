@@ -80,6 +80,9 @@ model Product {
   /// Stock per warehouse from 1C («Разбивать остатки по складам»). STAFF ONLY — never select it in customer APIs
   warehouseStock ProductWarehouseStock[]
 
+  /// every barcode of the product in 1С («Штрихкоды номенклатуры», over OData); `barcode` above is the one of the exchange
+  barcodes ProductBarcode[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -93,6 +96,22 @@ model Product {
   @@index([name])
   @@index([stock])
   // trigram indexes for the «contains» search (pg_trgm) live in prisma/manual/2026-10-31-search-trigram.sql
+}
+
+/// All barcodes of a product from 1С (register «Штрихкоды номенклатуры», read over OData by
+/// scripts/import-barcodes.js): the standard exchange gives only one. Search / scanner find a product by any.
+/// SQL: prisma/manual/2026-11-12-product-barcodes.sql
+model ProductBarcode {
+  barcode     String
+  productGuid String
+  product     Product  @relation(fields: [productGuid], references: [guid], onDelete: Cascade)
+  /// a packaging unit when the barcode is not of a piece (e.g. a box), its name from 1С if known
+  unitRef     String?
+  unitName    String?
+  updatedAt   DateTime @updatedAt
+
+  @@id([barcode, productGuid])
+  @@index([productGuid])
 }
 
 /// A 1C warehouse (offers.xml «Склады»). Staff only.

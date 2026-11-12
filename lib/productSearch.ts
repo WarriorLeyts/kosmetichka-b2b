@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 /**
  * Catalogue search by words: «shik тон» finds every product that has BOTH «shik» and «тон»
- * somewhere — in the name, the brand, the article or the barcode — in any order and as parts of
+ * somewhere — in the name, the brand, the article or any of its barcodes — in any order and as parts of
  * words («тон» → «тональный», «тонер»). Each word also matches when it was typed in the wrong
  * keyboard layout («ырш» → «shi», «nfy» → «тан»).
  */
@@ -41,6 +41,8 @@ function wordMatch(w: string): Prisma.ProductWhereInput[] {
     { article: { contains: w, mode: "insensitive" } },
     { barcode: { contains: w } },
   ];
+  // any barcode of the product in 1С (ProductBarcode): the exchange carries only one
+  if (/^\d{4,}$/.test(w)) m.push({ barcodes: { some: { barcode: { contains: w } } } });
   const alt = w.length >= 2 ? otherLayout(w) : null;
   if (alt) {
     m.push({ name: { contains: alt, mode: "insensitive" } }, { brand: { name: { contains: alt, mode: "insensitive" } } });

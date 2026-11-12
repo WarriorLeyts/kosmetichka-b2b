@@ -61,8 +61,11 @@ export async function GET(
       barcode: true,
       stock: true,
       images: { take: 1, select: { path: true } },
+      // every barcode of the product in 1С — the scanner matches any of them
+      barcodes: { select: { barcode: true } },
     },
   });
+  const allBarcodes = new Map(products.map((p) => [p.id, p.barcodes.map((b) => b.barcode)]));
   const imageMap = new Map<number, string | null>();
   const barcodeMap = new Map<number, string | null>();
   const stockMap = new Map<number, number | null>();
@@ -102,6 +105,8 @@ export async function GET(
         productId: item.productId,
         productName: item.productName,
         barcode: item.barcode ?? barcodeMap.get(item.productId) ?? null,
+        /** all barcodes of the product in 1С (the scanner checks each) */
+        barcodes: allBarcodes.get(item.productId) ?? [],
         quantity: item.quantity,
         price: item.price,
         total: item.total,
