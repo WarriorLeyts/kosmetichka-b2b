@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { productSearchWhere } from "@/lib/productSearch";
+import { arrivalIds } from "./arrivalInfo";
 
 /**
  * The product filters of the admin panel table (URL ?search=&category=&brand=&status=&photo=&desc=&seo=&stock=&label=),
@@ -33,6 +34,8 @@ export async function productWhere(sp: URLSearchParams): Promise<Prisma.ProductW
   if (sp.get("stock") === "out") and.push({ OR: [{ stock: null }, { stock: { lte: 0 } }] });
   const label = sp.get("label");
   if (label === "new" || label === "hit") and.push({ labels: { has: label } });
+  // automatic, by arrivals from 1С (lib/cms/arrivalInfo.ts)
+  if (label === "arr_new" || label === "arr_back") and.push({ id: { in: await arrivalIds(label === "arr_new" ? "new" : "back") } });
   if (sp.get("override") === "1") and.push({ OR: [{ categoryManual: true }, { brandManual: true }, { descriptionManual: true }] });
   return and.length ? { AND: and } : {};
 }

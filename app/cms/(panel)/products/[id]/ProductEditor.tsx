@@ -43,6 +43,15 @@ type Product = {
   path: string;
   hidden: boolean;
   labels: string[];
+  arrivals: {
+    kind: "new" | "back" | null;
+    shownOnSite: boolean;
+    why: string[];
+    firstReceiptAt: string | null;
+    newUntil: string | null;
+    until: string | null;
+    rows: { place: string; docNumber: string; docDate: string; qty: number }[];
+  };
   stock: number | null;
   wholesaleStock: number;
   salesCount: number;
@@ -96,6 +105,52 @@ const toForm = (p: Product): Form => ({
 });
 
 const SKIN = ["Для всех типов кожи", "Сухая", "Нормальная", "Жирная", "Комбинированная", "Чувствительная", "Для всех типов волос", "Сухие волосы", "Жирные волосы", "Окрашенные волосы", "Повреждённые волосы"];
+
+const ARRIVAL_LABELS = { new: "Новинка", back: "Снова в наличии" } as const;
+const PLACE: Record<string, string> = { stock: "Склад", shop: "Магазин" };
+const day = (d: string | null) => (d ? new Date(d).toLocaleDateString("ru-RU") : "—");
+
+/** «Поступления из 1С»: the automatic «Новинка» / «Снова в наличии» of the site (lib/arrivals.ts) for this product */
+function ArrivalsCard({ a }: { a: Product["arrivals"] }) {
+  return (
+    <Card className="p-5">
+      <div className="mb-2 flex items-center gap-1.5 font-medium">
+        <Lock className="size-4 text-neutral-400" /> Поступления из 1С
+      </div>
+      {a.kind ? (
+        <div className="mb-2 text-sm">
+          <Badge tone={a.shownOnSite ? "green" : "neutral"}>{ARRIVAL_LABELS[a.kind]}</Badge>{" "}
+          {a.shownOnSite ? (
+            <span className="text-neutral-600">на сайте до {day(a.kind === "new" ? a.newUntil : a.until)}</span>
+          ) : (
+            <span className="text-amber-700">на сайте не показана: {a.why.join(", ")}</span>
+          )}
+          {a.kind === "new" && a.until && a.newUntil && a.until > a.newUntil ? (
+            <div className="mt-1 text-xs text-neutral-500">Потом — «Снова в наличии» до {day(a.until)}</div>
+          ) : null}
+        </div>
+      ) : (
+        <p className="mb-2 text-sm text-neutral-500">За последние 10 дней не приходил — меток «Новинка» / «Снова в наличии» нет.</p>
+      )}
+      {a.rows.length ? (
+        <ul className="space-y-1 text-xs">
+          {a.rows.slice(0, 8).map((r, i) => (
+            <li key={i} className="flex justify-between gap-2">
+              <span className="text-neutral-600">
+                {day(r.docDate)} · {PLACE[r.place] ?? r.place} · {r.docNumber}
+              </span>
+              <span className="tabular-nums">{r.qty} шт.</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="mt-2 text-xs text-neutral-500">
+        Первое поступление: {day(a.firstReceiptAt)}. «Новинка» — 10 дней после первого прихода в компанию, «Снова в наличии» — 10 дней после повторного.
+        Розница видит пришедшее в магазин, опт — на склад и в магазин.
+      </p>
+    </Card>
+  );
+}
 
 export function ProductEditor({ id }: { id: number }) {
   const [p, setP] = useState<Product | null>(null);
@@ -256,6 +311,11 @@ export function ProductEditor({ id }: { id: number }) {
                 {LABELS[l]}
               </Badge>
             ))}
+            {p.arrivals.kind ? (
+              <Badge tone={p.arrivals.shownOnSite ? "green" : "neutral"}>
+                {ARRIVAL_LABELS[p.arrivals.kind]} · из 1С{p.arrivals.shownOnSite ? "" : " (не показана)"}
+              </Badge>
+            ) : null}
           </div>
         </div>
         <a href={`https://kosmetichka-opt.ru${p.path}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-[#8E1B47] hover:underline">
@@ -332,6 +392,10 @@ export function ProductEditor({ id }: { id: number }) {
                 </label>
               ))}
             </div>
+            <p className="mt-2 text-xs text-neutral-500">
+              «Новинка» и «Снова в наличии» ставятся сами по приходам из 1С (см. «Поступления из 1С» справа). Ручная метка — дополнительно, держится, пока её не
+              снимут.
+            </p>
           </Card>
 
           {/* ── Фотографии ── */}
@@ -584,6 +648,7 @@ export function ProductEditor({ id }: { id: number }) {
             </dl>
             <p className="mt-3 text-xs text-neutral-500">Название, артикул, штрихкод, цены и остатки меняются только в 1С и приходят с обменом.</p>
           </Card>
+          <ArrivalsCard a={p.arrivals} />
           {p.categoryManual || p.brandManual || p.descriptionManual ? (
             <Card className="p-5 text-sm">
               <div className="mb-2 flex items-center gap-1.5 font-medium">

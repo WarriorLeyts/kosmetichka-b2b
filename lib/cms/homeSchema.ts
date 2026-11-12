@@ -42,7 +42,8 @@ export const categoriesBlock = z.object({
 });
 
 export const PRODUCT_SOURCES = {
-  new: "Новинки (последние 30 дней)",
+  new: "Новинки — впервые пришли в 1С за 10 дней",
+  back: "Снова в наличии — пришли повторно за 10 дней",
   hits: "Хиты продаж",
   sale: "Акции — товары со скидкой",
   gift: "Подарочные наборы",
@@ -139,6 +140,7 @@ export const DEFAULT_HOME: PageContent = {
   blocks: [
     { id: "hero", visible: true, type: "hero", bannerIds: [], intervalSec: 6 },
     { id: "cats", visible: true, type: "categories", title: "Категории", categoryGuids: [], limit: 12 },
-    { id: "new", visible: true, type: "products", title: "Новинки", source: "new", productIds: [], limit: 12, moreText: "Все", moreLink: "/catalog?quick=new" },
+    { id: "new", visible: true, type: "products", title: "Новинки", source: "new", productIds: [], limit: 24, moreText: "Все", moreLink: "/catalog?quick=new" },
+    { id: "back", visible: true, type: "products", title: "Снова в наличии", source: "back", productIds: [], limit: 24, moreText: "", moreLink: "" },
   ],
 };

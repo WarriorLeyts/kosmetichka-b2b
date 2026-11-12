@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { resolveImageUrl } from "@/lib/image";
+import { listArrivals } from "@/lib/arrivals";
 import { DEFAULT_HOME, pageContentSchema, type HomeBlock, type PageContent } from "./homeSchema";
 
 export const HOME_KEY = "home";
@@ -39,12 +40,27 @@ export type ResolvedBlock =
   | (Extract<HomeBlock, { type: "hero" }> & { banners: ResolvedBanner[] })
   | (Extract<HomeBlock, { type: "categories" }> & { categories: { guid: string; name: string }[] | null; auto?: boolean })
   | (Extract<HomeBlock, { type: "products" }> & {
-      /** the catalogue request that lists the block's products (GET /api/catalog/products) */
-      query: { quick?: string[]; sort?: string; categoryGuid?: string; ids?: number[]; onlyStock?: boolean };
+      /**
+       * the catalogue request that lists the block's products (GET /api/catalog/products);
+       * arrivals — «Новые поступления» of the customer (…&arrivals=new|back, lib/arrivals.ts)
+       */
+      query: { quick?: string[]; sort?: string; categoryGuid?: string; ids?: number[]; onlyStock?: boolean; arrivals?: "new" | "back" };
       preview?: PreviewProduct[];
     })
   | (Extract<HomeBlock, { type: "info" }> & { imageUrl: string | null })
   | Extract<HomeBlock, { type: "buttons" }>;
+
+type ProductsQuery = Extract<ResolvedBlock, { type: "products" }>["query"];
+
+/** the catalogue request of each automatic source of a products block */
+const SOURCE_QUERY: Record<"new" | "back" | "sale" | "gift" | "hits", ProductsQuery> = {
+  // «Новинки» — arrivals=new; quick=new stays for apps that don't know `arrivals` yet (the site gives the same products)
+  new: { arrivals: "new", quick: ["new"], onlyStock: true },
+  back: { arrivals: "back", onlyStock: true },
+  sale: { quick: ["sale"], onlyStock: true },
+  gift: { quick: ["gift"], onlyStock: true },
+  hits: { sort: "popularity", onlyStock: true },
+};
 
 const bannerUrl = (p: string | null) => (p ? resolveImageUrl(p) : null);
 
@@ -108,17 +124,11 @@ export async function resolveBlocks(content: PageContent, opts: { withPreview?: 
       else out.push({ ...b, categories: opts.keepEmpty ? autoCats.slice(0, b.limit) : null, auto: true });
     } else if (b.type === "products") {
       const query: Extract<ResolvedBlock, { type: "products" }>["query"] =
-        b.source === "new"
-          ? { quick: ["new"], onlyStock: true }
-          : b.source === "sale"
-            ? { quick: ["sale"], onlyStock: true }
-            : b.source === "gift"
-              ? { quick: ["gift"], onlyStock: true }
-              : b.source === "hits"
-                ? { sort: "popularity", onlyStock: true }
-                : b.source === "category"
-                  ? { categoryGuid: b.categoryGuid, onlyStock: true }
-                  : { ids: b.productIds.filter((id) => visibleManual.has(id)) };
+        b.source === "manual"
+          ? { ids: b.productIds.filter((id) => visibleManual.has(id)) }
+          : b.source === "category"
+            ? { categoryGuid: b.categoryGuid, onlyStock: true }
+            : SOURCE_QUERY[b.source];
       if (b.source === "manual" && !query.ids?.length && !opts.keepEmpty) continue;
       out.push({ ...b, query });
     } else if (b.type === "info") {
@@ -136,13 +146,16 @@ export async function resolveBlocks(content: PageContent, opts: { withPreview?: 
 
 async function previewProducts(b: Extract<ResolvedBlock, { type: "products" }>): Promise<PreviewProduct[]> {
   const q = b.query;
-  const newSince = new Date(Date.now() - 30 * 86400_000);
+  // «Новинки» / «Снова в наличии»: what a wholesale customer sees (the warehouse and the shop) — retail sees the shop's part
+  const arrivalIds = q.arrivals
+    ? (await listArrivals({ wholesale: true, limit: 2000 })).filter((a) => (q.arrivals === "new" ? a.isNew : !a.isNew)).map((a) => a.productId).slice(0, Math.min(b.limit, 12))
+    : null;
+  const ids = arrivalIds ?? q.ids;
   const where: Prisma.ProductWhereInput = {
     hidden: false,
-    ...(q.onlyStock ? { stock: { gt: 0 } } : {}),
-    ...(q.ids ? { id: { in: q.ids } } : {}),
+    ...(q.onlyStock && !arrivalIds ? { stock: { gt: 0 } } : {}),
+    ...(ids ? { id: { in: ids } } : {}),
     ...(q.categoryGuid ? { categoryGuid: q.categoryGuid } : {}),
-    ...(q.quick?.includes("new") ? { createdAt: { gte: newSince } } : {}),
     ...(q.quick?.includes("sale") ? { hasDiscount: true } : {}),
     ...(q.quick?.includes("gift") ? { name: { contains: "Подарок", mode: "insensitive" } } : {}),
   };
@@ -153,6 +166,6 @@ async function previewProducts(b: Extract<ResolvedBlock, { type: "products" }>):
     select: { id: true, name: true, images: { take: 1, orderBy: [{ sortOrder: "asc" }, { id: "asc" }], select: { path: true } }, prices: { where: { priceType: "retail" }, select: { price: true } } },
   });
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const ordered = q.ids ? q.ids.map((id) => byId.get(id)).filter((r): r is (typeof rows)[number] => !!r) : rows;
+  const ordered = ids ? ids.map((id) => byId.get(id)).filter((r): r is (typeof rows)[number] => !!r) : rows;
   return ordered.map((r) => ({ id: r.id, name: r.name, image: resolveImageUrl(r.images[0]?.path, 320), price: r.prices[0]?.price ?? null }));
 }
