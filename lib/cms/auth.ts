@@ -16,6 +16,8 @@ export const PERMISSIONS = {
   "banners.delete": ["admin"],
   "products.edit": ["admin", "manager"],
   "products.photos": ["admin", "manager"],
+  "orders.view": ["admin", "manager"],
+  "orders.retry": ["admin", "manager"],
   "audit.view": ["admin"],
 } as const satisfies Record<string, readonly string[]>;
 

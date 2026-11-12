@@ -380,6 +380,7 @@ model Order {
   messages    OrderMessage[]
   statusLogs  OrderStatusLog[]
   itemChanges OrderItemChange[]
+  oneCAttempts OneCOrderAttempt[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -388,6 +389,26 @@ model Order {
   @@index([status])
   @@index([createdAt]) // used in admin order lists and 1C export ordering
   @@index([confirmRequestedAt]) // reminders: orders waiting for the customer's confirmation
+}
+
+/// Every try to send an order to 1С (lib/onecOrders.ts) — the log in the admin panel (/orders/<id>)
+model OneCOrderAttempt {
+  id         Int      @id @default(autoincrement())
+  orderId    Int
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  at         DateTime @default(now())
+  durationMs Int      @default(0)
+  /// created (document made) | linked (already was in 1С) | problem (data: no customer, contract…) | error (1С / network)
+  outcome    String
+  /// immediate (right after «Заказ оформлен») | auto (the worker, by schedule) | manual (the button in the admin panel)
+  trigger    String   @default("auto")
+  by         String?
+  /// 1С document number(s) after the try
+  docNumber  String?
+  error      String?  @db.Text
+
+  @@index([orderId, at])
+  @@index([at])
 }
 
 model OrderItem {

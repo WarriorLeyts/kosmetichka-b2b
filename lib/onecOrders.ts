@@ -29,9 +29,41 @@ export async function markExported(ids: number[]): Promise<void> {
 }
 
 type Outcome = "created" | "linked" | "problem" | "error" | "skipped";
+export type SendTrigger = "immediate" | "auto" | "manual";
 
-/** One order. Never throws: the error goes to Order.oneCError and the order is tried again later. */
-export async function sendOrderTo1C(id: number): Promise<Outcome> {
+/**
+ * One order. Never throws: the error goes to Order.oneCError and the order is tried again later.
+ * Every real try (not «skipped») is written to OneCOrderAttempt — the log in the admin panel.
+ */
+export async function sendOrderTo1C(id: number, meta: { trigger?: SendTrigger; by?: string } = {}): Promise<Outcome> {
+  const started = Date.now();
+  const outcome = await sendOnce(id);
+  if (outcome !== "skipped") await logAttempt(id, outcome, Date.now() - started, meta);
+  return outcome;
+}
+
+/** the log must never break the sending */
+async function logAttempt(id: number, outcome: Outcome, durationMs: number, meta: { trigger?: SendTrigger; by?: string }) {
+  try {
+    const o = await prisma.order.findUnique({ where: { id }, select: { oneCNumber: true, oneCStockNumber: true, oneCError: true } });
+    const ok = outcome === "created" || outcome === "linked";
+    await prisma.oneCOrderAttempt.create({
+      data: {
+        orderId: id,
+        durationMs,
+        outcome,
+        trigger: meta.trigger ?? "auto",
+        by: meta.by ?? null,
+        docNumber: [o?.oneCNumber, o?.oneCStockNumber].filter(Boolean).join(", ") || null,
+        error: ok ? null : (o?.oneCError ?? null),
+      },
+    });
+  } catch (e) {
+    console.warn(`[1c-orders] №${id}: журнал попыток не записан`, e instanceof Error ? e.message : e);
+  }
+}
+
+async function sendOnce(id: number): Promise<Outcome> {
   if (!ordersViaOData()) return "skipped";
   const now = new Date();
   // claim: only one sender per order (worker, status change, another instance)
@@ -186,5 +218,5 @@ export function startOrdersTo1C(): void {
 
 /** Right after the status became «Заказ оформлен» (doesn't wait; the worker would pick it up within a minute anyway). */
 export function kickOrderTo1C(id: number): void {
-  if (ordersViaOData()) void sendOrderTo1C(id);
+  if (ordersViaOData()) void sendOrderTo1C(id, { trigger: "immediate" });
 }

@@ -6,6 +6,8 @@ import { DATA_ROOT } from "@/lib/dataDir";
 import { requireCmsPage } from "@/lib/cms/page";
 import { can } from "@/lib/cms/auth";
 import { getHomePage } from "@/lib/cms/home";
+import { syncWhere } from "@/lib/cms/orderSync";
+import { orderScopeWhere, staffScope } from "@/lib/staffScope";
 
 export const metadata = { title: "Дашборд" };
 
@@ -24,7 +26,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const user = await requireCmsPage();
   const { denied } = await searchParams;
   const now = new Date();
-  const [total, hidden, inStock, noPhoto, noDesc, banners, home, ordersToday, log] = await Promise.all([
+  const scope = orderScopeWhere(await staffScope(user));
+  const [total, hidden, inStock, noPhoto, noDesc, banners, home, ordersToday, log, unsynced] = await Promise.all([
     prisma.product.count(),
     prisma.product.count({ where: { hidden: true } }),
     prisma.product.count({ where: { stock: { gt: 0 } } }),
@@ -32,8 +35,9 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     prisma.product.count({ where: { stock: { gt: 0 }, OR: [{ description: null }, { description: "" }] } }),
     prisma.banner.count({ where: { deletedAt: null, active: true } }),
     getHomePage(),
-    prisma.order.count({ where: { createdAt: { gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) } } }),
+    prisma.order.count({ where: { ...scope, createdAt: { gte: new Date(now.getFullYear(), now.getMonth(), now.getDate()) } } }),
     can(user, "audit.view") ? prisma.adminAuditLog.findMany({ orderBy: { createdAt: "desc" }, take: 8 }) : Promise.resolve([]),
+    can(user, "orders.view") ? prisma.order.count({ where: { AND: [scope, syncWhere("unsynced")] } }) : Promise.resolve(0),
   ]);
   const draftChanged = !home.publishedAt || home.draftUpdatedAt > home.publishedAt;
 
@@ -44,7 +48,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     { label: "В наличии без описания", value: noDesc.toLocaleString("ru-RU"), href: "/products?stock=in&desc=none", warn: noDesc > 0 },
     { label: "Скрыто с сайта", value: hidden.toLocaleString("ru-RU"), href: "/products?hidden=1" },
     { label: "Активных баннеров", value: banners, href: "/banners" },
-    { label: "Заказов сегодня", value: ordersToday },
+    { label: "Заказов сегодня", value: ordersToday, href: "/orders" },
+    { label: "Не передано в 1С", value: unsynced, href: "/orders?sync=unsynced", warn: unsynced > 0 },
   ];
 
   return (
