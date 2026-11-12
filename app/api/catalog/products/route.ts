@@ -253,8 +253,12 @@ export async function GET(request: Request) {
 
   // ?arrivals=1: «Новые поступления» for the home page — what came in the last 10 days and this customer can
   // buy now (retail — the shop, wholesale — the warehouse and the shop), newest first; isNew → «Новинка»
-  if (searchParams.get("arrivals") === "1") {
-    const list = await listArrivals({ wholesale, limit: 40 });
+  // arrivals=new — only «Новинки» (first receipt ever), arrivals=back — only «Снова в наличии», arrivals=1 — both
+  const arrivalsParam = searchParams.get("arrivals");
+  if (arrivalsParam === "1" || arrivalsParam === "new" || arrivalsParam === "back") {
+    const list = (await listArrivals({ wholesale, limit: 2000 }))
+      .filter((a) => (arrivalsParam === "new" ? a.isNew : arrivalsParam === "back" ? !a.isNew : true))
+      .slice(0, 40);
     const ids = list.map((a) => a.productId);
     const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, hidden: false }, include, omit }) : [];
     const meta = new Map(list.map((a, i) => [a.productId, { i, a }]));
