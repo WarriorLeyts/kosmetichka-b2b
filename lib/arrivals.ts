@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
  * «Новые поступления» (ProductArrival, scripts/import-arrivals.js): what came in the last 10 days, newest
  * first, one entry per product. Each customer sees what he can buy: retail — what came to the shop
  * («1. Мега Косметичка», transfers), wholesale — to the warehouse (receipts) and to the shop. Only products
- * in stock for him, not hidden, with a photo. «Новинка» — the product's first receipt ever is in the period.
+ * in stock for him, not hidden, with a photo. «Новинка» — the product's first receipt ever is in the period;
+ * those go first.
  */
 export const ARRIVAL_DAYS = 10;
 
@@ -39,5 +40,7 @@ export async function listArrivals({ wholesale, limit = 40, staff = false }: { w
     }
     out.set(p.id, { productId: p.id, arrivedAt: r.docDate, isNew, places: [r.place] });
   }
-  return [...out.values()].slice(0, limit);
+  // «Новинки» first (they would drown among restocks), then the rest — each group newest first
+  const all = [...out.values()];
+  return [...all.filter((a) => a.isNew), ...all.filter((a) => !a.isNew)].slice(0, limit);
 }
