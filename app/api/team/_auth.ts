@@ -8,7 +8,7 @@ import { verifyToken } from "@/lib/auth";
  *
  * The app logs in with POST /api/admin/login, which sets the httpOnly
  * `admin_token` cookie (JWT { id, email: <login>, role }). These helpers read
- * that cookie. /api/team/* is NOT covered by middleware.ts, so every route
+ * that cookie. /api/team/* is NOT covered by proxy.ts, so every route
  * must call requireStaff() itself.
  */
 
@@ -21,11 +21,11 @@ export type StaffSession = {
   role: StaffRole;
 };
 
-/** Same as /admin pages and /api/admin/* (middleware.ts + requireAdmin) */
+/** Same as /admin pages and /api/admin/* (proxy.ts + requireAdmin) */
 export const ADMIN_MANAGER: readonly StaffRole[] = ["admin", "manager"];
 /** Same as /admin/users pages (payload.role !== "admin" → redirect) */
 export const ADMIN_ONLY: readonly StaffRole[] = ["admin"];
-/** Same as /picker pages (middleware.ts: admin, manager and picker) */
+/** Same as /picker pages (proxy.ts: admin, manager and picker) */
 export const ANY_STAFF: readonly StaffRole[] = ["admin", "manager", "picker"];
 
 function isStaffRole(value: unknown): value is StaffRole {

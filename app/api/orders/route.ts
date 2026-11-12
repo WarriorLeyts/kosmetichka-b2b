@@ -24,6 +24,7 @@ import { adoptReservedBonuses, BONUSES_UNAVAILABLE, BONUSES_UNAVAILABLE_CODE } f
 import { enqueueMaxmaTask, runOrderMaxmaTasks } from "@/lib/maxmaQueue";
 import { PROMO_NOT_FOR_ITEMS } from "@/lib/promo";
 import { orderDelivery } from "@/lib/delivery";
+import { once, requestIdOf } from "@/lib/idempotency";
 
 /** Escape user-supplied strings before embedding in HTML emails */
 function escHtml(str: string): string {
@@ -35,7 +36,30 @@ function escHtml(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/**
+ * A repeated tap after a lost answer (same `requestId` from the app) gets the first order back
+ * instead of a second order (audit BUG-07). Without a requestId — as before.
+ */
 export async function POST(request: Request) {
+  const requestId = requestIdOf(await request.clone().json().catch(() => null));
+  const token = requestId ? (await cookies()).get("auth_token")?.value : undefined;
+  const who = token ? (await verifyCustomerToken(token))?.id : undefined;
+  if (!requestId || !who) return createOrder(request);
+
+  const turn = once(`${who}:${requestId}`);
+  if (turn.kind === "repeat") return NextResponse.json(turn.body);
+  if (turn.kind === "busy") return NextResponse.json({ error: "Заказ уже отправляется — подождите несколько секунд." }, { status: 409 });
+  try {
+    const res = await createOrder(request);
+    turn.done(res.status, res.ok ? await res.clone().json().catch(() => undefined) : undefined);
+    return res;
+  } catch (e) {
+    turn.done(500, undefined);
+    throw e;
+  }
+}
+
+async function createOrder(request: Request) {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
 

@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 
 /**
  * POST /api/team/logout — sign-out for every staff role (admin, manager, picker).
- * /api/admin/logout is closed to pickers by middleware.ts, so the app uses this one.
+ * /api/admin/logout is closed to pickers by proxy.ts, so the app uses this one.
  *
  * Browsers mark requests from other sites with `Sec-Fetch-Site: cross-site`;
  * those are refused so a foreign page can't log staff out (login CSRF-style).

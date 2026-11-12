@@ -1,6 +1,6 @@
 /**
- * The JWT signing secret — one place for lib/auth.ts, middleware.ts and lib/academy.ts (each had
- * its own copy of the dev fallback). No imports: middleware can use it too.
+ * The JWT signing secret — one place for lib/auth.ts, proxy.ts and lib/academy.ts (each had
+ * its own copy of the dev fallback). No imports: proxy.ts can use it too.
  */
 export function resolveJwtSecret(): string {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
