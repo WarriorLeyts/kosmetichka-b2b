@@ -21,7 +21,7 @@ export async function GET(
     include: {
       category: true,
       brand: true,
-      images: true,
+      images: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
       prices: true,
       variants: {
         include: { image: true },
@@ -43,6 +43,10 @@ export async function GET(
   const staffToken = customer?.id ? null : cookieStore.get("admin_token")?.value;
   const staff = staffToken ? await verifyToken(staffToken) : null;
   const signedIn = Boolean(customer?.id) || ["admin", "manager", "picker"].includes(String(staff?.role ?? ""));
+  // скрытый в админ-панели товар — только сотрудникам
+  if (product.hidden && !staff) {
+    return NextResponse.json({ error: "Товар не найден — возможно, его убрали из каталога" }, { status: 404 });
+  }
   const flat = withFlatPrices(product);
   if (signedIn) {
     // a wholesale customer sees what he may order: the shop minus its 12 + the warehouse

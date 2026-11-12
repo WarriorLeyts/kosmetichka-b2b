@@ -114,6 +114,10 @@ async function main() {
 
   const full = String(catalog?.СодержитТолькоИзменения ?? "").toLowerCase() === "false";
   const deleted = [];
+  // описание, исправленное в админ-панели (admin.kosmetichka-opt.ru), 1С больше не перезаписывает
+  const manualDescription = new Set(
+    (await prisma.product.findMany({ where: { descriptionManual: true }, select: { guid: true } })).map((p) => p.guid)
+  );
 
   for (const product of products) {
     if (isDeletedIn1C(product)) deleted.push(String(product.Ид));
@@ -124,7 +128,7 @@ async function main() {
 
     const brandGuid = getBrandGuid(product);
 
-    const description =
+    const description1C =
       (product["Описание"] ? String(product["Описание"]).trim() : null) ||
       getRequisite(product, [
         "Описание",
@@ -132,6 +136,7 @@ async function main() {
         "Полное описание",
       ]) ||
       null;
+    const description = manualDescription.has(String(product.Ид)) ? null : description1C;
 
     try {
       await prisma.product.upsert({

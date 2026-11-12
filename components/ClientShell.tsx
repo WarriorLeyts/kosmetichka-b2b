@@ -16,6 +16,8 @@ export function ClientShell() {
   const pathname = usePathname();
   // Тесты для сотрудников (/academy) — без магазинной обвязки: корзины, уведомлений, cookie-баннера
   if (pathname?.startsWith("/academy")) return null;
+  // админ-панель (admin.kosmetichka-opt.ru, lib/themeScript.ts ставит data-cms) — тоже без магазинной обвязки
+  if (mounted && document.documentElement.dataset.cms === "1") return null;
   // нижнее меню и баннер cookie рендерятся сразу (в HTML), остальное — после монтирования
   if (!mounted)
     return (

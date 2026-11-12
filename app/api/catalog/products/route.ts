@@ -167,6 +167,8 @@ export async function GET(request: Request) {
   newSince.setDate(newSince.getDate() - 30);
 
   const where: any = {
+    // скрытые в админ-панели товары покупатели не видят (корзина — ?ids= ниже — их ещё показывает)
+    hidden: false,
     ...(categoryGuids.length > 0 ? { categoryGuid: { in: categoryGuids } } : {}),
     ...(brandGuids.length > 0 ? { brandGuid: { in: brandGuids } } : {}),
     ...(onlyStock ? (wholesale ? { wholesaleStock: { gt: 0 } } : { stock: { gt: 0 } }) : {}),
@@ -190,7 +192,7 @@ export async function GET(request: Request) {
   const include = {
     category: true,
     brand: true,
-    images: { take: 1 },
+    images: { take: 1, orderBy: [{ sortOrder: "asc" as const }, { id: "asc" as const }] },
     prices: true,
   };
   // ?lite=1 (mobile apps): no description — it is ~65% of the page and cards don't show it

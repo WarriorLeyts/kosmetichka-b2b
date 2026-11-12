@@ -5,7 +5,7 @@ import { formatWarehouseStock } from "./warehouseStock";
 
 // Stock per warehouse is for staff only: customers see Product.stock (the total).
 // Guard: only staff code (admin, picker, team API, 1C import) may read it.
-const STAFF = [/^app\/admin\//, /^app\/api\/admin\//, /^app\/api\/team\//, /^app\/picker\//, /^app\/api\/picker\//, /^app\/api\/1c\//];
+const STAFF = [/^app\/admin\//, /^app\/cms\//, /^app\/api\/cms\//, /^app\/api\/admin\//, /^app\/api\/team\//, /^app\/picker\//, /^app\/api\/picker\//, /^app\/api\/1c\//];
 
 function files(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {

@@ -762,3 +762,9 @@ html[data-consent="1"] .app-cookie { display: none !important; }
 
 .app-show-all-brands { display: block; width: 100%; margin-top: 6px; padding: 8px 10px; border-radius: 12px; border: 1px dashed var(--sep); background: none; color: var(--tint); font-weight: 700; font-size: 13px; cursor: pointer; }
 .app-show-all-brands:hover { background: var(--tint-soft); }
+
+/* Админ-панель (admin.kosmetichka-opt.ru): без магазинной обвязки и фона витрины */
+html[data-cms] .mobile-bottom-nav,
+html[data-cms] .app-cookie { display: none !important; }
+html[data-cms] body::before { display: none !important; }
+html[data-cms] body { background: #fff !important; }
