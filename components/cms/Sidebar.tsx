@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { History, Home, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Package, ShoppingBag, Settings, LayoutGrid, FileText, Search, Upload, X, ExternalLink } from "lucide-react";
+import { History, Home, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Package, ShoppingBag, Settings, LayoutGrid, FileText, BadgePercent, Search, Upload, X, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ROLE: Record<string, string> = { admin: "Администратор", manager: "Менеджер" };
@@ -19,6 +19,7 @@ export function CmsSidebar({ user, canAudit }: { user: { name: string; role: str
     { href: "/catalog", label: "Каталог", icon: LayoutGrid },
     { href: "/pages", label: "Страницы", icon: FileText },
     { href: "/banners", label: "Баннеры", icon: ImageIcon },
+    { href: "/promo", label: "Акция", icon: BadgePercent },
     { href: "/products", label: "Товары", icon: Package },
     { href: "/products/images", label: "Загрузка фото", icon: Upload },
     { href: "/seo", label: "Массовое SEO", icon: Search },
