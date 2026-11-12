@@ -213,7 +213,9 @@ export function ProductEditor({ id }: { id: number }) {
 
   // порядок фото перетаскиванием (мышью и пальцем); сохраняется, когда фото отпущено
   const imgsRef = useRef<Img[]>([]);
-  imgsRef.current = p?.images ?? [];
+  useEffect(() => {
+    imgsRef.current = p?.images ?? [];
+  }, [p]);
   const photoSort = useSortable(
     (from, to) =>
       setP((cur) => {
