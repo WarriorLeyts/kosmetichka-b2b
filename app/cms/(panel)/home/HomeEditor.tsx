@@ -249,9 +249,9 @@ export function HomeEditor() {
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">{validation.error.issues[0]?.message}</div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto md:flex-row md:overflow-hidden">
         {/* слева: блоки и настройки выбранного */}
-        <div className="w-[360px] shrink-0 overflow-auto border-r border-neutral-200 bg-white">
+        <div className="w-full shrink-0 border-b border-neutral-200 bg-white md:w-[360px] md:overflow-auto md:border-b-0 md:border-r">
           <div className="p-3">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-medium text-neutral-700">Блоки страницы</span>
@@ -319,7 +319,7 @@ export function HomeEditor() {
         </div>
 
         {/* по центру: предпросмотр */}
-        <div className="min-w-0 flex-1 overflow-auto bg-neutral-100 p-4 md:p-6">
+        <div className="min-w-0 flex-1 bg-neutral-100 p-4 md:overflow-auto md:p-6">
           <HomePreview
             blocks={shown}
             device={device}
