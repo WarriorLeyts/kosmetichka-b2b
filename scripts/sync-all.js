@@ -14,6 +14,8 @@ const scripts = [
   "import-images.js",
   // all barcodes of the products of this exchange, from 1С over OData (the exchange carries one)
   ...(odata ? ["import-barcodes.js"] : []),
+  // «Новые поступления» (receipts to the warehouse, transfers to the shop) — rebuilt for the last days
+  ...(odata ? ["import-arrivals.js"] : []),
 ];
 
 console.log("=== 1C Sync started:", new Date().toLocaleString("ru-RU"), "===");

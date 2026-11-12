@@ -37,6 +37,11 @@ export async function register() {
     const { startBarcodesSync } = await import("./lib/barcodesSync");
     startBarcodesSync();
   }
+  // «Новые поступления» from 1С every 30 min (and after each exchange)
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { startArrivalsSync } = await import("./lib/arrivalsSync");
+    startArrivalsSync();
+  }
 }
 
 // Uncaught server errors → DATA_DIR/server-errors.log → Telegram via ~/ops/monitor.mjs (audit ARCH-07)
