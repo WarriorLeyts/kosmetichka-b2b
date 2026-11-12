@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hash } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { resetTokenHash } from "@/lib/resetToken";
 
 export async function POST(request: Request) {
   try {
@@ -21,9 +22,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Пароли не совпадают" }, { status: 400 });
     }
 
-    // Find valid token
+    // Find valid token (stored as its sha256)
+    const tokenHash = resetTokenHash(token);
     const resetToken = await prisma.passwordResetToken.findUnique({
-      where: { token },
+      where: { token: tokenHash },
     });
 
     if (!resetToken || resetToken.used || resetToken.expiresAt < new Date()) {
@@ -52,7 +54,7 @@ export async function POST(request: Request) {
         data: { password: hashed, passwordChangedAt: new Date() }, // every old session ends
       }),
       prisma.passwordResetToken.update({
-        where: { token },
+        where: { token: tokenHash },
         data: { used: true },
       }),
     ]);

@@ -41,7 +41,7 @@ export async function staffStillValid(id: unknown, role: unknown): Promise<boole
 
 /**
  * Verifies the admin/manager session cookie for use inside API route
- * handlers (middleware.ts only protects /admin/* pages, not /api/admin/*
+ * handlers (proxy.ts only protects /admin/* pages, not /api/admin/*
  * routes, so every admin API route must call this itself).
  */
 export async function requireAdmin() {

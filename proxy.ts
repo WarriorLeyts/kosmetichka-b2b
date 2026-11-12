@@ -4,7 +4,7 @@ import { resolveJwtSecret } from "@/lib/jwtSecret";
 
 const secret = new TextEncoder().encode(resolveJwtSecret());
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // --- Admin API routes: require admin or manager role, return JSON 401 ---
