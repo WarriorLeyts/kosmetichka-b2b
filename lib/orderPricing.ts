@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { cartPriceTier, type PriceType } from "@/lib/pricing";
-import { isWholesaleType } from "@/lib/utils";
+import { customerStock } from "@/lib/utils";
 
 /** the most pieces of one product in an order line */
 export const MAX_LINE_QTY = 9999;
@@ -74,6 +74,12 @@ export async function priceOrder(
   // «Опт»: the price by the order sum (5 000 / 50 000 ₽); the other types: the customer's own
   const appliedPriceType = cartPriceTier(cartForPricing, customer);
 
+  const qtyByProduct = new Map<number, number>();
+  for (const item of items) {
+    const q = Math.floor(Number(item.quantity));
+    if (Number.isFinite(q) && q > 0) qtyByProduct.set(Number(item.id), (qtyByProduct.get(Number(item.id)) ?? 0) + q);
+  }
+
   const lines = items.map((item) => {
     const product = productById.get(Number(item.id));
 
@@ -104,9 +110,15 @@ export async function priceOrder(
       throw new Error(`Слишком большое количество для «${product.name}»: не больше ${MAX_LINE_QTY} шт. в одной позиции`);
     }
 
-    // wholesalers: the shop keeps 12, the warehouse gives everything (Product.wholesaleStock)
-    if (isWholesaleType(customer.priceType) && !(Number(product.wholesaleStock ?? 0) > 0)) {
-      throw new Error(`«${product.name}» нет в наличии. Удалите этот товар из корзины.`);
+    // no more than the customer may take (audit BUG-01): wholesalers — the shop minus its 12 + the
+    // warehouse (Product.wholesaleStock), the others — the stock; the same product in several lines
+    // (variants) counts together. Unknown stock (null) — not checked, as before.
+    const available = customerStock(product.stock, customer.priceType, product.wholesaleStock);
+    if (available != null) {
+      const have = Math.max(0, Math.floor(Number(available)));
+      if (have <= 0) throw new Error(`«${product.name}» нет в наличии. Удалите этот товар из корзины.`);
+      const wanted = qtyByProduct.get(product.id) ?? quantity;
+      if (wanted > have) throw new Error(`«${product.name}»: в наличии ${have} шт. Уменьшите количество в корзине.`);
     }
 
     // MOQ check
