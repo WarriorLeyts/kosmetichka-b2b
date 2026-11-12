@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { requireAdminRole } from "@/lib/auth";
+import { cookies } from "next/headers";
+import { createToken, requireAdminRole } from "@/lib/auth";
 import { assignableGroups } from "@/lib/staffScope";
 
 type Props = {
@@ -27,7 +28,8 @@ const notFound = () =>
 
 export async function PATCH(request: Request, { params }: Props) {
   // Staff accounts are managed by admins only (same as the /admin/users pages)
-  if (!(await requireAdminRole())) return forbidden();
+  const me = await requireAdminRole();
+  if (!me) return forbidden();
 
   const { id: rawId } = await params;
   const id = parseId(rawId);
@@ -81,12 +83,25 @@ export async function PATCH(request: Request, { params }: Props) {
 
   if (password) {
     data.password = await bcrypt.hash(password, 10);
+    data.passwordChangedAt = new Date(); // his other sessions end (lib/auth.ts)
   }
 
-  await prisma.user.update({
+  const saved = await prisma.user.update({
     where: { id },
     data,
   });
+
+  // the admin changed his own password: this device stays signed in, the others end
+  if (password && Number(me.id) === id) {
+    const token = await createToken({ id: saved.id, email: saved.login, role: saved.role });
+    (await cookies()).set("admin_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+  }
 
   return NextResponse.json({ success: true });
 }

@@ -323,6 +323,13 @@ async function main() {
       console.error("Остатки по складам не очищены:", e.message);
     }
   }
+  // «Со скидкой» filter: the flag follows the «Скидка» prices (one query, only changed rows)
+  try {
+    const n = await prisma.$executeRaw`UPDATE "Product" p SET "hasDiscount" = d.has FROM (SELECT p2.guid, EXISTS (SELECT 1 FROM "ProductPrice" pp WHERE pp."productGuid" = p2.guid AND pp."priceType" = 'discount') AS has FROM "Product" p2) d WHERE d.guid = p.guid AND p."hasDiscount" <> d.has`;
+    if (n) console.log(`Флаг «Со скидкой» обновлён: ${n}`);
+  } catch (e) {
+    console.error("Флаг «Со скидкой» не обновлён:", e.message);
+  }
   // full price list: products 1C no longer offers can't be ordered (see hideMissing)
   if (full) await hideMissing(prisma, present, "остатки");
 

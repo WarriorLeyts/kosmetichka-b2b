@@ -171,6 +171,8 @@ export async function GET(request: Request) {
     ...(brandGuids.length > 0 ? { brandGuid: { in: brandGuids } } : {}),
     ...(onlyStock ? (wholesale ? { wholesaleStock: { gt: 0 } } : { stock: { gt: 0 } }) : {}),
     ...(quick.includes("new") ? { createdAt: { gte: newSince } } : {}),
+    // «Со скидкой»: a flag kept by import-prices.js (was an IN-list of thousands of guids — audit PERF-02)
+    ...(quick.includes("sale") ? { hasDiscount: true } : {}),
     ...(quick.includes("gift")
       ? { name: { contains: "Подарок", mode: "insensitive" } }
       : {}),
@@ -202,7 +204,7 @@ export async function GET(request: Request) {
 
   /** price range / «sale» → the guids that pass (null — no such filter) */
   async function priceFilterGuids(): Promise<string[] | null> {
-    if (priceMin === null && priceMax === null && !quick.includes("sale")) return null;
+    if (priceMin === null && priceMax === null) return null;
     const prices = await priceIndex();
     // by the prices this viewer sees — a guest never by wholesale ones (he could narrow the range down
     // and work out the hidden wholesale price of any product)
@@ -211,12 +213,7 @@ export async function GET(request: Request) {
     for (const [guid, price] of priceList) {
       if (priceMin !== null && price < priceMin) continue;
       if (priceMax !== null && price > priceMax) continue;
-      if (quick.includes("sale") && !prices.sale.has(guid)) continue;
       merged.push(guid);
-    }
-    // sale without a price range: products with a discount but no wholesale price count too
-    if (quick.includes("sale") && priceMin === null && priceMax === null) {
-      for (const guid of prices.sale) if (!priceList.has(guid)) merged.push(guid);
     }
     return merged;
   }
@@ -267,7 +264,6 @@ export async function GET(request: Request) {
   const needsPriceJoin =
     priceMin !== null ||
     priceMax !== null ||
-    quick.includes("sale") ||
     sort === "price_asc" ||
     sort === "price_desc";
 

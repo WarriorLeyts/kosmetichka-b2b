@@ -27,16 +27,20 @@ export async function verifyToken(token: string) {
   // Staff tokens (everything but "customer") live 7 days. The signature alone would keep a deleted
   // employee — or one whose role was lowered — in the admin until then, so the account is checked
   // on every use: it must still exist and still have the role written in the token.
-  if (payload.role !== "customer" && !(await staffStillValid(payload.id, payload.role))) return null;
+  if (payload.role !== "customer" && !(await staffStillValid(payload.id, payload.role, payload.iat))) return null;
   return payload;
 }
 
-/** The staff account `id` still exists and has role `role`. */
-export async function staffStillValid(id: unknown, role: unknown): Promise<boolean> {
+/**
+ * The staff account `id` still exists, has role `role`, and its password wasn't changed after the
+ * token was issued at `iat` (a changed password ends the other sessions — audit SEC-08).
+ */
+export async function staffStillValid(id: unknown, role: unknown, iat?: number): Promise<boolean> {
   const n = Number(id);
   if (!Number.isInteger(n) || n <= 0 || typeof role !== "string") return false;
-  const user = await prisma.user.findUnique({ where: { id: n }, select: { role: true } });
-  return user?.role === role;
+  const user = await prisma.user.findUnique({ where: { id: n }, select: { role: true, passwordChangedAt: true } });
+  if (user?.role !== role) return false;
+  return !user.passwordChangedAt || (iat ?? 0) >= Math.floor(user.passwordChangedAt.getTime() / 1000);
 }
 
 /**
