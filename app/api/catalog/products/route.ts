@@ -3,6 +3,7 @@ import { productSearchWhere } from "@/lib/productSearch";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { relatedIds } from "@/lib/related";
+import { listArrivals } from "@/lib/arrivals";
 import { customerStock, guestStock, isWholesaleType, withFlatPrices } from "@/lib/utils";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { verifyToken } from "@/lib/auth";
@@ -247,6 +248,22 @@ export async function GET(request: Request) {
     const order = new Map(ids.map((id, i) => [id, i]));
     found.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
     return NextResponse.json({ products: found.map(applyPrices), total: found.length, page: 1, hasMore: false });
+  }
+
+  // ?arrivals=1: «Новые поступления» for the home page — what came in the last 10 days and this customer can
+  // buy now (retail — the shop, wholesale — the warehouse and the shop), newest first; isNew → «Новинка»
+  if (searchParams.get("arrivals") === "1") {
+    const list = await listArrivals({ wholesale, limit: 40 });
+    const ids = list.map((a) => a.productId);
+    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, hidden: false }, include, omit }) : [];
+    const meta = new Map(list.map((a, i) => [a.productId, { i, a }]));
+    found.sort((x, y) => (meta.get(x.id)?.i ?? 0) - (meta.get(y.id)?.i ?? 0));
+    return NextResponse.json({
+      products: found.map((p) => ({ ...applyPrices(p), arrivalNew: meta.get(p.id)?.a.isNew ?? false, arrivedAt: meta.get(p.id)?.a.arrivedAt ?? null })),
+      total: found.length,
+      page: 1,
+      hasMore: false,
+    });
   }
 
   // ?ids=1,2,3 (the cart, up to 120): these products as they are now, in one request instead of one

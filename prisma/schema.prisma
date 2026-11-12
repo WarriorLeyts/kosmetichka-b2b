@@ -97,6 +97,9 @@ model Product {
   /// every barcode of the product in 1С («Штрихкоды номенклатуры», over OData); `barcode` above is the one of the exchange
   barcodes ProductBarcode[]
 
+  /// receipts to the warehouse / transfers to the shop of the last days («Новые поступления», lib/arrivals.ts)
+  arrivals ProductArrival[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -111,6 +114,26 @@ model Product {
   @@index([stock])
   @@index([hidden])
   // trigram indexes for the «contains» search (pg_trgm) live in prisma/manual/2026-10-31-search-trigram.sql
+}
+
+/// «Новые поступления»: a product came to «0. Склад» (receipt, place "stock") or to «1. Мега Косметичка»
+/// (transfer, place "shop") — from the posted 1С documents of the last days, rebuilt by scripts/import-arrivals.js.
+/// firstReceiptAt — the product's first receipt ever: within the period → «Новинка».
+/// SQL: prisma/manual/2026-11-12-product-arrivals.sql
+model ProductArrival {
+  id             Int       @id @default(autoincrement())
+  productGuid    String
+  product        Product   @relation(fields: [productGuid], references: [guid], onDelete: Cascade)
+  place          String
+  docRef         String
+  docNumber      String
+  docDate        DateTime
+  qty            Float
+  firstReceiptAt DateTime?
+
+  @@unique([docRef, productGuid])
+  @@index([docDate])
+  @@index([productGuid])
 }
 
 /// All barcodes of a product from 1С (register «Штрихкоды номенклатуры», read over OData by
