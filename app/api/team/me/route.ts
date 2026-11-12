@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ANY_STAFF, requireStaff } from "../_auth";
+import { ANY_STAFF, getStaffPayload, requireStaff } from "../_auth";
+import { needsRenewal, renewSession } from "@/lib/sessionRenew";
 import { ROLE_LABELS } from "../_shared";
 
 // GET /api/team/me — the logged-in staff user
@@ -14,6 +15,8 @@ export async function GET() {
   });
   // Token is still valid but the account was deleted
   if (!user) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+  // an active employee stays signed in (lib/sessionRenew.ts)
+  if (needsRenewal((await getStaffPayload())?.iat)) await renewSession("admin_token", { id: user.id, email: user.login, role: user.role });
 
   return NextResponse.json({
     id: user.id,

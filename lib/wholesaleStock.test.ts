@@ -60,14 +60,24 @@ describe("priceOrder: wholesalers only what they may order", () => {
     db.product.findMany.mockResolvedValue([product(12)]);
     await expect(priceOrder({ priceType: "wholesale" }, [{ id: 1, quantity: 30 }])).rejects.toThrow("нет в наличии");
   });
-  it("only on the warehouse (5): fine for a wholesaler", async () => {
+  it("only on the warehouse (5): a wholesaler gets up to 5 (audit BUG-01)", async () => {
     db.product.findMany.mockResolvedValue([product(5, 5)]);
-    const { lines } = await priceOrder({ priceType: "wholesale" }, [{ id: 1, quantity: 30 }]);
+    const { lines } = await priceOrder({ priceType: "wholesale" }, [{ id: 1, quantity: 5 }]);
     expect(lines).toHaveLength(1);
+    await expect(priceOrder({ priceType: "wholesale" }, [{ id: 1, quantity: 30 }])).rejects.toThrow("в наличии 5 шт.");
   });
-  it("retail customers are not affected", async () => {
+  it("two variants of one product count together", async () => {
+    db.product.findMany.mockResolvedValue([product(5, 5)]);
+    await expect(
+      priceOrder({ priceType: "wholesale" }, [{ id: 1, quantity: 3, variantName: "A" }, { id: 1, quantity: 3, variantName: "B" }])
+    ).rejects.toThrow("в наличии 5 шт.");
+  });
+  it("retail: up to the stock; unknown stock — not checked", async () => {
     db.product.findMany.mockResolvedValue([product(2)]);
     const { lines } = await priceOrder({ priceType: "retail" }, [{ id: 1, quantity: 1 }]);
     expect(lines[0].price).toBe(500);
+    await expect(priceOrder({ priceType: "retail" }, [{ id: 1, quantity: 3 }])).rejects.toThrow("в наличии 2 шт.");
+    db.product.findMany.mockResolvedValue([{ ...product(2), stock: null }]);
+    expect((await priceOrder({ priceType: "retail" }, [{ id: 1, quantity: 3 }])).lines).toHaveLength(1);
   });
 });

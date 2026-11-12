@@ -73,8 +73,13 @@ jobs:
 
       - name: Check site
         run: |
+          # the home page is a static file from nginx — it answers even when the site's server is down,
+          # so the API is checked too (audit BUG-05): the catalog must answer 200, «who am I» 200
           for i in $(seq 1 20); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' https://kosmetichka-opt.ru/)
-            echo "home: $code"; [ "$code" = 200 ] && exit 0; sleep 15
+            home=$(curl -s -o /dev/null -w '%{http_code}' https://kosmetichka-opt.ru/)
+            api=$(curl -s -o /dev/null -w '%{http_code}' "https://kosmetichka-opt.ru/api/catalog/products?limit=1&lite=1")
+            me=$(curl -s -o /dev/null -w '%{http_code}' https://kosmetichka-opt.ru/api/auth/me)
+            echo "home: $home, catalog: $api, auth/me: $me"
+            [ "$home" = 200 ] && [ "$api" = 200 ] && [ "$me" = 200 ] && exit 0; sleep 15
           done
-          echo "::error::Сайт не ответил 200 после выкладки"; exit 1
+          echo "::error::Сайт или API не ответили 200 после выкладки"; exit 1
