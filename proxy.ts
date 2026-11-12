@@ -4,8 +4,47 @@ import { resolveJwtSecret } from "@/lib/jwtSecret";
 
 const secret = new TextEncoder().encode(resolveJwtSecret());
 
+/** Admin panel host (admin.kosmetichka-opt.ru): its pages live in app/cms, its API in app/api/cms */
+const CMS_HOST = (process.env.CMS_HOST || "admin.kosmetichka-opt.ru").toLowerCase();
+
+function requestHost(request: NextRequest): string {
+  return (request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "").split(",")[0].trim().split(":")[0].toLowerCase();
+}
+
+function isCmsHost(host: string): boolean {
+  return host === CMS_HOST || host === "admin.localhost";
+}
+
+/** Paths of the admin host that are not its pages (API, Next files, photos) */
+function cmsPassThrough(pathname: string): boolean {
+  return /^\/(api|_next|1c|app)\//.test(pathname) || /^\/favicon\.(ico|svg)$/.test(pathname) || pathname === "/robots.txt";
+}
+
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const cmsHost = isCmsHost(requestHost(request));
+
+  if (cmsHost) {
+    if (pathname === "/robots.txt") {
+      return new NextResponse("User-agent: *\nDisallow: /\n", { headers: { "Content-Type": "text/plain" } });
+    }
+    if (!cmsPassThrough(pathname)) {
+      // the panel's addresses have no /cms prefix: admin.kosmetichka-opt.ru/products → app/cms/products
+      if (pathname === "/cms" || pathname.startsWith("/cms/")) {
+        const url = request.nextUrl.clone();
+        url.pathname = pathname.slice(4) || "/";
+        return NextResponse.redirect(url);
+      }
+      const url = request.nextUrl.clone();
+      url.pathname = "/cms" + (pathname === "/" ? "" : pathname);
+      const res = NextResponse.rewrite(url);
+      res.headers.set("X-Robots-Tag", "noindex, nofollow");
+      return res;
+    }
+  } else if (pathname === "/cms" || pathname.startsWith("/cms/") || pathname.startsWith("/api/cms/")) {
+    // the panel works only on its own host (its own login cookie)
+    return new NextResponse("Not found", { status: 404 });
+  }
 
   // --- Admin API routes: require admin or manager role, return JSON 401 ---
   // Вход и выход доступны всем: иначе сборщик, HR и сотрудник не могли выйти (403 до самого обработчика)
@@ -124,16 +163,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/api/admin/:path*",
-    "/admin/:path*",
-    "/picker/:path*",
-    "/academy",
-    "/academy/:path*",
-    "/orders/:path*",
-    "/orders",
-    "/profile",
-    "/wishlist",
-    "/wishlist/:path*",
-  ],
+  // every path: the admin host (admin.kosmetichka-opt.ru) is told apart by the Host header, not the path;
+  // the checks above only act on their own paths
+  matcher: ["/((?!_next/static|_next/image).*)"],
 };

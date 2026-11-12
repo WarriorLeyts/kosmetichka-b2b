@@ -12,6 +12,8 @@ model ProductImage {
 
   path String
   hash String?
+  /// order in the gallery (0 = main photo), set in the admin panel (admin.kosmetichka-opt.ru)
+  sortOrder Int @default(0)
 
   productId Int
   product   Product @relation(fields: [productId], references: [id])
@@ -56,6 +58,18 @@ model Product {
 
   stock       Float?
 
+  /// Admin panel (admin.kosmetichka-opt.ru): the product is not shown to customers (catalogue, search,
+  /// product page, related strips, sitemap). Prices / stock still come from 1C.
+  hidden          Boolean @default(false)
+  /// the description was edited in the admin panel — the 1C import no longer overwrites it
+  descriptionManual Boolean @default(false)
+  seoTitle        String?
+  seoDescription  String?
+  /// characteristics shown on the product page: [{ "name": "Объём", "value": "250 мл" }]
+  specs           Json?
+  /// «Сопутствующие товары» chosen by hand, shown first in the «С этим берут» strip
+  relatedIds      Int[]   @default([])
+
   /// what a wholesaler may order: the shop («1. Мега Косметичка») minus the 12 it keeps + the warehouse (import-prices.js)
 
   wholesaleStock Int @default(0)
@@ -95,6 +109,7 @@ model Product {
   @@index([brandGuid])
   @@index([name])
   @@index([stock])
+  @@index([hidden])
   // trigram indexes for the «contains» search (pg_trgm) live in prisma/manual/2026-10-31-search-trigram.sql
 }
 
@@ -733,4 +748,68 @@ model CustomerCart {
   items      Json
   comment    String   @default("")
   updatedAt  DateTime @updatedAt
+}
+
+/// Admin panel: every change made by staff (who, what, before/after). SQL: prisma/manual/2026-11-12-cms.sql
+model AdminAuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  userName  String
+  action    String
+  entity    String
+  entityId  String?
+  summary   String
+  before    Json?
+  after     Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([entity, entityId])
+}
+
+/// Admin panel: an editable page of the storefront (now "home"): a draft, the published version
+/// the apps show, and the history of published versions (rollback)
+model SitePage {
+  id             Int       @id @default(autoincrement())
+  key            String    @unique
+  title          String
+  draft          Json
+  draftUpdatedAt DateTime  @default(now())
+  draftUpdatedBy String?
+  published      Json?
+  publishedAt    DateTime?
+  publishedBy    String?
+
+  versions SitePageVersion[]
+}
+
+model SitePageVersion {
+  id        Int      @id @default(autoincrement())
+  pageId    Int
+  page      SitePage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  content   Json
+  note      String?
+  createdBy String
+  createdAt DateTime @default(now())
+
+  @@index([pageId, createdAt(sort: Desc)])
+}
+
+/// Admin panel: a banner (separate pictures for computer and phone), placed on the home page by its blocks
+model Banner {
+  id           Int       @id @default(autoincrement())
+  title        String
+  subtitle     String?
+  buttonText   String?
+  link         String?
+  imageDesktop String?
+  imageMobile  String?
+  active       Boolean   @default(true)
+  startsAt     DateTime?
+  endsAt       DateTime?
+  /// deleted from the admin panel (kept for the history, restorable)
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }

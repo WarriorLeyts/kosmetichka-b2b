@@ -12,11 +12,12 @@ export const RELATED_LIMIT = 12;
 
 type P = { id: number; brandGuid: string | null; categoryGuid: string | null; prices: { priceType: string; price: number }[] };
 
-const inStock = (wholesale: boolean) => (wholesale ? { wholesaleStock: { gt: 0 } } : { stock: { gt: 0 } });
+// hidden: false — товары, скрытые в админ-панели, в полосах не показываются
+const inStock = (wholesale: boolean) => (wholesale ? { wholesaleStock: { gt: 0 }, hidden: false } : { stock: { gt: 0 }, hidden: false });
 const retail = (p: P) => p.prices.find((x) => x.priceType === "retail")?.price ?? p.prices[0]?.price ?? 0;
 
 export async function relatedIds(productId: number, kind: RelatedKind, wholesale: boolean): Promise<number[]> {
-  const self = await prisma.product.findUnique({ where: { id: productId }, select: { id: true, brandGuid: true, categoryGuid: true, prices: { select: { priceType: true, price: true } } } });
+  const self = await prisma.product.findUnique({ where: { id: productId }, select: { id: true, brandGuid: true, categoryGuid: true, relatedIds: true, prices: { select: { priceType: true, price: true } } } });
   if (!self) return [];
   const out: number[] = [];
   const add = (ids: number[]) => {
@@ -24,6 +25,12 @@ export async function relatedIds(productId: number, kind: RelatedKind, wholesale
   };
 
   if (kind === "together") {
+    // «Сопутствующие товары», выбранные в админ-панели, — первыми (в наличии и не скрытые)
+    const manual = self.relatedIds ?? [];
+    if (manual.length) {
+      const ok = new Set((await prisma.product.findMany({ where: { id: { in: manual }, ...inStock(wholesale) }, select: { id: true } })).map((p) => p.id));
+      add(manual.filter((id) => ok.has(id)));
+    }
     const rows = await prisma.$queryRaw<{ productId: number; n: number }[]>`
       SELECT b."productId" AS "productId", COUNT(DISTINCT b."orderId")::int AS n
       FROM "OrderItem" a JOIN "OrderItem" b ON b."orderId" = a."orderId" AND b."productId" <> a."productId"

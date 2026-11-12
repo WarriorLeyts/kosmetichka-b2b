@@ -22,7 +22,7 @@ const getProduct = cache(async (id: number) => {
     include: {
       category: true,
       brand: true,
-      images: true,
+      images: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
       prices: true,
       variants: {
         include: { image: true },
@@ -37,9 +37,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const product = await getProduct(Number(id));
 
-  if (!product) return {};
+  if (!product || product.hidden) return {};
 
-  const title = product.name;
+  // SEO-поля из админ-панели (admin.kosmetichka-opt.ru) важнее автоматических
+  const title = product.seoTitle?.trim() || product.name;
   const plain = product.description
     ? product.description
         .replace(/[*_`#>~]+/g, "")
@@ -47,7 +48,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         .replace(/\s+/g, " ")
         .trim()
     : "";
-  const description = plain
+  const description = product.seoDescription?.trim()
+    ? product.seoDescription.trim()
+    : plain
     ? plain.length > 160 ? plain.slice(0, 157).replace(/\s+\S*$/, "") + "…" : plain
     : `Купить ${product.name} оптом в магазине Косметичка. Выгодные цены.`;
   const imageUrl = product.images[0]?.path
@@ -76,13 +79,14 @@ export default async function ProductPage({ params }: Props) {
   // getProduct is memoised by React.cache — no second DB hit if generateMetadata ran first
   const product = await getProduct(Number(id));
 
-  if (!product) {
+  // скрытый в админ-панели товар покупателям не показываем
+  if (!product || product.hidden) {
     notFound();
   }
 
   const relatedProducts = product.brandGuid
     ? await prisma.product.findMany({
-        where: { brandGuid: product.brandGuid, id: { not: product.id } },
+        where: { brandGuid: product.brandGuid, id: { not: product.id }, hidden: false },
         take: 8,
         include: { category: true, brand: true, images: true, prices: true },
         orderBy: { name: "asc" },

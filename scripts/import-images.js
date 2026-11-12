@@ -103,7 +103,8 @@ async function main() {
 
     // photos a product variant points at stay (deleting them failed the whole import on the foreign key);
     // the others are replaced by the photos from 1C
-    await prisma.productImage.deleteMany({ where: { productId: product.id, variants: { none: {} } } });
+    // фото, загруженные в админ-панели (uploads/…), остаются — 1С о них не знает
+    await prisma.productImage.deleteMany({ where: { productId: product.id, variants: { none: {} }, NOT: { path: { startsWith: "uploads/" } } } });
     const kept = new Set((await prisma.productImage.findMany({ where: { productId: product.id }, select: { path: true } })).map((i) => i.path));
 
     for (const imgPath of validImgs) {
