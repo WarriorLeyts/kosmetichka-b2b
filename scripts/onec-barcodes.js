@@ -65,12 +65,13 @@ export async function fetchAllBarcodes(env = process.env) {
   return normalizeBarcodeRows(rows);
 }
 
-/** Rows of the given products only (20 per request). */
+/** Rows of the given products only. The Cyrillic field name makes each condition ~150
+ * characters URL-encoded, and IIS refuses query strings over 2048 (404.15): 8 per request. */
 export async function fetchBarcodesOf(guids, env = process.env) {
   const rows = [];
   const list = [...new Set(guids)].filter((g) => GUID.test(g));
-  for (let i = 0; i < list.length; i += 20) {
-    const part = list.slice(i, i + 20);
+  for (let i = 0; i < list.length; i += 8) {
+    const part = list.slice(i, i + 8);
     rows.push(...(await odataGet(REG, { $select: "Штрихкод,Номенклатура_Key,ЕдиницаИзмерения_Key", $filter: part.map((g) => `Номенклатура_Key eq guid'${g}'`).join(" or ") }, env)));
   }
   return normalizeBarcodeRows(rows);
