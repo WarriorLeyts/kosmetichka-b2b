@@ -335,6 +335,7 @@ async function photoJob(ctx: JobContext) {
             break;
           }
           const n = await addProductPhotos(it.productId, good, mode === "replace" ? "replace" : "add");
+          // записано — дальше этот товар не повторяем, что бы ни случилось
           items[it.productId] = fileErrors.length ? { s: "partial", n, e: fileErrors.join("; ") } : { s: "ok", n };
           break;
         } catch (e) {

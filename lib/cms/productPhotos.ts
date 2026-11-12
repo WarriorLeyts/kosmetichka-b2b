@@ -16,7 +16,13 @@ export async function addProductPhotos(productId: number, files: Buffer[], mode:
     let order = (last._max.sortOrder ?? -1) + 1;
     for (const p of paths) await tx.productImage.create({ data: { productId, path: p.path, original: p.original, sortOrder: order++ } });
   });
-  revalidatePath(`/product/${productId}`);
+  // в фоновой задаче (не в запросе) у Next нет контекста для revalidatePath — страница товара
+  // всё равно рендерится на каждый запрос, кэш здесь не обязателен
+  try {
+    revalidatePath(`/product/${productId}`);
+  } catch {
+    /* вне запроса */
+  }
   return paths.length;
 }
 
