@@ -6,21 +6,37 @@ import { DEFAULT_HOME, pageContentSchema, type HomeBlock, type PageContent } fro
 
 export const HOME_KEY = "home";
 
-/** The home page row (created with the current home layout on first use). */
-export async function getHomePage() {
-  const found = await prisma.sitePage.findUnique({ where: { key: HOME_KEY } });
+/**
+ * Pages built from blocks in the admin panel: the home page and the top of the catalog (banners,
+ * product strips, buttons above the list of goods). The same editor, API (?page=) and storage (SitePage).
+ */
+export const BLOCK_PAGES = {
+  home: { title: "Главная страница", short: "Главная", empty: DEFAULT_HOME },
+  catalog: { title: "Каталог — блоки сверху", short: "Каталог", empty: { version: 1, blocks: [] } as PageContent },
+} as const;
+export type BlockPage = keyof typeof BLOCK_PAGES;
+
+/** ?page=catalog → "catalog"; anything else — the home page */
+export function blockPageOf(request: Request): BlockPage {
+  const p = new URL(request.url).searchParams.get("page");
+  return p && p in BLOCK_PAGES ? (p as BlockPage) : "home";
+}
+
+/** The page row (created with its starting layout on first use). */
+export async function getHomePage(key: BlockPage = "home") {
+  const found = await prisma.sitePage.findUnique({ where: { key } });
   if (found) return found;
   return prisma.sitePage.upsert({
-    where: { key: HOME_KEY },
+    where: { key },
     update: {},
-    create: { key: HOME_KEY, title: "Главная страница", draft: DEFAULT_HOME as unknown as Prisma.InputJsonValue },
+    create: { key, title: BLOCK_PAGES[key].title, draft: BLOCK_PAGES[key].empty as unknown as Prisma.InputJsonValue },
   });
 }
 
-/** Stored JSON → valid content (a broken / old value falls back to the default instead of failing the page). */
-export function readContent(raw: unknown): PageContent {
+/** Stored JSON → valid content (a broken / old value falls back to the page's default instead of failing). */
+export function readContent(raw: unknown, key: BlockPage = "home"): PageContent {
   const r = pageContentSchema.safeParse(raw);
-  return r.success ? r.data : DEFAULT_HOME;
+  return r.success ? r.data : BLOCK_PAGES[key].empty;
 }
 
 export type ResolvedBanner = {

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { ANY_STAFF, requireStaff } from "../_auth";
 import { prisma } from "@/lib/prisma";
-import { ARRIVAL_DAYS, listArrivals } from "@/lib/arrivals";
+import { listArrivals } from "@/lib/arrivals";
+import { getArrivalSettings } from "@/lib/arrivalSettings";
 import { productImageUrl } from "../_shared";
 
 /**
@@ -17,8 +18,11 @@ export async function GET() {
     select: { id: true, name: true, stock: true, wholesaleStock: true, images: { take: 1, orderBy: [{ sortOrder: "asc" }, { id: "asc" }], select: { path: true } } },
   });
   const byId = new Map(products.map((p) => [p.id, p]));
+  const periods = await getArrivalSettings();
   return NextResponse.json({
-    days: ARRIVAL_DAYS,
+    days: Math.max(periods.newDays, periods.backDays),
+    newDays: periods.newDays,
+    backDays: periods.backDays,
     items: list
       .map((a) => {
         const p = byId.get(a.productId);

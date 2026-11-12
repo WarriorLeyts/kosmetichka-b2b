@@ -50,6 +50,8 @@ type Product = {
     firstReceiptAt: string | null;
     newUntil: string | null;
     until: string | null;
+    newDays: number;
+    backDays: number;
     rows: { place: string; docNumber: string; docDate: string; qty: number }[];
   };
   stock: number | null;
@@ -130,7 +132,7 @@ function ArrivalsCard({ a }: { a: Product["arrivals"] }) {
           ) : null}
         </div>
       ) : (
-        <p className="mb-2 text-sm text-neutral-500">За последние 10 дней не приходил — меток «Новинка» / «Снова в наличии» нет.</p>
+        <p className="mb-2 text-sm text-neutral-500">Недавно не приходил — меток «Новинка» / «Снова в наличии» нет.</p>
       )}
       {a.rows.length ? (
         <ul className="space-y-1 text-xs">
@@ -145,7 +147,7 @@ function ArrivalsCard({ a }: { a: Product["arrivals"] }) {
         </ul>
       ) : null}
       <p className="mt-2 text-xs text-neutral-500">
-        Первое поступление: {day(a.firstReceiptAt)}. «Новинка» — 10 дней после первого прихода в компанию, «Снова в наличии» — 10 дней после повторного.
+        Первое поступление: {day(a.firstReceiptAt)}. «Новинка» — {a.newDays} дн. после первого прихода в компанию, «Снова в наличии» — {a.backDays} дн. после повторного (меняется в «Настройках»).
         Розница видит пришедшее в магазин, опт — на склад и в магазин.
       </p>
     </Card>

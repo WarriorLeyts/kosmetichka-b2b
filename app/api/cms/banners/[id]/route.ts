@@ -35,12 +35,15 @@ export async function DELETE(request: Request, ctx: Ctx) {
   if (isGuardError(g)) return g;
   const before = await load(ctx);
   if (!before || before.deletedAt) return NextResponse.json({ error: "Баннер не найден" }, { status: 404 });
-  // баннер, стоящий на опубликованной главной, не удаляем молча
-  const page = await getHomePage();
-  const used = page.published ? readContent(page.published).blocks.some((b) => b.type === "hero" && b.bannerIds.includes(before.id)) : false;
+  // баннер, стоящий на опубликованной главной или в каталоге, не удаляем молча
+  const usedOn: string[] = [];
+  for (const key of ["home", "catalog"] as const) {
+    const page = await getHomePage(key);
+    if (page.published && readContent(page.published, key).blocks.some((b) => b.type === "hero" && b.bannerIds.includes(before.id))) usedOn.push(key === "home" ? "главной" : "в каталоге");
+  }
   const force = new URL(request.url).searchParams.get("force") === "1";
-  if (used && !force) {
-    return NextResponse.json({ error: "Баннер стоит на опубликованной главной. Удалить всё равно?", inUse: true }, { status: 409 });
+  if (usedOn.length && !force) {
+    return NextResponse.json({ error: `Баннер стоит на опубликованной странице (${usedOn.join(", ")}). Удалить всё равно?`, inUse: true }, { status: 409 });
   }
   await prisma.banner.update({ where: { id: before.id }, data: { deletedAt: new Date(), active: false } });
   invalidateHome();
