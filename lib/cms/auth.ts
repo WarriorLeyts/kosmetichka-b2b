@@ -42,6 +42,10 @@ export async function getCmsUser(): Promise<CmsUser | null> {
  * Changing requests must come from the admin panel itself (Origin check against CSRF).
  */
 export async function cmsGuard(request: Request, perm: Permission): Promise<{ user: CmsUser; ip: string } | NextResponse> {
+  // the panel's API answers only on its own host (proxy.ts doesn't see /api/cms: big uploads must not pass through it)
+  const reqHost = (request.headers.get("host") ?? "").split(":")[0].toLowerCase();
+  const cmsHost = (process.env.CMS_HOST || "admin.kosmetichka-opt.ru").toLowerCase();
+  if (reqHost !== cmsHost && reqHost !== "admin.localhost") return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (request.method !== "GET" && request.method !== "HEAD") {
     const origin = request.headers.get("origin");
     const host = request.headers.get("host");
