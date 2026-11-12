@@ -44,6 +44,9 @@ const AUTO_APPROVE_TYPES = new Set(["retail"]);
 export async function POST(request: Request) {
   const body = await request.json();
   const { name, companyName, phone, email, password, captchaToken, smsCode, priceType: rawPriceType, source, address: rawAddress } = body;
+  // «Как вы узнали о нас?» / «Вы уже заказывали у нас?» — asked in the form itself (optional; same rules as /api/mobile/profile/survey)
+  const referralSource = typeof body?.referralSource === "string" ? body.referralSource.replace(/\s+/g, " ").trim().slice(0, 120) : "";
+  const orderedBefore = typeof body?.orderedBefore === "boolean" ? body.orderedBefore : null;
 
   // the website registers wholesale customers only for now (retail signs up in the app)
   if (source === "site" && !SITE_RETAIL_ENABLED && rawPriceType !== "wholesale" && rawPriceType !== "big_wholesale") {
@@ -214,6 +217,9 @@ export async function POST(request: Request) {
       // wholesale level the customer can switch back to after choosing retail (login still needs approval)
       wholesaleAccess: isWholesaleRole(effectivePriceType) ? effectivePriceType : null,
       ...(wantsBig ? { roleRequest: "big_wholesale", roleRequestStatus: "pending", roleRequestedAt: new Date() } : {}),
+      referralSource: referralSource || null,
+      orderedBefore,
+      surveyAt: new Date(),
   };
   const customer = again
     ? await prisma.customer.update({
