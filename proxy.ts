@@ -42,7 +42,7 @@ export async function proxy(request: NextRequest) {
       res.headers.set("X-Robots-Tag", "noindex, nofollow");
       return res;
     }
-  } else if (pathname === "/cms" || pathname.startsWith("/cms/") || pathname.startsWith("/api/cms/")) {
+  } else if (pathname === "/cms" || pathname.startsWith("/cms/")) {
     // the panel works only on its own host (its own login cookie)
     return new NextResponse("Not found", { status: 404 });
   }
@@ -164,7 +164,27 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // every path: the admin host (admin.kosmetichka-opt.ru) is told apart by the Host header, not the path;
-  // the checks above only act on their own paths
-  matcher: ["/((?!_next/static|_next/image).*)"],
+  // Only the paths that need a check. NOT every path: Proxy buffers a request body only up to 10 MB
+  // (experimental.proxyClientMaxBodySize) — the 1C exchange (/api/1c/*, tens of MB) and big uploads
+  // must never go through it, or they arrive cut off.
+  matcher: [
+    "/api/admin/:path*",
+    "/admin/:path*",
+    "/picker/:path*",
+    "/academy",
+    "/academy/:path*",
+    "/orders/:path*",
+    "/orders",
+    "/profile",
+    "/wishlist",
+    "/wishlist/:path*",
+    // the admin panel lives only on its host: /cms on the main domain → 404
+    "/cms",
+    "/cms/:path*",
+    // admin.kosmetichka-opt.ru: its page addresses → app/cms (API, Next files and photos pass by)
+    {
+      source: "/((?!api/|_next/|1c/).*)",
+      has: [{ type: "header", key: "host", value: "admin\\.kosmetichka-opt\\.ru|admin\\.localhost(:\\d+)?" }],
+    },
+  ],
 };
