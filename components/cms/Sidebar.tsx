@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { History, Home, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Package, Search, Upload, X, ExternalLink } from "lucide-react";
+import { History, Home, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Package, ShoppingBag, Search, Upload, X, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const ROLE: Record<string, string> = { admin: "Администратор", manager: "Менеджер" };
@@ -20,6 +20,7 @@ export function CmsSidebar({ user, canAudit }: { user: { name: string; role: str
     { href: "/products", label: "Товары", icon: Package },
     { href: "/products/images", label: "Загрузка фото", icon: Upload },
     { href: "/seo", label: "Массовое SEO", icon: Search },
+    { href: "/orders", label: "Заказы", icon: ShoppingBag },
     ...(canAudit ? [{ href: "/history", label: "Журнал действий", icon: History }] : []),
   ];
   const active = (href: string) => (href === "/" ? cur === "/" : cur === href || (cur.startsWith(href + "/") && !items.some((i) => i.href !== href && i.href.startsWith(href) && cur.startsWith(i.href))));
@@ -47,7 +48,7 @@ export function CmsSidebar({ user, canAudit }: { user: { name: string; role: str
         ))}
         <a href="https://kosmetichka-opt.ru/admin/" className="mt-3 flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-neutral-500 hover:bg-neutral-100">
           <ExternalLink className="size-4" />
-          Заказы и покупатели (Team)
+          Покупатели и сборка (Team)
         </a>
       </div>
       <div className="border-t border-neutral-200 px-5 py-4">
