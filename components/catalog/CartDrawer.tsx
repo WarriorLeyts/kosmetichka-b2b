@@ -10,10 +10,9 @@ import { useState, useEffect, useRef } from "react";
 import { SafeImage } from "./SafeImage";
 import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
 import {
-  effectivePriceType,
-  priceFor,
+  calculateCart,
+  cartItemPrice,
   priceTypeLabel,
-  rawCartTotal,
   resolveCustomerPriceType,
   amountUntilMinOrder,
   minOrderFor,
@@ -41,8 +40,9 @@ export function CartDrawer() {
   const customer = useAuthStore((state) => state.customer);
 
   const base = resolveCustomerPriceType(customer);
-  const activePriceType = effectivePriceType(cart, customer);
-  const total = rawCartTotal(cart, activePriceType);
+  const automaticPricing = calculateCart(cart, customer);
+  const activePriceType = automaticPricing.tier;
+  const total = automaticPricing.total;
   // minimum order: none any more (minOrderFor = 0); «Опт» pays by the order sum (lib/pricing.ts)
   const minOrder = minOrderFor(customer);
   const remainingToMin = amountUntilMinOrder(cart, customer);
@@ -314,7 +314,7 @@ export function CartDrawer() {
                       ? resolveImageUrl(item.images[0].path, 160)
                       : null;
 
-                    const price = priceFor(item, activePriceType);
+                    const price = cartItemPrice(item, activePriceType, customer);
                     const cartKey = item.cartKey || String(item.id);
 
                     return (
