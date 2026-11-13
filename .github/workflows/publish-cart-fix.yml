@@ -1,4 +1,4 @@
-name: Publish approved wholesale price panels
+name: Publish promotion prices with savings
 on:
   push:
     branches: [codex/publish-cart-fix]
@@ -26,9 +26,9 @@ jobs:
           ssh -i ~/.ssh/id_deploy -p "${PORT:-22}" -o ServerAliveInterval=30 "${USER:-root}@$HOST" "bash -lc 'python3 -'" <<'PY'
           import os, re, io, tarfile, hashlib, urllib.request, subprocess, tempfile, pathlib, shutil, gzip
           URL = "https://github.com/WarriorLeyts/kosmetichka-app/releases/download/web-latest/kosmetichka-web.tar.gz"
-          DIGEST = "fd2367e11e36de52843a116fdec88f68343480106b00991930af79b9e728e404"
-          OLD = "entry-091b2732f92b6c7823a4d63f9cf11884.js"
-          NEW = "entry-4ed6d05751e58ba075fdbbcbf2aa5f03.js"
+          DIGEST = "c7fe03fd3fe9b29ab4b7985233caaed45cd823ce1302e7bfdd289e4f9f424e19"
+          OLD = "entry-4ed6d05751e58ba075fdbbcbf2aa5f03.js"
+          NEW = "entry-6093a0f0dad4d410a3f19ebfacc986af.js"
           # Configuration stays on the server. Only deployment status is printed to Actions.
           config = subprocess.run(["nginx", "-T"], capture_output=True, text=True, check=True).stdout
           roots = set()
@@ -90,11 +90,11 @@ jobs:
                       fresh = pathlib.Path(str(gz) + ".cart-fix-pending")
                       with open(dest, "rb") as source, gzip.open(fresh, "wb") as zipped: shutil.copyfileobj(source, zipped)
                       os.replace(fresh, gz)
-          print("Customer storefront published with approved wholesale price panels")
+          print("Customer storefront published with promotion prices and savings")
           
           PY
       - name: Check published customer storefront
         run: |
-          curl --fail --silent --show-error --retry 3 https://kosmetichka-opt.ru/cart | grep -q 'entry-4ed6d05751e58ba075fdbbcbf2aa5f03.js'
-          curl --fail --silent --show-error --compressed --retry 3 https://kosmetichka-opt.ru/cart | grep -q 'entry-4ed6d05751e58ba075fdbbcbf2aa5f03.js'
+          curl --fail --silent --show-error --retry 3 https://kosmetichka-opt.ru/cart | grep -q 'entry-6093a0f0dad4d410a3f19ebfacc986af.js'
+          curl --fail --silent --show-error --compressed --retry 3 https://kosmetichka-opt.ru/cart | grep -q 'entry-6093a0f0dad4d410a3f19ebfacc986af.js'
           echo 'Approved cart build is served in plain and compressed responses'
