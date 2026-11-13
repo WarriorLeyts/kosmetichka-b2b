@@ -104,17 +104,23 @@ jobs:
           if(response.ok){
           const metadata=await response.text();
           const entries=[...metadata.matchAll(/<EntitySet\s+[^>]*Name="([^"]+)"[^>]*>/g)].map(m=>m[1]);
-          const entity=entries.find(n=>/^InformationRegister_/i.test(n)&&/Цен.*Номенклатур/i.test(n)&&!n.endsWith("_RecordType"));
+          const entity=entries.find(n=>n==="InformationRegister_ЦеныНоменклатуры")||entries.find(n=>/^InformationRegister_/i.test(n)&&/Цен.*Номенклатур/i.test(n)&&!n.endsWith("_RecordType"));
           if(entity){
           say("ONEC_PRICE_REGISTER_AVAILABLE");
-          const rows=await odata.odataGet(entity,{$filter:"Номенклатура_Key eq guid'"+item.guid+"'",$orderby:"Period desc",$top:"100"});
-          const valid=Array.isArray(rows)&&rows.some(p=>Number(p.Цена)>0&&p.ВидЦен_Key);
+          const matches=await odata.odataGet("Catalog_Номенклатура",{$filter:"Code eq 'ЦБ000000475'",$select:"Ref_Key,Description,Code"});
+          const match=Array.isArray(matches)&&matches.find(p=>/jomtam/i.test(String(p.Description)));
+          const target=match?.Ref_Key||item.guid;
+          say(match?(target===item.guid?"ONEC_ITEM_GUID_MATCHES":"ONEC_ITEM_GUID_DIFFERS"):"ONEC_ITEM_NOT_FOUND_BY_ARTICLE");
+          const rows=await odata.odataGet(entity,{$filter:"Номенклатура_Key eq guid'"+target+"'",$orderby:"Period desc",$top:"100"});
+          say(Array.isArray(rows)&&rows.length?"ONEC_PRODUCT_PRICE_ROWS_PRESENT":"ONEC_PRODUCT_PRICE_ROWS_ABSENT");
+          const typeKey=Array.isArray(rows)&&rows.length?Object.keys(rows[0]).find(k=>/Вид.*Цен.*_Key/.test(k)):null;
+          const valid=Array.isArray(rows)&&rows.some(p=>Number(p.Цена)>0&&p[typeKey]);
           say(valid?"ONEC_CURRENT_PRODUCT_PRICES_ACCESSIBLE":"ONEC_CURRENT_PRODUCT_PRICES_NOT_FOUND");
           if(valid){
           const kinds=await odata.odataGet("Catalog_ВидыЦен",{$select:"Ref_Key,Description"});
           const {normalizePriceType}=await import(require("url").pathToFileURL(path.join(root,"scripts/price-types.js")).href);
           const kindMap=new Map(kinds.map(t=>[t.Ref_Key,normalizePriceType(t.Description)]));
-          const latest=new Map();for(const p of rows){const t=kindMap.get(p.ВидЦен_Key);if(t&&!latest.has(t)&&Number(p.Цена)>0)latest.set(t,Number(p.Цена));}
+          const latest=new Map();for(const p of rows){const t=kindMap.get(p[typeKey]);if(t&&!latest.has(t)&&Number(p.Цена)>0)latest.set(t,Number(p.Цена));}
           const expected={retail:160,discount:115,wholesale:95,big_wholesale:85,promo_retail:99,promo_wholesale:79,promo_big_wholesale:79};
           for(const [t,value] of Object.entries(expected))say("ONEC_SCREENSHOT_"+t.toUpperCase()+"_"+(latest.get(t)===value?"MATCHES":"NOT_CONFIRMED"));
           }
