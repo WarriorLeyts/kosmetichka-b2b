@@ -1,3 +1,4 @@
+import { promotionProductsWhere } from "@/lib/promotionProducts";
 import { NextResponse } from "next/server";
 import { productSearchWhere } from "@/lib/productSearch";
 import { cookies } from "next/headers";
@@ -204,6 +205,8 @@ export async function GET(request: Request) {
         }
       : {}),
   };
+
+  if (quick.includes("promo")) where.AND = [...(where.AND ?? []), promotionProductsWhere(shownType)];
 
   const include = {
     category: true,
