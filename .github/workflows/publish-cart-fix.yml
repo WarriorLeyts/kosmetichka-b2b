@@ -1,0 +1,85 @@
+name: Publish approved cart storefront fix
+on:
+  push:
+    branches: [codex/publish-cart-fix]
+permissions:
+  contents: read
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Install verified public storefront build
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "${PORT:-22}" "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_deploy -p "${PORT:-22}" -o ServerAliveInterval=30 "${USER:-root}@$HOST" "bash -lc 'python3 -'" <<'PY'
+          import os, re, io, tarfile, hashlib, urllib.request, subprocess, tempfile, pathlib, shutil, gzip
+          URL = "https://github.com/WarriorLeyts/kosmetichka-app/releases/download/web-latest/kosmetichka-web.tar.gz"
+          DIGEST = "4dd6a8e145b8b7466f6b929a16bba3c11fd34d9f2e259c131e4ab38190f7b137"
+          OLD = "entry-ab6ba9febe7f677496936ab673d64e6e.js"
+          NEW = "entry-091b2732f92b6c7823a4d63f9cf11884.js"
+          # Configuration stays on the server. Only deployment status is printed to Actions.
+          config = subprocess.run(["nginx", "-T"], capture_output=True, text=True, check=True).stdout
+          roots = set()
+          for raw in re.findall(r"(?m)^\s*(?:root|alias)\s+([^;]+);", config):
+              raw = raw.strip().strip('"').strip("'")
+              if not raw.startswith("/") or "$" in raw: continue
+              p = pathlib.Path(raw).resolve()
+              index = p / "index.html"
+              if p != pathlib.Path("/") and index.is_file():
+                  content = index.read_text(errors="replace")
+                  if OLD in content or NEW in content: roots.add(p)
+          if len(roots) != 1: raise RuntimeError("Could not identify one matching customer storefront; no files changed")
+          root = next(iter(roots))
+          request = urllib.request.Request(URL, headers={"User-Agent": "Kosmetichka-website-deployment"})
+          archive = urllib.request.urlopen(request, timeout=90).read()
+          if hashlib.sha256(archive).hexdigest() != DIGEST: raise RuntimeError("Release checksum mismatch; no files changed")
+          with tempfile.TemporaryDirectory(prefix="kosmetichka-cart-publish-") as tmp:
+              stage = pathlib.Path(tmp) / "stage"
+              stage.mkdir()
+              with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tar:
+                  for member in tar.getmembers():
+                      p = pathlib.PurePosixPath(member.name)
+                      if p.is_absolute() or ".." in p.parts or member.issym() or member.islnk():
+                          raise RuntimeError("Unsafe archive member; no files changed")
+                  tar.extractall(stage, filter="data")
+              index = stage / "index.html"
+              if not index.is_file() or NEW not in index.read_text(): raise RuntimeError("Unexpected storefront build; no files changed")
+              files = [p for p in stage.rglob("*") if p.is_file()]
+              for p in files:
+                  dest = (root / p.relative_to(stage)).resolve()
+                  if root not in dest.parents: raise RuntimeError("Destination leaves storefront directory; no files changed")
+              backup = pathlib.Path(tempfile.mkdtemp(prefix="kosmetichka-cart-index-backup-"))
+              shutil.copy2(root / "index.html", backup / "index.html")
+              # Keep existing hashed assets for browsers still using the preceding build.
+              for p in files:
+                  relative = p.relative_to(stage)
+                  if str(relative) in ("index.html", "index.html.gz"): continue
+                  dest = root / relative
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(p, dest)
+              pending = root / ".cart-fix-index.pending"
+              shutil.copy2(index, pending)
+              if (root / "index.html.gz").exists():
+                  pending_gz = root / ".cart-fix-index.gz.pending"
+                  with open(index, "rb") as source, gzip.open(pending_gz, "wb") as zipped: shutil.copyfileobj(source, zipped)
+                  os.replace(pending_gz, root / "index.html.gz")
+              os.replace(pending, root / "index.html")
+          print("Customer storefront published with approved cart style fix")
+          
+          PY
+      - name: Check published customer storefront
+        run: |
+          curl --fail --silent --show-error --retry 3 https://kosmetichka-opt.ru/cart | grep -q 'entry-091b2732f92b6c7823a4d63f9cf11884.js'
+          echo 'Approved cart build is served by the website'
