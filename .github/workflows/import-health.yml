@@ -72,6 +72,15 @@ jobs:
           const slice="InformationRegister_ЦеныНоменклатуры/SliceLast(Period=datetime'"+pinned+"')";
           const order=keys.filter(k=>k.endsWith("_Key")).sort().join(",");
           const selected=[...new Set(["Номенклатура_Key",typeKey,"Цена","Period",...keys.filter(k=>k.endsWith("_Key"))])].join(",");
+          phase="PINNED_SLICE_CHECK";
+          await odata.odataGet(slice,{$filter:"Номенклатура_Key eq guid'"+item.guid+"'",$top:"1"});
+          phase="TARIFF_FILTER_CHECK";
+          await odata.odataGet(slice,{$filter:filter,$top:"1"});
+          phase="SOURCE_SELECT_CHECK";
+          await odata.odataGet(slice,{$filter:filter,$select:selected,$top:"1"});
+          phase="SOURCE_ORDER_CHECK";
+          await odata.odataGet(slice,{$filter:filter,$orderby:order,$select:selected,$top:"1"});
+          phase="FULL_PRICE_READ";
           const sourceMap=new Map(),ambiguous=new Set();
           let offset=0,complete=false;
           const began=Date.now();
@@ -92,6 +101,7 @@ jobs:
           }
           }
           if(!complete)throw Error("incomplete_source");
+          phase="CONTROL_VALIDATION";
           const expected={retail:160,discount:115,wholesale:95,big_wholesale:85,promo_retail:99,promo_wholesale:79,promo_big_wholesale:79};
           for(const [t,value] of Object.entries(expected)){const key=item.guid+"|"+t;if(ambiguous.has(key)||sourceMap.get(key)?.price!==value)throw Error("control_mismatch");}
           say("FULL_CURRENT_1C_PRICE_SLICE_READ");
@@ -123,5 +133,5 @@ jobs:
           if(ambiguous.size)say("AMBIGUOUS_PRICE_DIMENSIONS_EXCLUDED");
           say("PRIVATE_AUDIT_AND_PRICE_BACKUP_SAVED");
           }finally{await db.$disconnect();}
-          })().catch(()=>{console.error("PRICE_IMPORT_RESULT: AUDIT_FAILED_"+phase);process.exitCode=1;});
+          })().catch(e=>{const m=String(e?.message||"");const own=["no_control_slice","unsupported_schema","tariffs_ambiguous","currency_not_validated","audit_timeout","invalid_page","invalid_source_price","characteristic_filter_failed","incomplete_source","control_mismatch"];const code=own.includes(m)?m.toUpperCase():m.match(/HTTP ([0-9]{3})/)?.[0].replace(" ","_")||"ERROR";console.error("PRICE_IMPORT_RESULT: AUDIT_FAILED_"+phase+"_"+code);process.exitCode=1;});
           NODE
