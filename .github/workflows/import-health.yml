@@ -1,4 +1,4 @@
-name: Audit full catalog price source
+name: Restore audited catalog prices from 1C
 on:
   push:
     branches: [codex/diagnose-promo-import]
@@ -36,110 +36,65 @@ jobs:
           for(const k of ["DATABASE_URL","DATA_DIR","APP_ROOT"])if(meta[k]||meta.env?.[k])process.env[k]=meta[k]||meta.env[k];
           const req=require("module").createRequire(path.join(root,"package.json"));
           const say=code=>console.log("PRICE_IMPORT_RESULT: "+code);
-          phase="ONEC_SCHEMA";
-          const {pathToFileURL}=require("url");
-          const odata=await import(pathToFileURL(path.join(root,"scripts/onec-odata.js")).href);
-          if(!odata.odataConfigured())throw Error("no_connection");
+          phase="AUDIT_VALIDATE";
+          const dir=path.join(require("os").homedir(),".kosmetichka-private-backups");
+          const pointer=JSON.parse(fs.readFileSync(path.join(dir,"catalog-price-audit-latest.json"),"utf8"));
+          const auditPath=fs.realpathSync(pointer.auditPath);
+          if(!auditPath.startsWith(fs.realpathSync(dir)+path.sep)||!path.basename(auditPath).startsWith("catalog-price-audit-"))throw Error("invalid_audit_path");
+          const report=JSON.parse(fs.readFileSync(auditPath,"utf8"));
+          const age=Date.now()-Date.parse(report.at);
+          if(!report.complete||!Number.isFinite(age)||age<0||age>15*60*1000)throw Error("stale_audit");
+          const allowed=["retail","discount","wholesale","big_wholesale","promo_retail","promo_wholesale","promo_big_wholesale"];
+          const hash=require("crypto").createHash("sha256").update(JSON.stringify(report.allSource)).digest("hex");
+          if(hash!==report.sourceDigest)throw Error("audit_changed");
+          const keyOf=p=>p.productGuid+"|"+p.priceType;
+          const source=new Map();
+          for(const row of report.allSource){
+          if(!allowed.includes(row.priceType)||typeof row.productGuid!=="string"||!Number.isFinite(row.price)||row.price<0||source.has(keyOf(row)))throw Error("invalid_source");
+          source.set(keyOf(row),row);
+          }
+          const beforeMap=new Map(report.before.map(p=>[keyOf(p),p]));
+          phase="DATABASE";
           const {PrismaClient}=req("@prisma/client");const db=new PrismaClient();
           try{
-          const item=await db.product.findFirst({where:{article:"ЦБ000000475"},select:{guid:true}});
-          if(!item)throw Error("no_control_product");
-          const entity="InformationRegister_ЦеныНоменклатуры/SliceLast()";
-          const control=await odata.odataGet(entity,{$filter:"Номенклатура_Key eq guid'"+item.guid+"'",$top:"100"});
-          if(!Array.isArray(control)||!control.length)throw Error("no_control_slice");
-          const keys=Object.keys(control[0]).filter(k=>!k.startsWith("odata."));
-          const typeKey=keys.find(k=>/Вид.*Цен.*_Key/.test(k));
-          const charKey=keys.find(k=>/Характеристик.*_Key/.test(k));
-          const currencyKey=keys.find(k=>/Валют.*_Key/.test(k));
-          if(!typeKey||!keys.includes("Номенклатура_Key")||!keys.includes("Цена"))throw Error("unsupported_schema");
-          const empty="00000000-0000-0000-0000-000000000000";
-          const {normalizePriceType}=await import(pathToFileURL(path.join(root,"scripts/price-types.js")).href);
-          const allowed=["retail","discount","wholesale","big_wholesale","promo_retail","promo_wholesale","promo_big_wholesale"];
-          const labels=new Map([["розница","retail"],["скидка","discount"],["опт","wholesale"],["крупный опт","big_wholesale"],["акция розница","promo_retail"],["акция опт","promo_wholesale"],["акция крупный опт","promo_big_wholesale"]]);
-          const kinds=await odata.odataGet("Catalog_ВидыЦен",{});
-          const kindMap=new Map();
-          for(const kind of kinds){const label=String(kind.Description||"").trim().toLowerCase().replace(/ё/g,"е").replace(/ +/g," ");if(labels.has(label))kindMap.set(kind.Ref_Key,labels.get(label));}
-          if(kindMap.size!==7||new Set(kindMap.values()).size!==7)throw Error("tariffs_ambiguous");
-          let filter="("+[...kindMap.keys()].map(g=>typeKey+" eq guid'"+g+"'").join(" or ")+")";
-          // Characteristic prices are excluded after reading; avoid an unsupported 1C slice predicate.
-          if(currencyKey){
-          const currencies=await odata.odataGet("Catalog_Валюты",{$select:"Ref_Key,Code,Description",$filter:"Code eq '643'"});
-          if(!Array.isArray(currencies)||currencies.length!==1)throw Error("currency_not_validated");
-          const rub=currencies[0].Ref_Key;
-          const currencyKeys=Object.keys(kinds[0]||{}).filter(k=>/Валют.*_Key/.test(k));
-          for(const kind of kinds.filter(k=>kindMap.has(k.Ref_Key)))for(const k of currencyKeys)if(kind[k]&&kind[k]!==empty&&kind[k]!==rub)throw Error("currency_not_validated");
-          filter+=" and ("+currencyKey+" eq guid'"+rub+"' or "+currencyKey+" eq guid'"+empty+"')";
-
+          let changed=[],backupPath;
+          await db.$transaction(async tx=>{
+          phase="CONCURRENT_PRICE_CHECK";
+          await tx.$executeRawUnsafe('LOCK TABLE "ProductPrice" IN SHARE ROW EXCLUSIVE MODE');
+          const fresh=await tx.productPrice.findMany({where:{priceType:{in:allowed}}});
+          const live=new Map(fresh.map(p=>[keyOf(p),p]));
+          for(const [key,row] of source){
+          const current=live.get(key),before=beforeMap.get(key);
+          if(current?.price===row.price)continue;
+          if(current?.price!==before?.price||String(current?.updatedAt?.toISOString())!==String(before?.updatedAt))throw Error("prices_changed_after_audit");
+          changed.push(row);
           }
-          phase="FULL_PRICE_READ";
-          const pinned=new Date(Date.now()+3*60*60*1000).toISOString().slice(0,19);
-          const slice="InformationRegister_ЦеныНоменклатуры/SliceLast(Period=datetime'"+pinned+"')";
-          const order=keys.filter(k=>k.endsWith("_Key")).sort().join(",");
-          const selected=[...new Set(["Номенклатура_Key",typeKey,"Цена","Period",...keys.filter(k=>k.endsWith("_Key"))])].join(",");
-          phase="PINNED_SLICE_CHECK";
-          await odata.odataGet(slice,{$filter:"Номенклатура_Key eq guid'"+item.guid+"'",$top:"1"});
-          phase="SINGLE_TARIFF_FILTER_CHECK";
-          await odata.odataGet(slice,{$filter:typeKey+" eq guid'"+[...kindMap.keys()][0]+"'",$top:"1"});
-          phase="TARIFF_FILTER_CHECK";
-          await odata.odataGet(slice,{$filter:filter,$top:"1"});
-          phase="SOURCE_SELECT_CHECK";
-          await odata.odataGet(slice,{$filter:filter,$select:selected,$top:"1"});
-          phase="SOURCE_ORDER_CHECK";
-          await odata.odataGet(slice,{$filter:filter,$orderby:order,$select:selected,$top:"1"});
-          phase="FULL_PRICE_READ";
-          const sourceMap=new Map(),ambiguous=new Set();
-          let offset=0,complete=false;
-          const began=Date.now();
-          for(let page=0;page<200;page++){
-          if(Date.now()-began>8*60*1000)throw Error("audit_timeout");
-          const rows=await odata.odataGet(slice,{$filter:filter,$orderby:order,$select:selected,$top:"5000",$skip:String(offset)});
-          if(!Array.isArray(rows))throw Error("invalid_page");
-          if(!rows.length){complete=true;break;}
-          offset+=rows.length;
-          for(const row of rows){
-          const guid=row.Номенклатура_Key,t=kindMap.get(row[typeKey]),price=Number(row.Цена);
-          if(!guid||!t||!Number.isFinite(price)||price<0)throw Error("invalid_source_price");
-          if(charKey&&row[charKey]&&row[charKey]!==empty)continue;
-          const key=guid+"|"+t,value=Math.round(price*100)/100;
-          const previous=sourceMap.get(key);
-          if(previous&&previous.price!==value)ambiguous.add(key);
-          else sourceMap.set(key,{productGuid:guid,priceType:t,price:value});
+          const flags=await tx.product.findMany({select:{guid:true,hasDiscount:true,hidden:true,id:true}});
+          const validGuids=new Set(flags.map(p=>p.guid));
+          if(changed.some(p=>!validGuids.has(p.productGuid)))throw Error("catalog_changed_after_audit");
+          phase="BACKUP";
+          fs.chmodSync(dir,0o700);
+          backupPath=path.join(dir,"catalog-price-recovery-"+Date.now()+".json");
+          fs.writeFileSync(backupPath,JSON.stringify({at:new Date().toISOString(),auditPath,sourceDigest:report.sourceDigest,before:fresh,productFlags:flags,planned:changed}),{mode:0o600,flag:"wx"});
+          phase="PRICE_WRITE";
+          const sql='INSERT INTO "ProductPrice" ("productGuid","priceType","price","createdAt","updatedAt") SELECT x."productGuid",x."priceType",x.price,NOW(),NOW() FROM jsonb_to_recordset($1::jsonb) AS x("productGuid" text,"priceType" text,price double precision) ON CONFLICT ("productGuid","priceType") DO UPDATE SET price=EXCLUDED.price,"updatedAt"=NOW() WHERE "ProductPrice".price IS DISTINCT FROM EXCLUDED.price';
+          for(let i=0;i<changed.length;i+=500)await tx.$executeRawUnsafe(sql,JSON.stringify(changed.slice(i,i+500)));
+          phase="PRICE_VERIFY";
+          const after=await tx.productPrice.findMany({where:{priceType:{in:allowed}},select:{productGuid:true,priceType:true,price:true}});
+          const checked=new Map(after.map(p=>[keyOf(p),p.price]));
+          if([...source].some(([key,row])=>checked.get(key)!==row.price))throw Error("post_write_mismatch");
+          },{timeout:60000,maxWait:10000});
+          const result={at:new Date().toISOString(),sourceDigest:report.sourceDigest,changedPrices:changed.length,changedProducts:new Set(changed.map(p=>p.productGuid)).size,verifiedRows:source.size,backupPath};
+          fs.writeFileSync(path.join(dir,"catalog-price-recovery-result-"+Date.now()+".json"),JSON.stringify(result),{mode:0o600,flag:"wx"});
+          say(changed.length?"CATALOG_PRICES_RESTORED_FROM_1C_WITH_PRIVATE_BACKUP":"CATALOG_PRICES_ALREADY_CURRENT");
+          say("ALL_AUDITED_PRICES_VERIFIED_AFTER_TRANSACTION");
+          phase="PUBLIC_CHECK";
+          const changedGuids=[...new Set(changed.map(p=>p.productGuid))];
+          const sample=changedGuids.length?await db.product.findFirst({where:{guid:{in:changedGuids},hidden:false,prices:{some:{priceType:{in:["promo_wholesale","promo_big_wholesale"]},price:{gt:0}}}},select:{id:true}}):null;
+          if(sample){
+          const response=await fetch("http://127.0.0.1:3000/api/products/"+sample.id,{headers:{Host:"kosmetichka-opt.ru","X-Forwarded-Proto":"https"},signal:AbortSignal.timeout(15000)}).catch(()=>null);
+          if(response?.ok)console.log("PUBLIC_REPAIRED_PRODUCT: https://kosmetichka-opt.ru/product/"+sample.id);
           }
-          }
-          if(!complete)throw Error("incomplete_source");
-          phase="CONTROL_VALIDATION";
-          const expected={retail:160,discount:115,wholesale:95,big_wholesale:85,promo_retail:99,promo_wholesale:79,promo_big_wholesale:79};
-          let controlValid=true;
-          for(const [t,value] of Object.entries(expected)){const key=item.guid+"|"+t;if(ambiguous.has(key)||sourceMap.get(key)?.price!==value){controlValid=false;say("CONTROL_"+t.toUpperCase()+"_"+(ambiguous.has(key)?"AMBIGUOUS":sourceMap.has(key)?"DIFFERS":"MISSING"));}}
-          if(!controlValid)throw Error("control_mismatch");
-          say("FULL_CURRENT_1C_PRICE_SLICE_READ");
-          phase="CATALOG_COMPARE";
-          const products=await db.product.findMany({select:{id:true,guid:true,hidden:true,wholesaleStock:true}});
-          const productMap=new Map(products.map(p=>[p.guid,p]));
-          const existing=await db.productPrice.findMany({where:{priceType:{in:allowed}}});
-          const current=new Map(existing.map(p=>[p.productGuid+"|"+p.priceType,p]));
-          const proposed=[],allSource=[];
-          for(const [key,row] of sourceMap){
-          if(!productMap.has(row.productGuid)||ambiguous.has(key))continue;
-          allSource.push(row);
-          const before=current.get(key);
-          if(before?.price!==row.price)proposed.push({...row,before:before?{id:before.id,price:before.price,updatedAt:before.updatedAt}:null});
-          }
-          const changedProducts=new Set(proposed.map(p=>p.productGuid));
-          const promoGuids=new Set(allSource.filter(p=>p.priceType.startsWith("promo_")&&p.price>0).map(p=>p.productGuid));
-          const optGuids=new Set(allSource.filter(p=>["promo_wholesale","promo_big_wholesale"].includes(p.priceType)&&p.price>0).map(p=>p.productGuid));
-          const now=new Date().toISOString();
-          const backupDir=path.join(require("os").homedir(),".kosmetichka-private-backups");
-          fs.mkdirSync(backupDir,{recursive:true,mode:0o700});
-          const report={at:now,pinned,allowed,complete,counts:{catalog:products.length,sourceRows:allSource.length,changedProducts:changedProducts.size,changedPrices:proposed.length,ambiguous:ambiguous.size,promoProducts:promoGuids.size,wholesalePromoProducts:optGuids.size},proposed,allSource,before:existing,sourceDigest:require("crypto").createHash("sha256").update(JSON.stringify(allSource)).digest("hex")};
-          const auditPath=path.join(backupDir,"catalog-price-audit-"+Date.now()+".json");
-          fs.writeFileSync(auditPath,JSON.stringify(report),{mode:0o600,flag:"wx"});
-          const pointer=path.join(backupDir,"catalog-price-audit-latest.json");
-          const pending=pointer+".pending";fs.writeFileSync(pending,JSON.stringify({auditPath}),{mode:0o600});fs.renameSync(pending,pointer);
-          say("FULL_CATALOG_PRICE_AUDIT_COMPLETE");
-          say(proposed.length?"CATALOG_PRICE_DIFFERENCES_FOUND":"CATALOG_PRICES_ALREADY_MATCH_1C");
-          if(ambiguous.size)say("AMBIGUOUS_PRICE_DIMENSIONS_EXCLUDED");
-          say("PRIVATE_AUDIT_AND_PRICE_BACKUP_SAVED");
           }finally{await db.$disconnect();}
-          })().catch(e=>{const m=String(e?.message||"");const own=["no_control_slice","unsupported_schema","tariffs_ambiguous","currency_not_validated","audit_timeout","invalid_page","invalid_source_price","characteristic_filter_failed","incomplete_source","control_mismatch"];const code=own.includes(m)?m.toUpperCase():m.match(/HTTP ([0-9]{3})/)?.[0].replace(" ","_")||"ERROR";console.error("PRICE_IMPORT_RESULT: AUDIT_FAILED_"+phase+"_"+code);process.exitCode=1;});
+          })().catch(e=>{const own=["invalid_audit_path","stale_audit","audit_changed","invalid_source","prices_changed_after_audit","catalog_changed_after_audit","post_write_mismatch"];const code=own.includes(e?.message)?e.message.toUpperCase():"ERROR";console.error("PRICE_IMPORT_RESULT: RECOVERY_FAILED_"+phase+"_"+code);process.exitCode=1;});
           NODE
