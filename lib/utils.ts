@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { promotionalPrice } from "./pricing";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -24,7 +25,28 @@ export function withFlatPrices<
   const discountPrice =
     product.prices?.find((p) => p.priceType === "discount")?.price ?? null;
 
-  return { ...product, retailPrice, wholesalePrice, bigWholesalePrice, discountPrice };
+  const special = (type: string) => product.prices?.find((p) => p.priceType === type)?.price ?? null;
+  const regularPrices = { retailPrice, wholesalePrice, bigWholesalePrice, discountPrice };
+  const flat = { ...product, ...regularPrices, regularPrices,
+    promoRetailPrice: special("promo_retail"),
+    promoWholesalePrice: special("promo_wholesale"),
+    promoBigWholesalePrice: special("promo_big_wholesale"),
+  };
+  // Keep the existing API fields useful to older apps as well as the site's priceFor().
+  const now = Date.now();
+  return { ...flat, retailPrice: promotionalPrice(flat, "retail", now) ?? retailPrice,
+    discountPrice: promotionalPrice(flat, "discount", now) ?? discountPrice,
+    wholesalePrice: promotionalPrice(flat, "wholesale", now) ?? wholesalePrice,
+    bigWholesalePrice: promotionalPrice(flat, "big_wholesale", now) ?? bigWholesalePrice };
+}
+
+/** New promotional fields and the regular-price snapshot must follow the guest price mask too. */
+export function maskWholesalePrices(product: any) {
+  const { wholesalePrice: _w, bigWholesalePrice: _b, promoWholesalePrice: _pw,
+    promoBigWholesalePrice: _pb, prices: _p, regularPrices, ...rest } = product;
+  return { ...rest, prices: [], ...(regularPrices ? { regularPrices: {
+    retailPrice: regularPrices.retailPrice, discountPrice: regularPrices.discountPrice,
+  } } : {}) };
 }
 
 /**
@@ -73,3 +95,4 @@ export function guestStock(stock: number | null | undefined): number {
   if (!(v > 0)) return 0;
   return v > 10 ? 9999 : 10;
 }
+

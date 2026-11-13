@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { customerStock, guestStock, isWholesaleType, withFlatPrices } from "@/lib/utils";
+import { customerStock, guestStock, isWholesaleType, withFlatPrices, maskWholesalePrices } from "@/lib/utils";
 import { cookies } from "next/headers";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { arrivalLabels, withArrivalLabel } from "@/lib/arrivals";
@@ -57,6 +57,6 @@ export async function GET(
     // a wholesale customer sees what he may order: the shop minus its 12 + the warehouse
     return NextResponse.json(isWholesaleType(priceType) ? { ...flat, stock: customerStock(flat.stock, priceType, product.wholesaleStock) } : flat);
   }
-  const { wholesalePrice: _w, bigWholesalePrice: _b, prices: _p, ...guest } = flat; // eslint-disable-line @typescript-eslint/no-unused-vars
-  return NextResponse.json({ ...guest, prices: [], stock: guestStock(flat.stock) });
+  return NextResponse.json({ ...maskWholesalePrices(flat), stock: guestStock(flat.stock) });
 }
+

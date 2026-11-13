@@ -4,11 +4,11 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { relatedIds } from "@/lib/related";
 import { arrivalLabels, listArrivals, withArrivalLabel } from "@/lib/arrivals";
-import { customerStock, guestStock, isWholesaleType, withFlatPrices } from "@/lib/utils";
+import { customerStock, guestStock, isWholesaleType, withFlatPrices, maskWholesalePrices } from "@/lib/utils";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { verifyToken } from "@/lib/auth";
 import { createHash } from "crypto";
-import { resolveCustomerPriceType, type PriceType } from "@/lib/pricing";
+import { resolveCustomerPriceType, priceFor, novemberPromoActive, type PriceType } from "@/lib/pricing";
 import { pricingCustomer } from "@/lib/siteMode";
 
 const SORTS = ["popularity", "price_asc", "price_desc", "name"] as const;
@@ -16,8 +16,7 @@ type Sort = (typeof SORTS)[number];
 
 /** Скрывает оптовые цены от незарегистрированных пользователей */
 function maskGuestPrices(product: any) {
-  const { wholesalePrice, bigWholesalePrice, prices, ...rest } = product;
-  return { ...rest, prices: [], stock: guestStock(product.stock) };
+  return { ...maskWholesalePrices(product), stock: guestStock(product.stock) };
 }
 
 /**
@@ -31,9 +30,12 @@ type PriceIndex = {
   retail: Map<string, number>;
   discount: Map<string, number>;
   big: Map<string, number>;
+  promoRetail: Map<string, number>;
+  promoWholesale: Map<string, number>;
+  promoBig: Map<string, number>;
   sale: Set<string>;
   /** the price each kind of viewer sees (see shownPrices), built on first use */
-  shown: Map<PriceType, Map<string, number>>;
+  shown: Map<string, Map<string, number>>;
 };
 let priceMemo: PriceIndex | null = null;
 /** Price-sorted product ids per filter set (see the price sort below), max 100 entries, 1 min. */
@@ -43,23 +45,29 @@ async function priceIndex(): Promise<PriceIndex> {
   if (priceMemo && Date.now() - priceMemo.at < 120_000) return priceMemo;
   if (!priceMemoLoading) {
     priceMemoLoading = prisma.productPrice
-      .findMany({ where: { priceType: { in: ["wholesale", "discount", "retail", "big_wholesale"] } }, select: { productGuid: true, priceType: true, price: true } })
+      .findMany({ where: { priceType: { in: ["wholesale", "discount", "retail", "big_wholesale", "promo_retail", "promo_wholesale", "promo_big_wholesale"] } }, select: { productGuid: true, priceType: true, price: true } })
       .then((rows) => {
         const wholesale = new Map<string, number>();
         const retail = new Map<string, number>();
         const discount = new Map<string, number>();
         const big = new Map<string, number>();
+        const promoRetail = new Map<string, number>();
+        const promoWholesale = new Map<string, number>();
+        const promoBig = new Map<string, number>();
         const sale = new Set<string>();
         for (const r of rows) {
           if (r.priceType === "wholesale") wholesale.set(r.productGuid, r.price);
           else if (r.priceType === "retail") retail.set(r.productGuid, r.price);
           else if (r.priceType === "big_wholesale") big.set(r.productGuid, r.price);
-          else {
+          else if (r.priceType === "promo_retail") promoRetail.set(r.productGuid, r.price);
+          else if (r.priceType === "promo_wholesale") promoWholesale.set(r.productGuid, r.price);
+          else if (r.priceType === "promo_big_wholesale") promoBig.set(r.productGuid, r.price);
+          else if (r.priceType === "discount") {
             sale.add(r.productGuid);
             discount.set(r.productGuid, r.price);
           }
         }
-        const next: PriceIndex = { at: Date.now(), wholesale, retail, discount, big, sale, shown: new Map() };
+        const next: PriceIndex = { at: Date.now(), wholesale, retail, discount, big, promoRetail, promoWholesale, promoBig, sale, shown: new Map() };
         priceMemo = next;
         return next;
       })
@@ -99,18 +107,20 @@ async function pageInStockFirst(where: any, orderBy: any[], page: number, limit:
  * card price (discount → retail), never the wholesale one.
  */
 function shownPrices(idx: PriceIndex, type: PriceType): Map<string, number> {
-  const hit = idx.shown.get(type);
+  const now = Date.now();
+  const key = `${type}:${novemberPromoActive(now)}`;
+  const hit = idx.shown.get(key);
   if (hit) return hit;
-  const chain =
-    type === "retail" ? [idx.retail]
-    : type === "guest" || type === "discount" ? [idx.discount, idx.retail]
-    : type === "big_wholesale" ? [idx.big, idx.wholesale, idx.retail]
-    : [idx.wholesale, idx.retail];
   const out = new Map<string, number>();
-  for (const m of chain) {
-    for (const [guid, price] of m) if (!out.has(guid) && price > 0) out.set(guid, price);
+  const guids = new Set([idx.retail, idx.discount, idx.wholesale, idx.big, idx.promoRetail, idx.promoWholesale, idx.promoBig].flatMap((m) => [...m.keys()]));
+  for (const guid of guids) {
+    const price = priceFor({ retailPrice: idx.retail.get(guid), discountPrice: idx.discount.get(guid),
+      wholesalePrice: idx.wholesale.get(guid), bigWholesalePrice: idx.big.get(guid),
+      promoRetailPrice: idx.promoRetail.get(guid), promoWholesalePrice: idx.promoWholesale.get(guid),
+      promoBigWholesalePrice: idx.promoBig.get(guid) }, type, now);
+    if (price > 0) out.set(guid, price);
   }
-  idx.shown.set(type, out);
+  idx.shown.set(key, out);
   return out;
 }
 
@@ -176,7 +186,11 @@ export async function GET(request: Request) {
     ...(onlyStock ? (wholesale ? { wholesaleStock: { gt: 0 } } : { stock: { gt: 0 } }) : {}),
     ...(quick.includes("new") ? { id: { in: novelIds } } : {}),
     // «Со скидкой»: a flag kept by import-prices.js (was an IN-list of thousands of guids — audit PERF-02)
-    ...(quick.includes("sale") ? { hasDiscount: true } : {}),
+    ...(quick.includes("sale") ? novemberPromoActive() ? { OR: [
+      { hasDiscount: true },
+      { prices: { some: { priceType: shownType === "big_wholesale" ? "promo_big_wholesale"
+        : shownType === "wholesale" ? "promo_wholesale" : "promo_retail", price: { gt: 0 } } } },
+    ] } : { hasDiscount: true } : {}),
     ...(quick.includes("gift")
       ? { name: { contains: "Подарок", mode: "insensitive" } }
       : {}),
@@ -351,7 +365,7 @@ export async function GET(request: Request) {
   // The sorted id list for these filters is cached for a minute: scrolling pages 2, 3, … and
   // other customers with the same filters reuse it instead of loading ~12k rows each time
   // (under load the price sort used to take seconds).
-  const sortKey = createHash("sha1").update(JSON.stringify([where, sort, prices.at, shownType, wholesale])).digest("hex");
+  const sortKey = createHash("sha1").update(JSON.stringify([where, sort, prices.at, shownType, wholesale, novemberPromoActive()])).digest("hex");
   let sortedIds = sortedMemo.get(sortKey);
   if (!sortedIds || Date.now() - sortedIds.at > 60_000) {
     const matched = await prisma.product.findMany({
@@ -403,3 +417,4 @@ export async function GET(request: Request) {
     hasMore: page * limit < total,
   });
 }
+

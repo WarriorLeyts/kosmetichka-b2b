@@ -52,9 +52,9 @@ export async function loadInvoice(id: number, audience: "staff" | "customer"): P
   const labels = audience === "customer" ? ORDER_STATUS_LABELS_CUSTOMER : ORDER_STATUS_LABELS;
 
   const totals: InvoiceData["totals"] = [];
-  if ((order.promoCode && order.discount > 0) || order.bonusesApplied > 0)
+  if (order.discount > 0 || order.bonusesApplied > 0)
     totals.push({ label: "Сумма без скидки:", value: rub(order.total + order.discount + order.bonusesApplied) });
-  if (order.promoCode && order.discount > 0) totals.push({ label: `Промокод ${order.promoCode}:`, value: `−${rub(order.discount)}` });
+  if (order.discount > 0) totals.push({ label: order.promoCode ? `Скидки (включая промокод ${order.promoCode}):` : "Скидка на заказ:", value: `−${rub(order.discount)}` });
   if (order.bonusesApplied > 0) totals.push({ label: "Списано бонусов:", value: `−${rub(order.bonusesApplied)}` });
   totals.push({ label: "ИТОГО:", value: rub(order.total), strong: true });
   if (order.bonusesCollected > 0) totals.push({ label: "Начислится бонусов:", value: order.bonusesCollected.toLocaleString("ru-RU") });
@@ -83,3 +83,4 @@ export async function loadInvoice(id: number, audience: "staff" | "customer"): P
     comment: order.comment || null,
   };
 }
+

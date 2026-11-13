@@ -3,6 +3,7 @@ import { XMLParser } from "fast-xml-parser";
 import nodemailer from "nodemailer";
 import fs from "fs";
 import nodePath from "path";
+import { normalizePriceType } from "./price-types.js";
 import { hideMissing, offerTotalStock, offerWarehouseStock, toKopecks, warehouseNames, wholesaleAvailable } from "./onec-helpers.js";
 // 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
 const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
@@ -17,17 +18,6 @@ const parser = new XMLParser({
 function toArray(value) {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
-}
-
-function normalizePriceType(name) {
-  const value = String(name || "").toLowerCase();
-
-  if (value.includes("круп")) return "big_wholesale";
-  if (value.includes("опт")) return "wholesale";
-  if (value.includes("скид")) return "discount";
-  if (value.includes("роз")) return "retail";
-
-  return value;
 }
 
 /**
@@ -278,9 +268,11 @@ async function main() {
 
     // only what changed is written (audit P2-09): same price / stock → no query
     const had = new Map(product.prices.map((x) => [x.priceType, x.price]));
+    const offeredTypes = new Set();
     for (const item of toArray(offer.Цены?.Цена)) {
       const priceType = priceTypeMap.get(item.ИдТипаЦены);
       if (!priceType) continue;
+      offeredTypes.add(priceType);
       const price = toKopecks(item.ЦенаЗаЕдиницу);
       // an old value with a float tail (145.94999…) is rewritten once, rounded
       if (had.get(priceType) === price) continue;
@@ -290,6 +282,15 @@ async function main() {
         create: { productGuid, priceType, price },
       });
       changedPrices++;
+    }
+    // A full exchange is authoritative: a withdrawn shock price must not remain on the site.
+    // Partial exchanges omit unchanged prices, so absence alone never deletes them there.
+    if (full) {
+      const missing = ["promo_retail", "promo_wholesale", "promo_big_wholesale"].filter((t) => had.has(t) && !offeredTypes.has(t));
+      if (missing.length) {
+        const removed = await prisma.productPrice.deleteMany({ where: { productGuid, priceType: { in: missing } } });
+        changedPrices += removed.count;
+      }
     }
 
     const split = splits[offerIndex];
@@ -347,3 +348,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

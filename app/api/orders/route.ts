@@ -7,8 +7,8 @@ import { afterHoursNote } from "@/lib/afterHours";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { sendMail } from "@/lib/mail";
 import { orderCreationLimiter } from "@/lib/rateLimit";
-import { priceOrder, type PricedLine } from "@/lib/orderPricing";
-import type { PriceType } from "@/lib/pricing";
+import { priceOrder, loyaltyLines, type PricedLine } from "@/lib/orderPricing";
+import type { PriceType, CartPricing } from "@/lib/pricing";
 import {
   BONUS_SPEND_FORBIDDEN,
   calcLoyalty,
@@ -124,10 +124,11 @@ async function createOrder(request: Request) {
   let order;
   let lines: PricedLine[];
   let tier: PriceType;
+  let pricing: CartPricing;
   let promo: PromoResult | null = null;
 
   try {
-    ({ lines, tier } = await priceOrder(pricingCustomer(customer, request), items));
+    ({ lines, tier, pricing } = await priceOrder(pricingCustomer(customer, request), items));
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Не удалось создать заказ";
@@ -140,11 +141,12 @@ async function createOrder(request: Request) {
   // v2/calculate-purchase, like the shop's cash desks). A linked card also gets the accrual.
   const promoCode = typeof promocode === "string" ? promocode.trim().slice(0, 64) : "";
   const hasCard = Boolean(customer.loyaltyCard?.trim());
+  const netLines = loyaltyLines(lines, pricing);
   let calc: LoyaltyResult | null = null;
   if (promoCode || hasCard) {
     try {
       if (!maxmaConfigured()) throw new MaxmaError("not_configured", 503);
-      calc = await calcLoyalty({ customer, lines, promocode: promoCode || null, applyBonuses });
+      calc = await calcLoyalty({ customer, lines: netLines, promocode: promoCode || null, applyBonuses });
     } catch (e) {
       const status = e instanceof MaxmaError && e.status === 503 ? 503 : 502;
       if (promoCode) {
@@ -177,25 +179,27 @@ async function createOrder(request: Request) {
 
   const orderItems = lines.map(({ sku: _sku, ...line }, i) => ({ // eslint-disable-line @typescript-eslint/no-unused-vars
     ...line,
-    ...(promo ? { discount: promo.lines[i] } : {}),
+    ...((pricing.discounts[i] ?? 0) + (promo?.lines[i] ?? 0) > 0
+      ? { discount: (pricing.discounts[i] ?? 0) + (promo?.lines[i] ?? 0) } : {}),
     ...(bonusLines[i] > 0 ? { bonusDiscount: bonusLines[i] } : {}),
   }));
   const linesTotal = orderItems.reduce((s, it) => s + it.total, 0);
-  const promoDiscount = promo ? promo.discount : 0;
+  const promoDiscount = pricing.discount + (promo?.discount ?? 0);
   const orderData = {
     customerId: Number(payload.id),
     status: "pending",
     priceType: customer.priceType,
     priceTier: tier,
     ...delivery,
-    total: linesTotal - promoDiscount - bonusesApplied,
+    total: Math.round((linesTotal - promoDiscount - bonusesApplied) * 100) / 100,
     comment: comment || null,
-    ...(promo ? { promoCode, discount: promo.discount } : {}),
+    ...(promo ? { promoCode } : {}),
+    ...(promoDiscount > 0 ? { discount: promoDiscount } : {}),
     ...(bonusesApplied > 0 ? { bonusesApplied } : {}),
     ...(bonusesCollected > 0 ? { bonusesCollected } : {}),
     items: { create: orderItems },
   };
-  const maxmaQuery = setOrderQuery(lines, { customer, promocode: promo ? promoCode : null, applyBonuses: bonusesApplied });
+  const maxmaQuery = setOrderQuery(netLines, { customer, promocode: promo ? promoCode : null, applyBonuses: bonusesApplied });
 
   if (bonusesApplied > 0) {
     // Spent bonuses are reserved in MAXMA BEFORE the order is committed: the MAXMA id
@@ -226,7 +230,7 @@ async function createOrder(request: Request) {
             requested: applyBonuses,
             bonusRows: r.bonusRows,
             lineTotals: orderItems.map((it) => it.total),
-            promoLines: promo ? promo.lines : orderItems.map(() => 0),
+            promoLines: orderItems.map((it) => it.discount ?? 0),
           });
           if (!adopted) {
             reservation.failed = true;
@@ -321,8 +325,9 @@ async function createOrder(request: Request) {
             <tbody>${itemsHtml}</tbody>
           </table>
           <div style="border-top:2px solid #1e293b;padding-top:12px;text-align:right;">
-            ${promo || order.bonusesApplied > 0 ? `<div style="font-size:14px;color:#475569;margin-bottom:4px;">Сумма без скидки: ${(order.total + order.discount + order.bonusesApplied).toLocaleString("ru-RU")} ₽</div>` : ""}
-            ${promo ? `<div style="font-size:14px;color:#16a34a;margin-bottom:6px;">Скидка по промокоду ${escHtml(promoCode)}: −${order.discount.toLocaleString("ru-RU")} ₽</div>` : ""}
+            ${order.discount > 0 || order.bonusesApplied > 0 ? `<div style="font-size:14px;color:#475569;margin-bottom:4px;">Сумма без скидки: ${(order.total + order.discount + order.bonusesApplied).toLocaleString("ru-RU")} ₽</div>` : ""}
+            ${pricing.discount > 0 ? `<div style="font-size:14px;color:#16a34a;margin-bottom:6px;">Светлая пятница + ОПТ (${pricing.percent}%): −${pricing.discount.toLocaleString("ru-RU")} ₽</div>` : ""}
+            ${promo ? `<div style="font-size:14px;color:#16a34a;margin-bottom:6px;">Скидка по промокоду ${escHtml(promoCode)}: −${promo.discount.toLocaleString("ru-RU")} ₽</div>` : ""}
             ${order.bonusesApplied > 0 ? `<div style="font-size:14px;color:#16a34a;margin-bottom:6px;">Списано бонусов: ${order.bonusesApplied.toLocaleString("ru-RU")}</div>` : ""}
             <strong style="font-size:16px;color:#1e293b;">Итого: ${order.total.toLocaleString("ru-RU")} ₽</strong>
             ${order.bonusesCollected > 0 ? `<div style="font-size:13px;color:#6366f1;margin-top:6px;">Будет начислено: ${order.bonusesCollected.toLocaleString("ru-RU")} бонусов</div>` : ""}
@@ -355,7 +360,8 @@ async function createOrder(request: Request) {
           <p style="margin:0 0 8px;color:#475569;"><b>Клиент:</b> ${clientName}</p>
           ${clientPhone ? `<p style="margin:0 0 8px;color:#475569;"><b>Телефон:</b> ${clientPhone}</p>` : ""}
           <p style="margin:0 0 ${promo || order.bonusesApplied > 0 || order.bonusesCollected > 0 ? 8 : 24}px;color:#475569;"><b>Сумма:</b> ${order.total} ₽</p>
-          ${promo ? `<p style="margin:0 0 8px;color:#475569;"><b>Промокод:</b> ${escHtml(promoCode)} — скидка ${order.discount} ₽</p>` : ""}
+          ${pricing.discount > 0 ? `<p style="margin:0 0 8px;color:#475569;"><b>Светлая пятница + ОПТ:</b> ${pricing.percent}% — скидка ${pricing.discount} ₽</p>` : ""}
+          ${promo ? `<p style="margin:0 0 8px;color:#475569;"><b>Промокод:</b> ${escHtml(promoCode)} — скидка ${promo.discount} ₽</p>` : ""}
           ${order.bonusesApplied > 0 ? `<p style="margin:0 0 8px;color:#475569;"><b>Списано бонусов:</b> ${order.bonusesApplied}</p>` : ""}
           ${order.bonusesCollected > 0 ? `<p style="margin:0 0 8px;color:#475569;"><b>Будет начислено:</b> ${order.bonusesCollected} бонусов</p>` : ""}
           ${promo || order.bonusesApplied > 0 || order.bonusesCollected > 0 ? `<div style="height:16px;"></div>` : ""}
@@ -380,3 +386,4 @@ async function createOrder(request: Request) {
       : {}),
   });
 }
+

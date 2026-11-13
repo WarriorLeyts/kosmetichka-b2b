@@ -10,10 +10,12 @@ import { useState, useEffect, useRef } from "react";
 import { SafeImage } from "./SafeImage";
 import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
 import {
-  effectivePriceType,
+  calculateCart,
+  novemberPromoActive,
+  NOVEMBER_PROMO,
+  type PriceType,
   priceFor,
   priceTypeLabel,
-  rawCartTotal,
   resolveCustomerPriceType,
   amountUntilMinOrder,
   minOrderFor,
@@ -23,6 +25,8 @@ type CalcBonuses = { canSpend: boolean; balance: number | null; maxToApply: numb
 type CalcResponse = {
   error?: string;
   subtotal: number;
+  priceTier: PriceType;
+  wholesalePromo: { name: string; percent: number; discount: number; eligibleSubtotal: number } | null;
   promo: { code: string; name: string | null; discount: number } | null;
   promoError?: string;
   bonuses: CalcBonuses | null;
@@ -40,9 +44,18 @@ export function CartDrawer() {
 
   const customer = useAuthStore((state) => state.customer);
 
+  const [pricingNow, setPricingNow] = useState(() => Date.now());
+  const [serverCalc, setServerCalc] = useState<{ key: string; data: CalcResponse } | null>(null);
+  const cartSignature = cart.map((i) => `${i.cartKey || i.id}:${i.quantity}:${i.updatedAt ?? ""}`).join(",");
+  const calculationKey = `${customer?.id}:${customer?.priceType}:${cartSignature}:${novemberPromoActive(pricingNow)}`;
+  const currentCalc = serverCalc?.key === calculationKey ? serverCalc.data : null;
+  const localPricing = calculateCart(cart, customer, pricingNow);
+
   const base = resolveCustomerPriceType(customer);
-  const activePriceType = effectivePriceType(cart, customer);
-  const total = rawCartTotal(cart, activePriceType);
+  const activePriceType = currentCalc?.priceTier ?? localPricing.tier;
+  const total = currentCalc?.subtotal ?? localPricing.subtotal;
+  const wholesalePromo = currentCalc ? currentCalc.wholesalePromo : localPricing.percent > 0
+    ? { name: NOVEMBER_PROMO.name, percent: localPricing.percent, discount: localPricing.discount, eligibleSubtotal: localPricing.eligibleSubtotal } : null;
   // minimum order: none any more (minOrderFor = 0); «Опт» pays by the order sum (lib/pricing.ts)
   const minOrder = minOrderFor(customer);
   const remainingToMin = amountUntilMinOrder(cart, customer);
@@ -60,12 +73,16 @@ export function CartDrawer() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [bonuses, setBonuses] = useState<CalcBonuses | null>(null);
   const [spendBonuses, setSpendBonuses] = useState(false);
-  // false after the server said the customer has no linked card: no calc without a promo code
-  const [hasCard, setHasCard] = useState(true);
   const calcReq = useRef(0);
-  const cartSignature = cart.map((i) => `${i.cartKey || i.id}:${i.quantity}`).join(",");
   const bonusesApplied = spendBonuses && bonuses?.canSpend ? bonuses.applied : 0;
-  const promoTotal = Math.max(0, total - (promo?.discount ?? 0) - bonusesApplied);
+  const promoTotal = currentCalc?.total ?? Math.max(0, localPricing.total - (promo?.discount ?? 0) - bonusesApplied);
+
+  useEffect(() => {
+    if (!isCartOpen) return;
+    setPricingNow(Date.now());
+    const t = setInterval(() => setPricingNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [isCartOpen]);
 
   async function postCalc(code: string | null, applyBonuses: number) {
     const res = await fetch("/api/checkout/calc", {
@@ -91,6 +108,7 @@ export function CartDrawer() {
    */
   async function runCalc(code: string | null, opts: { recheck?: boolean; spend?: boolean } = {}) {
     const req = ++calcReq.current;
+    const key = calculationKey;
     const spend = opts.spend ?? spendBonuses;
     if (code) setPromoLoading(true);
     if (code && !opts.recheck) setPromoError("");
@@ -109,6 +127,8 @@ export function CartDrawer() {
     setPromoLoading(false);
     const data = r?.data ?? null;
     if (!r?.ok || !data) {
+      setServerCalc(null);
+      setError(data?.error || "Не удалось рассчитать корзину. Попробуйте ещё раз.");
       const message = data?.error || "Не удалось рассчитать скидку";
       if (code) {
         setPromo(null);
@@ -116,8 +136,9 @@ export function CartDrawer() {
       }
       return;
     }
+    setServerCalc({ key, data });
+    setError("");
     setBonuses(data.bonuses ?? null);
-    setHasCard(Boolean(data.bonuses));
     if (!data.bonuses?.canSpend) setSpendBonuses(false);
     if (code) {
       if (data.promo) {
@@ -141,7 +162,8 @@ export function CartDrawer() {
     setPromoInput("");
     setPromoError("");
     setPromoLoading(false);
-    if (hasCard && cart.length > 0) runCalc(null);
+    setServerCalc(null);
+    if (cart.length > 0) runCalc(null);
   }
 
   function toggleBonuses(on: boolean) {
@@ -164,11 +186,10 @@ export function CartDrawer() {
       }, 0);
       return () => clearTimeout(t);
     }
-    if (!appliedCode && !hasCard) return;
     const t = setTimeout(() => runCalc(appliedCode, { recheck: true }), 600);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartSignature, loggedIn, isCartOpen]);
+  }, [calculationKey, loggedIn, isCartOpen]);
 
   // Animation state: keep drawer mounted during closing animation
   const [visible, setVisible] = useState(isCartOpen);
@@ -314,7 +335,7 @@ export function CartDrawer() {
                       ? resolveImageUrl(item.images[0].path, 160)
                       : null;
 
-                    const price = priceFor(item, activePriceType);
+                    const price = priceFor(item, activePriceType, pricingNow);
                     const cartKey = item.cartKey || String(item.id);
 
                     return (
@@ -424,6 +445,29 @@ export function CartDrawer() {
                     <strong>{promoTotal.toLocaleString("ru-RU")} ₽</strong>
                   </div>
 
+                  {customer && (base === "wholesale" || base === "big_wholesale") && novemberPromoActive(pricingNow) && (
+                    <div className="cart-promo-applied">
+                      <span>
+                        <b>{NOVEMBER_PROMO.name}</b> · до 30 ноября включительно
+                        <span className="cart-promo-subtotal">
+                          Крупный опт от 25 000 ₽. Скидка: от 40 000 ₽ — 2%, от 100 000 ₽ — 3%, от 300 000 ₽ — 5%.
+                          Товары с шок-ценами учитываются в сумме заказа, дополнительная скидка на них не действует.
+                        </span>
+                        {wholesalePromo && wholesalePromo.discount > 0 && (
+                          <span className="cart-promo-subtotal">
+                            Скидка {wholesalePromo.percent}%: −{wholesalePromo.discount.toLocaleString("ru-RU")} ₽
+                            {" "}(на товары без шок-цен: {wholesalePromo.eligibleSubtotal.toLocaleString("ru-RU")} ₽)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+
+                  {customer && !currentCalc && <p className="cart-progress-hint">Проверяем цены и скидки…</p>}
+                  {customer && error && !currentCalc && (
+                    <button type="button" className="cart-promo-apply" onClick={() => runCalc(appliedCode, { recheck: true })}>Повторить расчёт</button>
+                  )}
+
                   {/* Promo code — only for logged-in customers (guests can't check out) */}
                   {customer && (
                     <div className="cart-promo">
@@ -513,7 +557,7 @@ export function CartDrawer() {
                   {customer ? (
                     <button
                       onClick={checkout}
-                      disabled={loading || cart.length === 0 || remainingToMin > 0}
+                      disabled={loading || cart.length === 0 || remainingToMin > 0 || !currentCalc}
                       className="checkout-button disabled:opacity-50"
                     >
                       {loading ? "Оформляем..." : "Оформить заказ"}
@@ -541,3 +585,4 @@ export function CartDrawer() {
     </div>
   );
 }
+

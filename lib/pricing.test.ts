@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   resolveCustomerPriceType,
   priceFor,
@@ -12,6 +12,10 @@ import {
   BIG_WHOLESALE_MIN_ORDER,
 } from "./pricing";
 import type { CartItem } from "./types";
+
+// Baseline tariff tests must stay independent of the real calendar and dated campaigns.
+beforeEach(() => vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-12T12:00:00+03:00")));
+afterEach(() => vi.restoreAllMocks());
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -201,3 +205,4 @@ describe("minOrderFor / amountUntilMinOrder — no minimum any more", () => {
     expect(BIG_WHOLESALE_MIN_ORDER).toBe(50_000);
   });
 });
+
