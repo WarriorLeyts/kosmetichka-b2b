@@ -1,4 +1,4 @@
-name: Publish campaign banner and promotion catalog
+name: Remove narrow promotion strip from home and catalog
 on:
   push:
     branches: [codex/publish-cart-fix]
@@ -26,9 +26,9 @@ jobs:
           ssh -i ~/.ssh/id_deploy -p "${PORT:-22}" -o ServerAliveInterval=30 "${USER:-root}@$HOST" "bash -lc 'python3 -'" <<'PY'
           import os, re, io, tarfile, hashlib, urllib.request, subprocess, tempfile, pathlib, shutil, gzip
           URL = "https://github.com/WarriorLeyts/kosmetichka-app/releases/download/web-latest/kosmetichka-web.tar.gz"
-          DIGEST = "677397636a54aa61a23670b0696d813becc4a29e654a0fb0470c3e930da08f10"
-          OLD = "entry-e09299c98526dc013468b77d817671de.js"
-          NEW = "entry-d0cad25bf0891e9f105a77ee3d2a5563.js"
+          DIGEST = "5a7842193cc08f2bbb237fcd12810a43d32ef5a2e6ad60679a72e80a8358bf7d"
+          OLD = "entry-d0cad25bf0891e9f105a77ee3d2a5563.js"
+          NEW = "entry-f2732e6bf4b1dae3d584ac2c12793a20.js"
           # Configuration stays on the server. Only deployment status is printed to Actions.
           config = subprocess.run(["nginx", "-T"], capture_output=True, text=True, check=True).stdout
           roots = set()
@@ -90,11 +90,11 @@ jobs:
                       fresh = pathlib.Path(str(gz) + ".cart-fix-pending")
                       with open(dest, "rb") as source, gzip.open(fresh, "wb") as zipped: shutil.copyfileobj(source, zipped)
                       os.replace(fresh, gz)
-          print("Customer storefront published with retail promotion prices and campaign thresholds")
+          print("Customer storefront published without narrow home and catalog promotion strip")
           
           PY
       - name: Check published customer storefront
         run: |
-          curl --fail --silent --show-error --retry 3 https://kosmetichka-opt.ru/cart | grep -q 'entry-d0cad25bf0891e9f105a77ee3d2a5563.js'
-          curl --fail --silent --show-error --compressed --retry 3 https://kosmetichka-opt.ru/cart | grep -q 'entry-d0cad25bf0891e9f105a77ee3d2a5563.js'
-          echo 'Approved cart build is served in plain and compressed responses'
+          curl --fail --silent --show-error --retry 3 https://kosmetichka-opt.ru/cart | grep -q 'entry-f2732e6bf4b1dae3d584ac2c12793a20.js'
+          curl --fail --silent --show-error --compressed --retry 3 https://kosmetichka-opt.ru/cart | grep -q 'entry-f2732e6bf4b1dae3d584ac2c12793a20.js'
+          echo 'Verified storefront build is served in plain and compressed responses'
