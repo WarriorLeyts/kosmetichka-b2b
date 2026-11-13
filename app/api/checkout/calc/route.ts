@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { checkoutCalcLimiter } from "@/lib/rateLimit";
-import { priceOrderItems } from "@/lib/orderPricing";
+import { priceOrder, loyaltyLines } from "@/lib/orderPricing";
 import { BONUS_SPEND_FORBIDDEN, calcLoyalty, canSpendBonuses, maxmaConfigured, type LoyaltyResult } from "@/lib/maxma";
 import { PROMO_NOT_FOR_ITEMS } from "@/lib/promo";
 
@@ -49,25 +49,36 @@ export async function POST(request: Request) {
   if (applyBonuses > 0 && !canSpend) return NextResponse.json({ error: BONUS_SPEND_FORBIDDEN }, { status: 400 });
 
   let lines;
+  let pricing;
   try {
-    lines = await priceOrderItems(pricingCustomer(customer, request), items);
+    const priced = await priceOrder(pricingCustomer(customer, request), items);
+    pricing = priced.pricing;
+    lines = loyaltyLines(priced.lines, pricing);
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Не удалось рассчитать корзину" }, { status: 400 });
   }
-  const subtotal = lines.reduce((s, l) => s + l.total, 0);
+  const subtotal = pricing.subtotal;
+  const automatic = {
+    priceTier: pricing.tier,
+    wholesalePromo: pricing.percent > 0 ? {
+      name: "Светлая пятница + ОПТ", percent: pricing.percent,
+      eligibleSubtotal: pricing.eligibleSubtotal, discount: pricing.discount,
+    } : null,
+  };
   const hasCard = Boolean(customer.loyaltyCard?.trim());
 
   // Nothing to ask MAXMA about
   if (!promocode && !hasCard) {
-    return NextResponse.json({ subtotal, promo: null, bonuses: null, total: subtotal });
+    return NextResponse.json({ ...automatic, subtotal, promo: null, bonuses: null, total: pricing.total });
   }
   if (!maxmaConfigured()) {
     return NextResponse.json({
+      ...automatic,
       subtotal,
       promo: null,
       ...(promocode ? { promoError: "Промокоды временно недоступны" } : {}),
       bonuses: null,
-      total: subtotal,
+      total: pricing.total,
       loyaltyError: "Сервис лояльности недоступен",
     });
   }
@@ -77,11 +88,12 @@ export async function POST(request: Request) {
     calc = await calcLoyalty({ customer, lines, promocode, applyBonuses, withBalance: true });
   } catch {
     return NextResponse.json({
+      ...automatic,
       subtotal,
       promo: null,
       ...(promocode ? { promoError: "Сервис лояльности недоступен, попробуйте позже" } : {}),
       bonuses: null,
-      total: subtotal,
+      total: pricing.total,
       loyaltyError: "Сервис лояльности недоступен, попробуйте позже",
     });
   }
@@ -100,10 +112,12 @@ export async function POST(request: Request) {
     ? { canSpend, balance: b.balance, maxToApply: b.maxToApply, applied: b.applied, collected: b.collected }
     : null;
   return NextResponse.json({
+    ...automatic,
     subtotal,
     promo,
     ...(promoError ? { promoError } : {}),
     bonuses,
-    total: subtotal - (promo?.discount ?? 0) - (b?.applied ?? 0),
+    total: Math.round((pricing.total - (promo?.discount ?? 0) - (b?.applied ?? 0)) * 100) / 100,
   });
 }
+

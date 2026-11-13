@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../_auth";
+import { cleanPromoSnapshot } from "@/lib/pricing";
 
 /** the most products one list keeps, and the size of what is stored */
 const MAX_ITEMS = 1000;
@@ -17,7 +18,7 @@ function cleanItem(raw: unknown): Record<string, unknown> | null {
   for (const k of ["stock", "minOrderQty", "retailPrice", "discountPrice", "wholesalePrice", "bigWholesalePrice"]) if (typeof l[k] === "number" && Number.isFinite(l[k])) out[k] = l[k];
   if (Array.isArray(l.images)) out.images = (l.images as unknown[]).slice(0, 1).filter((x) => x && typeof x === "object" && typeof (x as { path?: unknown }).path === "string").map((x) => ({ path: String((x as { path: string }).path).slice(0, 300) }));
   if (l.brand && typeof l.brand === "object" && typeof (l.brand as { name?: unknown }).name === "string") out.brand = { name: String((l.brand as { name: string }).name).slice(0, 200) };
-  return out;
+  return { ...out, ...cleanPromoSnapshot(l) };
 }
 
 /** GET /api/mobile/favorites — the customer's favourites saved on the server ({ items: [], updatedAt: null } when none). */
@@ -47,3 +48,4 @@ export async function PUT(request: Request) {
   });
   return NextResponse.json({ updatedAt: f.updatedAt.toISOString(), count: items.length });
 }
+

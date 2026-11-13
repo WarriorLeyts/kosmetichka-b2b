@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { cartPriceTier, type PriceType } from "@/lib/pricing";
-import { customerStock } from "@/lib/utils";
+import { calculateCart, priceFor, type PriceType, type CartPricing } from "@/lib/pricing";
+import { customerStock, withFlatPrices } from "@/lib/utils";
 
 /** the most pieces of one product in an order line */
 export const MAX_LINE_QTY = 9999;
@@ -37,7 +37,16 @@ export async function priceOrderItems(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   items: any[]
 ): Promise<PricedLine[]> {
-  return (await priceOrder(customer, items)).lines;
+  const order = await priceOrder(customer, items);
+  return loyaltyLines(order.lines, order.pricing);
+}
+
+/** MAXMA sees what is left after the automatic wholesale discount, so it cannot spend it twice. */
+export function loyaltyLines(lines: PricedLine[], pricing: CartPricing): PricedLine[] {
+  return lines.map((line, i) => {
+    const total = Math.round((line.total - (pricing.discounts[i] ?? 0)) * 100) / 100;
+    return { ...line, total, price: total / line.quantity };
+  });
 }
 
 /** priceOrderItems + the price tier the lines got. */
@@ -45,7 +54,8 @@ export async function priceOrder(
   customer: { priceType?: string | null },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   items: any[]
-): Promise<{ lines: PricedLine[]; tier: PriceType }> {
+): Promise<{ lines: PricedLine[]; tier: PriceType; pricing: CartPricing }> {
+  const now = Date.now();
   const productIds: number[] = items.map((item) => Number(item.id));
 
   const products = await prisma.product.findMany({
@@ -58,21 +68,15 @@ export async function priceOrder(
   // Build flat product representations for effectivePriceType calculation
   const cartForPricing = items.map((item) => {
     const product = productById.get(Number(item.id));
-    const priceMap: Record<string, number> = {};
-    for (const pp of product?.prices ?? []) {
-      priceMap[pp.priceType] = Number(pp.price);
-    }
     return {
-      wholesalePrice: priceMap["wholesale"] ?? 0,
-      bigWholesalePrice: priceMap["big_wholesale"] ?? 0,
-      discountPrice: priceMap["discount"] ?? 0,
-      retailPrice: priceMap["retail"] ?? 0,
+      ...withFlatPrices(product ?? { prices: [] }),
       quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
     };
   });
 
   // «Опт»: the price by the order sum (5 000 / 50 000 ₽); the other types: the customer's own
-  const appliedPriceType = cartPriceTier(cartForPricing, customer);
+  const pricing = calculateCart(cartForPricing, customer, now);
+  const appliedPriceType = pricing.tier;
 
   const qtyByProduct = new Map<number, number>();
   for (const item of items) {
@@ -80,7 +84,7 @@ export async function priceOrder(
     if (Number.isFinite(q) && q > 0) qtyByProduct.set(Number(item.id), (qtyByProduct.get(Number(item.id)) ?? 0) + q);
   }
 
-  const lines = items.map((item) => {
+  const lines = items.map((item, index) => {
     const product = productById.get(Number(item.id));
 
     if (!product) {
@@ -88,17 +92,10 @@ export async function priceOrder(
     }
 
     // as in priceFor(): a missing / zero price falls back — big wholesale → wholesale → retail
-    const positive = (t: string) => product.prices.find((p) => p.priceType === t && p.price > 0);
-    const matchedPrice =
-      positive(appliedPriceType) ??
-      (appliedPriceType === "big_wholesale" ? positive("wholesale") : undefined);
-    const fallbackPrice = positive("retail");
-
-    const rawPrice = matchedPrice?.price ?? fallbackPrice?.price;
-    if (!rawPrice || rawPrice <= 0) {
+    const price = priceFor(cartForPricing[index], appliedPriceType, now);
+    if (price <= 0) {
       throw new Error(`Цена для товара «${product.name}» не найдена. Обратитесь к менеджеру.`);
     }
-    const price = Math.round(rawPrice);
     const quantity = Math.floor(Number(item.quantity));
 
     // Explicit non-positive guard (Number(-1) || 0 returns -1, so must check explicitly)
@@ -140,7 +137,7 @@ export async function priceOrder(
       sku: product.guid || String(product.id),
     };
   });
-  return { lines, tier: appliedPriceType };
+  return { lines, tier: appliedPriceType, pricing };
 }
 
 /**
@@ -161,3 +158,4 @@ export function orderSums(lines: { total: number; discount?: number | null; bonu
   }
   return { total, discount, bonuses };
 }
+

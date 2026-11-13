@@ -3,7 +3,7 @@
  * which prices each customer type gets, the wholesale minimums, bonuses only for retail buyers,
  * promo codes, and the 409 when MAXMA can't reserve bonuses.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: (n: string) => (n === "auth_token" ? { value: "t" } : undefined) }),
@@ -60,6 +60,7 @@ const order = (body: object) =>
 let created: { data: { total: number; priceType: string; items: { create: { price: number; quantity: number }[] }; bonusesApplied?: number } } | null;
 
 beforeEach(() => {
+  vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-12T12:00:00+03:00"));
   vi.clearAllMocks();
   orderCreationLimiter.reset("order:1");
   created = null;
@@ -70,6 +71,49 @@ beforeEach(() => {
   });
   db.$transaction.mockImplementation(async (fn: (tx: typeof db) => unknown) => fn(db));
   maxma.calcLoyalty.mockResolvedValue({ promo: null, bonuses: { balance: 500, maxToApply: 300, applied: 0, collected: 50 }, bonusLines: [0] });
+});
+
+afterEach(() => vi.restoreAllMocks());
+
+describe("Светлая пятница + ОПТ", () => {
+  beforeEach(() => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-13T12:00:00+03:00"));
+  });
+
+  it("stores a 3% discount on 80 000 ₽, while 20 000 ₽ of shock items qualify for the 100 000 ₽ threshold", async () => {
+    db.customer.findUnique.mockResolvedValue(customer("wholesale"));
+    db.product.findMany.mockResolvedValue([
+      product(1, { retail: 1100, wholesale: 900, big_wholesale: 800 }),
+      product(2, { retail: 300, wholesale: 250, big_wholesale: 220, promo_big_wholesale: 200 }),
+    ]);
+    const r = await order({ items: [{ id: 1, quantity: 100 }, { id: 2, quantity: 100 }] });
+    expect(r.status).toBe(200);
+    expect(created?.data.total).toBe(97_600);
+    const data = created?.data as unknown as { discount: number; priceTier: string; items: { create: { price: number; discount?: number }[] } };
+    expect(data.priceTier).toBe("big_wholesale");
+    expect(data.discount).toBe(2400);
+    expect(data.items.create[0]).toMatchObject({ price: 800, discount: 2400 });
+    expect(data.items.create[1].price).toBe(200);
+    expect(data.items.create[1].discount ?? 0).toBe(0);
+  });
+
+  it("retail and discount-card buyers get Акция Розница", async () => {
+    db.customer.findUnique.mockResolvedValue(customer("retail"));
+    db.product.findMany.mockResolvedValue([product(1, { retail: 490, discount: 440, promo_retail: 399 })]);
+    const r = await order({ items: [{ id: 1, quantity: 1 }] });
+    expect(r.status).toBe(200);
+    expect(created?.data.total).toBe(399);
+    expect(created?.data.items.create[0].price).toBe(399);
+  });
+
+  it("restores regular prices and the 50 000 ₽ threshold after Moscow midnight", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-12-01T00:00:00+03:00"));
+    db.customer.findUnique.mockResolvedValue(customer("wholesale"));
+    db.product.findMany.mockResolvedValue([product(1, { retail: 490, wholesale: 190, big_wholesale: 180, promo_wholesale: 168, promo_big_wholesale: 168 })]);
+    const r = await order({ items: [{ id: 1, quantity: 150 }] });
+    expect(r.status).toBe(200);
+    expect(created?.data.total).toBe(28_500);
+  });
 });
 
 describe("prices by customer type", () => {
@@ -228,3 +272,4 @@ describe("promo code", () => {
     expect(db.order.create).not.toHaveBeenCalled();
   });
 });
+

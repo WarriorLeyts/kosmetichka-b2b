@@ -33,6 +33,15 @@ export type FlatProduct = {
   discountPrice?: number | null;
   wholesalePrice?: number | null;
   bigWholesalePrice?: number | null;
+  promoRetailPrice?: number | null;
+  promoWholesalePrice?: number | null;
+  promoBigWholesalePrice?: number | null;
+  regularPrices?: {
+    retailPrice?: number | null;
+    discountPrice?: number | null;
+    wholesalePrice?: number | null;
+    bigWholesalePrice?: number | null;
+  };
 
   images?: ProductImage[];
   prices?: ProductPrice[];
@@ -89,3 +98,4 @@ export type AuthCustomer = CustomerForPricing & {
   manager?: string | null;
   isApproved?: boolean;
 };
+
