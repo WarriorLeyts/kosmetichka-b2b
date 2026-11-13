@@ -11,7 +11,7 @@ import { SafeImage } from "./SafeImage";
 import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
 import {
   calculateCart,
-  cartItemPrice,
+  priceFor,
   priceTypeLabel,
   resolveCustomerPriceType,
   amountUntilMinOrder,
@@ -314,7 +314,7 @@ export function CartDrawer() {
                       ? resolveImageUrl(item.images[0].path, 160)
                       : null;
 
-                    const price = cartItemPrice(item, activePriceType, customer);
+                    const price = priceFor(item, activePriceType);
                     const cartKey = item.cartKey || String(item.id);
 
                     return (

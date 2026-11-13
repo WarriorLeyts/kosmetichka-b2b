@@ -90,31 +90,6 @@ export function priceFor(product: any, type: PriceType, now = Date.now()): numbe
   return pick(product.wholesalePrice, product.retailPrice);
 }
 
-/** Shock wholesale prices remain available below the ordinary wholesale order threshold. */
-export function cartItemPromotionalPrice(
-  product: any, tier: PriceType, customer: { priceType?: string | null } | null, now = Date.now()
-): number | null {
-  const type = customer?.priceType === "wholesale" && tier === "discount" ? "wholesale" : tier;
-  return promotionalPrice(product, type, now);
-}
-
-export function cartItemPrice(
-  product: any, tier: PriceType, customer: { priceType?: string | null } | null, now = Date.now()
-): number {
-  if (customer?.priceType === "wholesale" && tier === "discount") {
-    return cartItemPromotionalPrice(product, tier, customer, now)
-      ?? priceFor(product.regularPrices ?? product, "discount", now);
-  }
-  return priceFor(product, tier, now);
-}
-
-/** Per-line exceptions use the customer's role; the order tier still applies to ordinary goods. */
-export function cartTotalForCustomer(
-  cart: any[], tier: PriceType, customer: { priceType?: string | null } | null, now = Date.now()
-): number {
-  return cart.reduce((sum, item) => sum + cartItemPrice(item, tier, customer, now) * item.quantity, 0);
-}
-
 /** Сумма корзины по тарифу (без авто-апгрейда). */
 export function rawCartTotal(cart: any[], type: PriceType, now = Date.now()): number {
   return cart.reduce(
@@ -165,7 +140,7 @@ export function nextPriceTier(
     return {
       type: "wholesale",
       need: Math.max(0, WHOLESALE_MIN_ORDER - rawCartTotal(cart, "wholesale", now)),
-      save: Math.max(0, cartTotalForCustomer(cart, "discount", customer, now) - cartTotalForCustomer(cart, "wholesale", customer, now)),
+      save: Math.max(0, rawCartTotal(cart, "discount", now) - rawCartTotal(cart, "wholesale", now)),
     };
   }
   if (tier === "wholesale") {
@@ -206,12 +181,12 @@ export function calculateCart(
   cart: any[], customer: { priceType?: string | null } | null, now = Date.now()
 ): CartPricing {
   const tier = cartPriceTier(cart, customer, now);
-  const totals = cart.map((item) => cartItemPrice(item, tier, customer, now) * item.quantity);
+  const totals = cart.map((item) => priceFor(item, tier, now) * item.quantity);
   const subtotal = totals.reduce((sum, n) => sum + n, 0);
   const wholesale = customer?.priceType === "wholesale" || customer?.priceType === "big_wholesale";
   const percent = !wholesale || !novemberPromoActive(now) ? 0
     : subtotal >= 300_000 ? 5 : subtotal >= 100_000 ? 3 : subtotal >= 40_000 ? 2 : 0;
-  const eligible = totals.map((n, i) => cartItemPromotionalPrice(cart[i], tier, customer, now) === null ? n : 0);
+  const eligible = totals.map((n, i) => promotionalPrice(cart[i], tier, now) === null ? n : 0);
   // Work in kopecks. Allocate the rounding remainder once across lines so splitting a product
   // into variants cannot change the discount or make Σ(line discounts) differ from the order.
   const raw = eligible.map((n) => n * percent);
