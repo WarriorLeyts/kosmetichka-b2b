@@ -22,10 +22,15 @@ jobs:
           ssh-keyscan -p "${PORT:-22}" "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
           ssh -i ~/.ssh/id_deploy -p "${PORT:-22}" -o ServerAliveInterval=30 "${USER:-root}@$HOST" "bash -lc 'node'" <<'NODE'
           const fs=require("fs"),path=require("path"),cp=require("child_process");
+          let phase="PROCESS";
           (async()=>{
           const apps=JSON.parse(cp.execFileSync("pm2",["jlist"],{encoding:"utf8",maxBuffer:20*1024*1024}));
           const app=apps.find(a=>a.name==="kosmetichka");if(!app)throw Error("no_app");
-          const meta=app.pm2_env,cwd=meta.pm_cwd,root=meta.APP_ROOT||(cwd.endsWith("/.next/standalone")?path.resolve(cwd,"../.."):cwd);
+          const meta=app.pm2_env,cwd=meta.pm_cwd;
+          const execDir=path.dirname(meta.pm_exec_path||cwd);
+          const roots=[meta.APP_ROOT,meta.env?.APP_ROOT,cwd,path.resolve(cwd,"../.."),execDir,path.resolve(execDir,"../..")].filter(Boolean);
+          const root=roots.find(p=>fs.existsSync(path.join(p,"scripts/import-prices.js")))||cwd;
+          phase="ENVIRONMENT";
           process.chdir(cwd);
           for(const p of [path.join(root,".env"),path.join(cwd,".env")])if(fs.existsSync(p)&&process.loadEnvFile)process.loadEnvFile(p);
           for(const k of ["DATABASE_URL","DATA_DIR","APP_ROOT"])if(meta[k]||meta.env?.[k])process.env[k]=meta[k]||meta.env[k];
@@ -34,8 +39,10 @@ jobs:
           const file=candidates.sort((a,b)=>fs.statSync(b).mtimeMs-fs.statSync(a).mtimeMs)[0];
           const say=code=>console.log("PRICE_IMPORT_RESULT: "+code);
           if(!file){say("PRICE_FILE_NOT_RECEIVED");return;}
+          phase="IMPORT_SOURCE";
           const importer=fs.readFileSync(path.join(root,"scripts/import-prices.js"),"utf8");
           if(!importer.includes("promo_wholesale")||!fs.existsSync(path.join(root,"scripts/price-types.js"))){say("IMPORT_SOURCE_NEEDS_UPDATE");return;}
+          phase="XML_PARSE";
           const {XMLParser}=req("fast-xml-parser");
           const parsed=new XMLParser({ignoreAttributes:false,attributeNamePrefix:""}).parse(fs.readFileSync(file,"utf8"));
           const packages=parsed?.КоммерческаяИнформация?.ПакетПредложений;
@@ -49,6 +56,7 @@ jobs:
           if(!opt.size){say("PROMO_TARIFFS_NOT_INCLUDED_IN_1C_EXPORT");return;}
           const hasPromo=offers.some(o=>list(o.Цены?.Цена).some(p=>opt.has(String(p.ИдТипаЦены))&&Number(p.ЦенаЗаЕдиницу)>0));
           if(!hasPromo){say("PROMO_TARIFFS_HAVE_NO_PRODUCT_PRICES");return;}
+          phase="DATABASE";
           const {PrismaClient}=req("@prisma/client");const db=new PrismaClient();
           try{
           const any=await db.productPrice.findFirst({where:{priceType:{in:["promo_wholesale","promo_big_wholesale"]},price:{gt:0}},select:{id:true}});
@@ -61,6 +69,6 @@ jobs:
           say(dbHas?"PROMO_IMPORTED_FOR_SCREENSHOT_PRODUCT":xmlHas?"SCREENSHOT_PRODUCT_PROMO_NOT_IMPORTED":"NO_PROMO_IN_EXPORT_FOR_SCREENSHOT_PRODUCT");
           }else say("PROMO_PRICES_IMPORTED");
           }finally{await db.$disconnect();}
-          })().catch(()=>{console.error("PRICE_IMPORT_RESULT: DIAGNOSTIC_FAILED_NO_DATA_EXPORTED");process.exitCode=1;});
+          })().catch(e=>{const code=typeof e?.code==="string"&&/^[A-Z0-9_]+$/.test(e.code)?e.code:"ERROR";console.error("PRICE_IMPORT_RESULT: DIAGNOSTIC_FAILED_"+phase+"_"+code);process.exitCode=1;});
           
           NODE
