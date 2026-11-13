@@ -1,4 +1,4 @@
-name: Verify promotion price recovery
+name: Verify screenshot product price exchange
 on:
   push:
     branches: [codex/diagnose-promo-import]
@@ -94,13 +94,20 @@ jobs:
           const example=await db.productPrice.findFirst({where:{priceType:"promo_wholesale",price:{gt:0},product:{hidden:false}},select:{product:{select:{id:true}}}});
           if(example){const id=example.product.id;const res=await fetch("http://127.0.0.1:3000/api/products/"+id,{headers:{Host:"kosmetichka-opt.ru","X-Forwarded-Proto":"https"},signal:AbortSignal.timeout(15000)});if(res.ok)console.log("PUBLIC_VERIFICATION_PRODUCT: https://kosmetichka-opt.ru/product/"+id);}
           phase="DATABASE";
-          const item=await db.product.findFirst({where:{barcode:"8806334355135"},select:{guid:true,prices:{select:{priceType:true,price:true}}}});
-          if(item){
+          const item=await db.product.findFirst({where:{article:"ЦБ000000475"},select:{guid:true,prices:{select:{priceType:true,price:true}}}});
+          if(!item){say("SCREENSHOT_PRODUCT_NOT_FOUND");return;}
           const row=offers.find(o=>String(o.Ид)===item.guid);
-          const xmlHas=row&&list(row.Цены?.Цена).some(p=>opt.has(String(p.ИдТипаЦены))&&Number(p.ЦенаЗаЕдиницу)>0);
-          const dbHas=item.prices.some(p=>["promo_wholesale","promo_big_wholesale"].includes(p.priceType)&&p.price>0);
-          say(dbHas?"PROMO_IMPORTED_FOR_SCREENSHOT_PRODUCT":xmlHas?"SCREENSHOT_PRODUCT_PROMO_NOT_IMPORTED":"NO_PROMO_IN_EXPORT_FOR_SCREENSHOT_PRODUCT");
-          }else say("PROMO_PRICES_IMPORTED");
+          if(!row){say("SCREENSHOT_PRODUCT_NOT_IN_RECEIVED_FILE");return;}
+          const {pathToFileURL}=require("url");
+          const {normalizePriceType}=await import(pathToFileURL(path.join(root,"scripts/price-types.js")).href);
+          const expected={retail:160,discount:115,wholesale:95,big_wholesale:85,promo_retail:99,promo_wholesale:79,promo_big_wholesale:79};
+          const xm=new Map();
+          for(const p of list(row.Цены?.Цена)){const name=types.get(String(p.ИдТипаЦены));if(name)xm.set(normalizePriceType(name),Number(p.ЦенаЗаЕдиницу));}
+          const dm=new Map(item.prices.map(p=>[p.priceType,p.price]));
+          for(const [type,want] of Object.entries(expected)){
+          say("SCREENSHOT_XML_"+type.toUpperCase()+"_"+(!xm.has(type)?"MISSING":xm.get(type)===want?"MATCHES_1C_SCREENSHOT":"DIFFERS_FROM_1C_SCREENSHOT"));
+          say("SCREENSHOT_DB_"+type.toUpperCase()+"_"+(!dm.has(type)?"MISSING":dm.get(type)===want?"MATCHES_1C_SCREENSHOT":"DIFFERS_FROM_1C_SCREENSHOT"));
+          }
           }finally{await db.$disconnect();}
           })().catch(e=>{const code=typeof e?.code==="string"&&/^[A-Z0-9_]+$/.test(e.code)?e.code:"ERROR";console.error("PRICE_IMPORT_RESULT: DIAGNOSTIC_FAILED_"+phase+"_"+code);process.exitCode=1;});
           
