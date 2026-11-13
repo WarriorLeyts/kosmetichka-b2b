@@ -87,7 +87,7 @@ jobs:
           phase="SOURCE_ORDER_CHECK";
           await odata.odataGet(slice,{$filter:filter,$orderby:order,$select:selected,$top:"1"});
           phase="FULL_PRICE_READ";
-          const sourceMap=new Map(),ambiguous=new Set();
+          const sourceMap=new Map(),ambiguous=new Set(),characteristicOnly=new Set();
           let offset=0,complete=false;
           const began=Date.now();
           for(let page=0;page<200;page++){
@@ -99,7 +99,7 @@ jobs:
           for(const row of rows){
           const guid=row.Номенклатура_Key,t=kindMap.get(row[typeKey]),price=Number(row.Цена);
           if(!guid||!t||!Number.isFinite(price)||price<0)throw Error("invalid_source_price");
-          if(charKey&&row[charKey]&&row[charKey]!==empty)continue;
+          if(charKey&&row[charKey]&&row[charKey]!==empty){if(price>0)characteristicOnly.add(guid+"|"+t);continue;}
           const key=guid+"|"+t,value=Math.round(price*100)/100;
           const previous=sourceMap.get(key);
           if(previous&&previous.price!==value)ambiguous.add(key);
@@ -118,6 +118,7 @@ jobs:
           const productMap=new Map(products.map(p=>[p.guid,p]));
           const existing=await db.productPrice.findMany({where:{priceType:{in:allowed}}});
           const current=new Map(existing.map(p=>[p.productGuid+"|"+p.priceType,p]));
+          const characteristicGaps=[...characteristicOnly].filter(key=>productMap.has(key.split("|")[0])&&!sourceMap.has(key));
           const proposed=[],allSource=[];
           for(const [key,row] of sourceMap){
           if(!productMap.has(row.productGuid)||ambiguous.has(key))continue;
@@ -131,12 +132,13 @@ jobs:
           const now=new Date().toISOString();
           const backupDir=path.join(require("os").homedir(),".kosmetichka-private-backups");
           fs.mkdirSync(backupDir,{recursive:true,mode:0o700});
-          const report={at:now,pinned,allowed,complete,counts:{catalog:products.length,sourceRows:allSource.length,changedProducts:changedProducts.size,changedPrices:proposed.length,ambiguous:ambiguous.size,promoProducts:promoGuids.size,wholesalePromoProducts:optGuids.size},proposed,allSource,before:existing,sourceDigest:require("crypto").createHash("sha256").update(JSON.stringify(allSource)).digest("hex")};
+          const report={at:now,pinned,allowed,complete,counts:{catalog:products.length,sourceRows:allSource.length,changedProducts:changedProducts.size,changedPrices:proposed.length,ambiguous:ambiguous.size,characteristicGaps:characteristicGaps.length,promoProducts:promoGuids.size,wholesalePromoProducts:optGuids.size},proposed,allSource,before:existing,sourceDigest:require("crypto").createHash("sha256").update(JSON.stringify(allSource)).digest("hex")};
           const auditPath=path.join(backupDir,"catalog-price-audit-"+Date.now()+".json");
           fs.writeFileSync(auditPath,JSON.stringify(report),{mode:0o600,flag:"wx"});
           const pointer=path.join(backupDir,"catalog-price-audit-latest.json");
           const pending=pointer+".pending";fs.writeFileSync(pending,JSON.stringify({auditPath}),{mode:0o600});fs.renameSync(pending,pointer);
           say("FULL_CATALOG_PRICE_AUDIT_COMPLETE");
+          say(characteristicGaps.length?"CHARACTERISTIC_ONLY_PRICE_TARIFFS_REQUIRE_REVIEW":"NO_UNMAPPED_CHARACTERISTIC_PRICE_TARIFFS_FOR_SITE");
           say(proposed.length?"CATALOG_PRICE_DIFFERENCES_FOUND":"CATALOG_PRICES_ALREADY_MATCH_1C");
           if(ambiguous.size)say("AMBIGUOUS_PRICE_DIMENSIONS_EXCLUDED");
           say("PRIVATE_AUDIT_AND_PRICE_BACKUP_SAVED");
