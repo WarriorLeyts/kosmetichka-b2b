@@ -123,6 +123,18 @@ jobs:
           const latest=new Map();for(const p of rows){const t=kindMap.get(p[typeKey]);if(t&&!latest.has(t)&&Number(p.Цена)>0)latest.set(t,Number(p.Цена));}
           const expected={retail:160,discount:115,wholesale:95,big_wholesale:85,promo_retail:99,promo_wholesale:79,promo_big_wholesale:79};
           for(const [t,value] of Object.entries(expected))say("ONEC_SCREENSHOT_"+t.toUpperCase()+"_"+(latest.get(t)===value?"MATCHES":"NOT_CONFIRMED"));
+          if(Object.entries(expected).every(([t,value])=>latest.get(t)===value)){
+          phase="PRICE_REPAIR_BACKUP";
+          const allowed=Object.keys(expected);
+          const before=await db.productPrice.findMany({where:{productGuid:item.guid,priceType:{in:allowed}}});
+          const dir=path.join(require("os").homedir(),".kosmetichka-private-backups");
+          fs.mkdirSync(dir,{recursive:true,mode:0o700});
+          fs.writeFileSync(path.join(dir,"jomtam-price-repair-"+Date.now()+".json"),JSON.stringify({at:new Date().toISOString(),productGuid:item.guid,before,source:Object.fromEntries(allowed.map(t=>[t,latest.get(t)]))}),{mode:0o600,flag:"wx"});
+          phase="PRICE_REPAIR";
+          await db.$transaction(allowed.map(priceType=>db.productPrice.upsert({where:{productGuid_priceType:{productGuid:item.guid,priceType}},update:{price:latest.get(priceType)},create:{productGuid:item.guid,priceType,price:latest.get(priceType)}})));
+          say("SCREENSHOT_PRODUCT_PRICES_REPAIRED_FROM_1C_WITH_PRIVATE_BACKUP");
+          }
+
           }
           }else say("ONEC_PRICE_REGISTER_NOT_PUBLISHED");
           }else say("ONEC_METADATA_NOT_ACCESSIBLE");
