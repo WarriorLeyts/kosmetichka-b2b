@@ -1,0 +1,65 @@
+name: Private-data-safe import health check
+on:
+  push:
+    branches: [codex/diagnose-promo-import]
+permissions:
+  contents: read
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check import state without exporting production data
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "${PORT:-22}" "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_deploy -p "${PORT:-22}" -o ServerAliveInterval=30 "${USER:-root}@$HOST" "bash -lc 'node'" <<'NODE'
+          const fs=require("fs"),path=require("path"),cp=require("child_process");
+          (async()=>{
+          const apps=JSON.parse(cp.execFileSync("pm2",["jlist"],{encoding:"utf8",maxBuffer:20*1024*1024}));
+          const app=apps.find(a=>a.name==="kosmetichka");if(!app)throw Error("no_app");
+          const meta=app.pm2_env,cwd=meta.pm_cwd,root=meta.APP_ROOT||(cwd.endsWith("/.next/standalone")?path.resolve(cwd,"../.."):cwd);
+          process.chdir(cwd);
+          for(const p of [path.join(root,".env"),path.join(cwd,".env")])if(fs.existsSync(p)&&process.loadEnvFile)process.loadEnvFile(p);
+          for(const k of ["DATABASE_URL","DATA_DIR","APP_ROOT"])if(meta[k])process.env[k]=meta[k];
+          const req=require("module").createRequire(path.join(root,"package.json"));
+          const file=path.join(process.env.DATA_DIR||path.join(cwd,"data"),"1c","offers.xml");
+          const say=code=>console.log("PRICE_IMPORT_RESULT: "+code);
+          if(!fs.existsSync(file)){say("PRICE_FILE_NOT_RECEIVED");return;}
+          const importer=fs.readFileSync(path.join(root,"scripts/import-prices.js"),"utf8");
+          if(!importer.includes("promo_wholesale")||!fs.existsSync(path.join(root,"scripts/price-types.js"))){say("IMPORT_SOURCE_NEEDS_UPDATE");return;}
+          const {XMLParser}=req("fast-xml-parser");
+          const parsed=new XMLParser({ignoreAttributes:false,attributeNamePrefix:""}).parse(fs.readFileSync(file,"utf8"));
+          const packages=parsed?.КоммерческаяИнформация?.ПакетПредложений;
+          const list=v=>v==null?[]:Array.isArray(v)?v:[v];
+          const types=new Map(),offers=[];
+          for(const p of list(packages)){
+          for(const t of list(p.ТипыЦен?.ТипЦены))types.set(String(t.Ид),String(t.Наименование||"").toLowerCase());
+          offers.push(...list(p.Предложения?.Предложение));
+          }
+          const opt=new Set([...types].filter(([,n])=>n.includes("акци")&&n.includes("опт")).map(([id])=>id));
+          if(!opt.size){say("PROMO_TARIFFS_NOT_INCLUDED_IN_1C_EXPORT");return;}
+          const hasPromo=offers.some(o=>list(o.Цены?.Цена).some(p=>opt.has(String(p.ИдТипаЦены))&&Number(p.ЦенаЗаЕдиницу)>0));
+          if(!hasPromo){say("PROMO_TARIFFS_HAVE_NO_PRODUCT_PRICES");return;}
+          const {PrismaClient}=req("@prisma/client");const db=new PrismaClient();
+          try{
+          const any=await db.productPrice.findFirst({where:{priceType:{in:["promo_wholesale","promo_big_wholesale"]},price:{gt:0}},select:{id:true}});
+          if(!any){say("PROMO_PRICES_RECEIVED_BUT_NOT_IMPORTED");return;}
+          const item=await db.product.findFirst({where:{barcode:"8806334355135"},select:{guid:true,prices:{select:{priceType:true,price:true}}}});
+          if(item){
+          const row=offers.find(o=>String(o.Ид)===item.guid);
+          const xmlHas=row&&list(row.Цены?.Цена).some(p=>opt.has(String(p.ИдТипаЦены))&&Number(p.ЦенаЗаЕдиницу)>0);
+          const dbHas=item.prices.some(p=>["promo_wholesale","promo_big_wholesale"].includes(p.priceType)&&p.price>0);
+          say(dbHas?"PROMO_IMPORTED_FOR_SCREENSHOT_PRODUCT":xmlHas?"SCREENSHOT_PRODUCT_PROMO_NOT_IMPORTED":"NO_PROMO_IN_EXPORT_FOR_SCREENSHOT_PRODUCT");
+          }else say("PROMO_PRICES_IMPORTED");
+          }finally{await db.$disconnect();}
+          })().catch(()=>{console.error("PRICE_IMPORT_RESULT: DIAGNOSTIC_FAILED_NO_DATA_EXPORTED");process.exitCode=1;});
+          
+          NODE
