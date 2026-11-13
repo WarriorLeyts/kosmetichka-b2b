@@ -76,10 +76,25 @@ jobs:
                   with open(index, "rb") as source, gzip.open(pending_gz, "wb") as zipped: shutil.copyfileobj(source, zipped)
                   os.replace(pending_gz, root / "index.html.gz")
               os.replace(pending, root / "index.html")
+              # Nginx may serve precompressed HTML to browsers; retire stale Brotli copies
+              # and rebuild gzip copies from the newly published HTML, keeping backups.
+              for html in [p for p in files if p.suffix == ".html"]:
+                  dest = root / html.relative_to(stage)
+                  br = pathlib.Path(str(dest) + ".br")
+                  gz = pathlib.Path(str(dest) + ".gz")
+                  if br.is_file():
+                      saved = backup / br.relative_to(root)
+                      saved.parent.mkdir(parents=True, exist_ok=True)
+                      os.replace(br, saved)
+                  if gz.is_file():
+                      fresh = pathlib.Path(str(gz) + ".cart-fix-pending")
+                      with open(dest, "rb") as source, gzip.open(fresh, "wb") as zipped: shutil.copyfileobj(source, zipped)
+                      os.replace(fresh, gz)
           print("Customer storefront published with approved cart style fix")
           
           PY
       - name: Check published customer storefront
         run: |
           curl --fail --silent --show-error --retry 3 https://kosmetichka-opt.ru/cart | grep -q 'entry-091b2732f92b6c7823a4d63f9cf11884.js'
-          echo 'Approved cart build is served by the website'
+          curl --fail --silent --show-error --compressed --retry 3 https://kosmetichka-opt.ru/cart | grep -q 'entry-091b2732f92b6c7823a4d63f9cf11884.js'
+          echo 'Approved cart build is served in plain and compressed responses'
