@@ -59,6 +59,19 @@ jobs:
           phase="DATABASE";
           const {PrismaClient}=req("@prisma/client");const db=new PrismaClient();
           try{
+          phase="IMPORT_LOG";
+          let log="";
+          for(const logPath of [meta.pm_out_log_path,meta.pm_err_log_path].filter(Boolean)){
+          if(!fs.existsSync(logPath))continue;
+          const fd=fs.openSync(logPath,"r"),sz=fs.fstatSync(fd).size,b=Buffer.alloc(Math.min(sz,600000));
+          fs.readSync(fd,b,0,b.length,Math.max(0,sz-b.length));fs.closeSync(fd);log+="\n"+b.toString("utf8");
+          }
+          if(/Cannot find module[^\\n]*sync-all/.test(log))say("SYNC_SCRIPT_PATH_ERROR");
+          if(/Cannot find module[^\\n]*price-types|ERR_MODULE_NOT_FOUND/.test(log))say("IMPORT_MODULE_LOAD_ERROR");
+          if(/ENOENT[^\\n]*offers.xml|ENOENT[^\\n]*import.xml/.test(log))say("EXCHANGE_FILE_PATH_ERROR");
+          if(/PrismaClientValidationError/.test(log))say("DATABASE_VALIDATION_ERROR_SEEN");
+          if(/ReferenceError/.test(log))say("SCRIPT_REFERENCE_ERROR_SEEN");
+          phase="DATABASE";
           const any=await db.productPrice.findFirst({where:{priceType:{in:["promo_wholesale","promo_big_wholesale"]},price:{gt:0}},select:{id:true}});
           if(!any){say("PROMO_PRICES_RECEIVED_BUT_NOT_IMPORTED");return;}
           const item=await db.product.findFirst({where:{barcode:"8806334355135"},select:{guid:true,prices:{select:{priceType:true,price:true}}}});
