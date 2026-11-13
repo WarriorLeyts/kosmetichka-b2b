@@ -1,4 +1,4 @@
-name: Recover received promotion prices
+name: Verify promotion price recovery
 on:
   push:
     branches: [codex/diagnose-promo-import]
@@ -72,49 +72,26 @@ jobs:
           if(/PrismaClientValidationError/.test(log))say("DATABASE_VALIDATION_ERROR_SEEN");
           if(/ReferenceError/.test(log))say("SCRIPT_REFERENCE_ERROR_SEEN");
           phase="DATABASE";
-          phase="PRICE_RECOVERY_VALIDATE";
-          const normalizer=(await import(require("url").pathToFileURL(path.join(root,"scripts/price-types.js")).href)).normalizePriceType;
-          const allowed=new Set(["retail","discount","wholesale","big_wholesale","promo_retail","promo_wholesale","promo_big_wholesale"]);
-          const mapped=new Map([...types].map(([id,name])=>[id,normalizer(name)]));
-          if([...opt].some(id=>!["promo_wholesale","promo_big_wholesale"].includes(mapped.get(id)))){say("PROMO_PRICE_MAPPING_ERROR");return;}
-          const products=await db.product.findMany({select:{guid:true}});
-          const known=new Set(products.map(p=>p.guid)), priceRows=new Map();
-          let variantOnly=false;
-          for(const offer of offers){
-          const guid=String(offer.Ид);
-          if(!known.has(guid)){if(known.has(guid.split("#")[0]))variantOnly=true;continue;}
-          for(const price of list(offer.Цены?.Цена)){
-          const type=mapped.get(String(price.ИдТипаЦены));
-          if(!allowed.has(type))continue;
-          const value=Number(price.ЦенаЗаЕдиницу);
-          if(!Number.isFinite(value)||value<0)throw Error("invalid_price");
-          priceRows.set(guid+"|"+type,{productGuid:guid,priceType:type,price:Math.round(value*100)/100});
-          }}
-          const rows=[...priceRows.values()];
-          if(!rows.some(p=>p.priceType.startsWith("promo_")&&p.price>0)){say(variantOnly?"VARIANT_IDENTIFIERS_REQUIRE_IMPORT_FIX":"NO_MATCHING_PRODUCTS_FOR_PROMO_PRICES");return;}
-          const sample=await db.product.findFirst({where:{barcode:"8806334355135"},select:{id:true,updatedAt:true}});
-          if(sample){
-          const live=await fetch("http://127.0.0.1:3000/api/products/"+sample.id,{headers:{Host:"kosmetichka-opt.ru","X-Forwarded-Proto":"https"},signal:AbortSignal.timeout(15000)});
-          const publicProduct=await live.json();
-          if(!live.ok||publicProduct.updatedAt!==sample.updatedAt.toISOString())throw Error("database_verification_failed");
-          }
-          phase="PRICE_RECOVERY_BACKUP";
-          const before=await db.productPrice.findMany({where:{priceType:{in:[...allowed]}},select:{productGuid:true,priceType:true,price:true}});
-          const backupDir=path.join(require("os").homedir(),".kosmetichka-private-backups");
-          fs.mkdirSync(backupDir,{recursive:true,mode:0o700});
-          fs.writeFileSync(path.join(backupDir,"price-recovery-"+Date.now()+".json"),JSON.stringify({at:new Date().toISOString(),before,incoming:rows}),{mode:0o600,flag:"wx"});
-          const fingerprint=fs.statSync(file).mtimeMs;
-          phase="PRICE_RECOVERY_TRANSACTION";
-          if(Date.now()-fingerprint>2*60*60*1000)throw Error("stale_exchange_file");
-          const sql='INSERT INTO "ProductPrice" ("productGuid","priceType","price","createdAt","updatedAt") SELECT x."productGuid",x."priceType",x.price,NOW(),NOW() FROM jsonb_to_recordset($1::jsonb) AS x("productGuid" text,"priceType" text,price double precision) ON CONFLICT ("productGuid","priceType") DO UPDATE SET price=EXCLUDED.price,"updatedAt"=NOW() WHERE "ProductPrice".price IS DISTINCT FROM EXCLUDED.price';
-          await db.$transaction(async tx=>{
-          if(fs.statSync(file).mtimeMs!==fingerprint)throw Error("exchange_changed");
-          for(let i=0;i<rows.length;i+=500)await tx.$executeRawUnsafe(sql,JSON.stringify(rows.slice(i,i+500)));
-          },{timeout:60000});
-          say("PROMOTIONAL_PRICES_RECOVERED_WITH_PRIVATE_BACKUP");
-          phase="DATABASE";
           const any=await db.productPrice.findFirst({where:{priceType:{in:["promo_wholesale","promo_big_wholesale"]},price:{gt:0}},select:{id:true}});
           if(!any){say("PROMO_PRICES_RECEIVED_BUT_NOT_IMPORTED");return;}
+          phase="RUNTIME_PATHS";
+          const runtimeCwd=fs.readlinkSync("/proc/"+app.pid+"/cwd");
+          const selected={};
+          const initial=fs.readFileSync("/proc/"+app.pid+"/environ","utf8").split("\0");
+          for(const entry of initial){const i=entry.indexOf("=");const k=entry.slice(0,i);if(["DATA_DIR","APP_ROOT"].includes(k))selected[k]=entry.slice(i+1);}
+          const parser=require("util").parseEnv;
+          if(parser)for(const name of [".env.production.local",".env.local",".env.production",".env"]){
+          const p=path.join(runtimeCwd,name);if(!fs.existsSync(p))continue;
+          const env=parser(fs.readFileSync(p,"utf8"));for(const k of ["DATA_DIR","APP_ROOT"])if(!selected[k]&&env[k])selected[k]=env[k];}
+          const runtimeFile=path.join(selected.DATA_DIR||path.join(runtimeCwd,"data"),"1c","offers.xml");
+          say(fs.existsSync(runtimeFile)&&fs.realpathSync(runtimeFile)===fs.realpathSync(file)?"RUNTIME_EXCHANGE_PATH_MATCHES":"RUNTIME_EXCHANGE_PATH_DIFFERS");
+          const runtimeRoot=selected.APP_ROOT||(runtimeCwd.endsWith("/.next/standalone")?path.resolve(runtimeCwd,"../.."):runtimeCwd);
+          const runtimeImporter=path.join(runtimeRoot,"scripts/import-prices.js");
+          say(fs.existsSync(runtimeImporter)&&fs.readFileSync(runtimeImporter,"utf8").includes("promo_wholesale")?"RUNTIME_PRICE_IMPORTER_CURRENT":"RUNTIME_PRICE_IMPORTER_NOT_CURRENT");
+          phase="PUBLIC_VERIFICATION";
+          const example=await db.productPrice.findFirst({where:{priceType:"promo_wholesale",price:{gt:0},product:{hidden:false}},select:{product:{select:{id:true}}}});
+          if(example){const id=example.product.id;const res=await fetch("http://127.0.0.1:3000/api/products/"+id,{headers:{Host:"kosmetichka-opt.ru","X-Forwarded-Proto":"https"},signal:AbortSignal.timeout(15000)});if(res.ok)console.log("PUBLIC_VERIFICATION_PRODUCT: https://kosmetichka-opt.ru/product/"+id);}
+          phase="DATABASE";
           const item=await db.product.findFirst({where:{barcode:"8806334355135"},select:{guid:true,prices:{select:{priceType:true,price:true}}}});
           if(item){
           const row=offers.find(o=>String(o.Ид)===item.guid);
