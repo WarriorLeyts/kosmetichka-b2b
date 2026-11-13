@@ -34,3 +34,17 @@ describe("catalog brand facets", () => {
     expect(where.AND).toBeTruthy(); // the search stays
   });
 });
+
+describe("promotion filter combined with catalog filters",()=>{
+  it("keeps the search and appends the role-scoped promotion predicate",async()=>{
+    const clock=vi.spyOn(Date,"now").mockReturnValue(Date.parse("2026-11-13T12:00:00+03:00"));
+    try {
+      db.product.groupBy.mockResolvedValue([]);db.brand.findMany.mockResolvedValue([]);
+      await GET(new Request("http://x/api/catalog/products?facets=brand&quick=promo&search=тонер"));
+      const where=db.product.groupBy.mock.calls.at(-1)![0].where;
+      expect(where.hidden).toBe(false);
+      expect(where.AND).toHaveLength(2);
+      expect(where.AND[1]).toEqual({prices:{some:{priceType:{in:["promo_retail"]},price:{gt:0}}}});
+    }finally{clock.mockRestore();}
+  });
+});
