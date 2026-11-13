@@ -200,3 +200,21 @@ export function calculateCart(
     discount, discounts: cents.map((n) => n / 100), total: Math.round((subtotal - discount) * 100) / 100 };
 }
 
+/** Whitelisted price metadata for saved carts / favourites; checkout always reloads real DB prices. */
+export function cleanPromoSnapshot(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const copy = (from: Record<string, unknown>, to: Record<string, unknown>, fields: string[]) => {
+    for (const k of fields) {
+      const n = from[k];
+      if (n === null || (typeof n === "number" && Number.isFinite(n))) to[k] = n;
+    }
+  };
+  copy(raw, out, ["promoRetailPrice", "promoWholesalePrice", "promoBigWholesalePrice"]);
+  if (raw.regularPrices && typeof raw.regularPrices === "object" && !Array.isArray(raw.regularPrices)) {
+    const regular: Record<string, unknown> = {};
+    copy(raw.regularPrices as Record<string, unknown>, regular, ["retailPrice", "discountPrice", "wholesalePrice", "bigWholesalePrice"]);
+    if (Object.keys(regular).length > 0) out.regularPrices = regular;
+  }
+  return out;
+}
+

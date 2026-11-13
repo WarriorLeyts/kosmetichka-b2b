@@ -1,6 +1,6 @@
 import { describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { calculateCart, cartPriceTier, priceFor, novemberPromoActive, bigWholesaleMinOrder } from "./pricing";
+import { calculateCart, cartPriceTier, priceFor, novemberPromoActive, bigWholesaleMinOrder, cleanPromoSnapshot } from "./pricing";
 import { normalizePriceType } from "../scripts/price-types.js";
 
 const during = Date.parse("2026-11-13T12:00:00+03:00");
@@ -40,6 +40,18 @@ describe("1C campaign prices", () => {
   it("expires a persisted API snapshot using its original prices", () => {
     const snapshot = { ...screenshot, wholesalePrice: 168, regularPrices: { wholesalePrice: 190, retailPrice: 490 } };
     assert.equal(priceFor(snapshot, "wholesale", after), 190);
+  });
+  it("preserves campaign metadata through saved-cart sanitisation and expires it afterwards", () => {
+    const raw = { ...screenshot, wholesalePrice: 168, regularPrices: { retailPrice: 490, wholesalePrice: 190 } };
+    const restored = { wholesalePrice: 168, ...cleanPromoSnapshot(raw) };
+    assert.equal(priceFor(restored, "wholesale", during), 168);
+    assert.equal(priceFor(restored, "wholesale", after), 190);
+  });
+  it("drops unrecognised and non-numeric metadata from saved snapshots", () => {
+    assert.deepEqual(cleanPromoSnapshot({ promoWholesalePrice: Infinity, promoRetailPrice: "1",
+      regularPrices: { wholesalePrice: 190, retailPrice: null, extra: "discard", discountPrice: NaN } }),
+    { regularPrices: { wholesalePrice: 190, retailPrice: null } });
+    assert.deepEqual(cleanPromoSnapshot({}), {});
   });
 });
 
