@@ -103,7 +103,7 @@ jobs:
           const response=await fetch(base+"$metadata",{headers:{Authorization:"Basic "+Buffer.from(process.env.ODATA_USER+":"+process.env.ODATA_PASSWORD).toString("base64")},signal:AbortSignal.timeout(30000)});
           if(response.ok){
           const metadata=await response.text();
-          const entries=[...metadata.matchAll(/<EntitySet\\s+[^>]*Name="([^"]+)"[^>]*>/g)].map(m=>m[1]);
+          const entries=[...metadata.matchAll(/<EntitySet\s+[^>]*Name="([^"]+)"[^>]*>/g)].map(m=>m[1]);
           const entity=entries.find(n=>/^InformationRegister_/i.test(n)&&/Цен.*Номенклатур/i.test(n)&&!n.endsWith("_RecordType"));
           if(entity){
           say("ONEC_PRICE_REGISTER_AVAILABLE");
