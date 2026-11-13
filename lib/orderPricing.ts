@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { calculateCart, cartItemPrice, type PriceType, type CartPricing } from "@/lib/pricing";
+import { calculateCart, priceFor, type PriceType, type CartPricing } from "@/lib/pricing";
 import { customerStock, withFlatPrices } from "@/lib/utils";
 
 /** the most pieces of one product in an order line */
@@ -92,7 +92,7 @@ export async function priceOrder(
     }
 
     // as in priceFor(): a missing / zero price falls back — big wholesale → wholesale → retail
-    const price = cartItemPrice(cartForPricing[index], appliedPriceType, customer, now);
+    const price = priceFor(cartForPricing[index], appliedPriceType, now);
     if (price <= 0) {
       throw new Error(`Цена для товара «${product.name}» не найдена. Обратитесь к менеджеру.`);
     }
