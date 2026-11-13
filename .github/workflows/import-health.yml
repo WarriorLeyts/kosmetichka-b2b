@@ -56,7 +56,7 @@ jobs:
           const {normalizePriceType}=await import(pathToFileURL(path.join(root,"scripts/price-types.js")).href);
           const allowed=["retail","discount","wholesale","big_wholesale","promo_retail","promo_wholesale","promo_big_wholesale"];
           const labels=new Map([["розница","retail"],["скидка","discount"],["опт","wholesale"],["крупный опт","big_wholesale"],["акция розница","promo_retail"],["акция опт","promo_wholesale"],["акция крупный опт","promo_big_wholesale"]]);
-          const kinds=await odata.odataGet("Catalog_ВидыЦен",{$select:"Ref_Key,Description"});
+          const kinds=await odata.odataGet("Catalog_ВидыЦен",{});
           const kindMap=new Map();
           for(const kind of kinds){const label=String(kind.Description||"").trim().toLowerCase().replace(/ё/g,"е").replace(/ +/g," ");if(labels.has(label))kindMap.set(kind.Ref_Key,labels.get(label));}
           if(kindMap.size!==7||new Set(kindMap.values()).size!==7)throw Error("tariffs_ambiguous");
@@ -65,7 +65,11 @@ jobs:
           if(currencyKey){
           const currencies=await odata.odataGet("Catalog_Валюты",{$select:"Ref_Key,Code,Description",$filter:"Code eq '643'"});
           if(!Array.isArray(currencies)||currencies.length!==1)throw Error("currency_not_validated");
-          filter+=" and "+currencyKey+" eq guid'"+currencies[0].Ref_Key+"'";
+          const rub=currencies[0].Ref_Key;
+          const currencyKeys=Object.keys(kinds[0]||{}).filter(k=>/Валют.*_Key/.test(k));
+          for(const kind of kinds.filter(k=>kindMap.has(k.Ref_Key)))for(const k of currencyKeys)if(kind[k]&&kind[k]!==empty&&kind[k]!==rub)throw Error("currency_not_validated");
+          filter+=" and ("+currencyKey+" eq guid'"+rub+"' or "+currencyKey+" eq guid'"+empty+"')";
+
           }
           phase="FULL_PRICE_READ";
           const pinned=new Date(Date.now()+3*60*60*1000).toISOString().slice(0,19);
@@ -105,7 +109,9 @@ jobs:
           if(!complete)throw Error("incomplete_source");
           phase="CONTROL_VALIDATION";
           const expected={retail:160,discount:115,wholesale:95,big_wholesale:85,promo_retail:99,promo_wholesale:79,promo_big_wholesale:79};
-          for(const [t,value] of Object.entries(expected)){const key=item.guid+"|"+t;if(ambiguous.has(key)||sourceMap.get(key)?.price!==value)throw Error("control_mismatch");}
+          let controlValid=true;
+          for(const [t,value] of Object.entries(expected)){const key=item.guid+"|"+t;if(ambiguous.has(key)||sourceMap.get(key)?.price!==value){controlValid=false;say("CONTROL_"+t.toUpperCase()+"_"+(ambiguous.has(key)?"AMBIGUOUS":sourceMap.has(key)?"DIFFERS":"MISSING"));}}
+          if(!controlValid)throw Error("control_mismatch");
           say("FULL_CURRENT_1C_PRICE_SLICE_READ");
           phase="CATALOG_COMPARE";
           const products=await db.product.findMany({select:{id:true,guid:true,hidden:true,wholesaleStock:true}});
