@@ -28,11 +28,12 @@ jobs:
           const meta=app.pm2_env,cwd=meta.pm_cwd,root=meta.APP_ROOT||(cwd.endsWith("/.next/standalone")?path.resolve(cwd,"../.."):cwd);
           process.chdir(cwd);
           for(const p of [path.join(root,".env"),path.join(cwd,".env")])if(fs.existsSync(p)&&process.loadEnvFile)process.loadEnvFile(p);
-          for(const k of ["DATABASE_URL","DATA_DIR","APP_ROOT"])if(meta[k])process.env[k]=meta[k];
+          for(const k of ["DATABASE_URL","DATA_DIR","APP_ROOT"])if(meta[k]||meta.env?.[k])process.env[k]=meta[k]||meta.env[k];
           const req=require("module").createRequire(path.join(root,"package.json"));
-          const file=path.join(process.env.DATA_DIR||path.join(cwd,"data"),"1c","offers.xml");
+          const candidates=[process.env.DATA_DIR,meta.DATA_DIR,meta.env?.DATA_DIR,path.join(require("os").homedir(),"kosmetichka-data"),path.join(root,"data"),path.join(cwd,"data")].filter(Boolean).map(p=>path.join(p,"1c","offers.xml")).filter(p=>fs.existsSync(p));
+          const file=candidates.sort((a,b)=>fs.statSync(b).mtimeMs-fs.statSync(a).mtimeMs)[0];
           const say=code=>console.log("PRICE_IMPORT_RESULT: "+code);
-          if(!fs.existsSync(file)){say("PRICE_FILE_NOT_RECEIVED");return;}
+          if(!file){say("PRICE_FILE_NOT_RECEIVED");return;}
           const importer=fs.readFileSync(path.join(root,"scripts/import-prices.js"),"utf8");
           if(!importer.includes("promo_wholesale")||!fs.existsSync(path.join(root,"scripts/price-types.js"))){say("IMPORT_SOURCE_NEEDS_UPDATE");return;}
           const {XMLParser}=req("fast-xml-parser");
