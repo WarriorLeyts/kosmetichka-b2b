@@ -47,6 +47,8 @@ jobs:
           const parsed=new XMLParser({ignoreAttributes:false,attributeNamePrefix:""}).parse(fs.readFileSync(file,"utf8"));
           const packages=parsed?.КоммерческаяИнформация?.ПакетПредложений;
           const list=v=>v==null?[]:Array.isArray(v)?v:[v];
+          say(Array.isArray(packages)?"EXCHANGE_CONTAINS_MULTIPLE_PACKAGES":"EXCHANGE_CONTAINS_SINGLE_PACKAGE");
+          say(apps.some(a=>a.name==="kosmetichka"&&a.pm2_env.status==="online")?"APPLICATION_ONLINE":"APPLICATION_NOT_ONLINE");
           const types=new Map(),offers=[];
           for(const p of list(packages)){
           for(const t of list(p.ТипыЦен?.ТипЦены))types.set(String(t.Ид),String(t.Наименование||"").toLowerCase());
