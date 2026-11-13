@@ -97,7 +97,27 @@ jobs:
           const item=await db.product.findFirst({where:{article:"ЦБ000000475"},select:{guid:true,prices:{select:{priceType:true,price:true}}}});
           if(!item){say("SCREENSHOT_PRODUCT_NOT_FOUND");return;}
           const row=offers.find(o=>String(o.Ид)===item.guid);
-          if(!row){say("SCREENSHOT_PRODUCT_NOT_IN_RECEIVED_FILE");return;}
+          if(!row){
+          const prefix=offers.some(o=>String(o.Ид).split("#")[0]===item.guid);
+          say(prefix?"SCREENSHOT_PRODUCT_HAS_CHARACTERISTIC_ID":"SCREENSHOT_PRODUCT_NOT_IN_LATEST_FILE");
+          const files=new Set(candidates);
+          const walk=(dir,depth)=>{if(depth>3)return;for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,entry.name);if(entry.isSymbolicLink())continue;if(entry.isDirectory()&&!["import_files","images","node_modules"].includes(entry.name))walk(p,depth+1);else if(entry.isFile()&&/offers.*[.]xml$/i.test(entry.name))files.add(p);}};
+          for(const dir of new Set(candidates.map(p=>path.dirname(p))))walk(dir,0);
+          let found=false,fullFound=false,shape=false;
+          for(const p of files){
+          if(fs.statSync(p).size>150*1024*1024)continue;
+          const text=fs.readFileSync(p,"utf8");if(!text.includes(item.guid))continue;
+          const doc=new XMLParser({ignoreAttributes:false,attributeNamePrefix:""}).parse(text);
+          for(const pack of list(doc?.КоммерческаяИнформация?.ПакетПредложений)){
+          for(const offer of list(pack?.Предложения?.Предложение))if(String(offer.Ид).split("#")[0]===item.guid){found=true;if(String(pack.СодержитТолькоИзменения).toLowerCase()==="false")fullFound=true;if(String(offer.Ид)!==item.guid)shape=true;}
+          }
+          }
+          say(found?"SCREENSHOT_PRODUCT_FOUND_IN_OTHER_RECEIVED_FILE":"SCREENSHOT_PRODUCT_NOT_FOUND_IN_RETAINED_OFFER_FILES");
+          if(fullFound)say("SCREENSHOT_PRODUCT_FOUND_IN_FULL_EXCHANGE");
+          if(shape)say("SCREENSHOT_PRODUCT_USES_CHARACTERISTIC_ID");
+          say(String(packages?.СодержитТолькоИзменения).toLowerCase()==="false"?"LATEST_EXCHANGE_FULL":"LATEST_EXCHANGE_PARTIAL_OR_UNSPECIFIED");
+          return;
+          }
           const {pathToFileURL}=require("url");
           const {normalizePriceType}=await import(pathToFileURL(path.join(root,"scripts/price-types.js")).href);
           const expected={retail:160,discount:115,wholesale:95,big_wholesale:85,promo_retail:99,promo_wholesale:79,promo_big_wholesale:79};
