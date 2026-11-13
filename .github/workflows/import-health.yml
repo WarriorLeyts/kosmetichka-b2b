@@ -44,15 +44,84 @@ jobs:
           try{
           const item=await db.product.findFirst({where:{article:"ЦБ000000475"},select:{guid:true}});
           if(!item)throw Error("no_control_product");
-          const rows=await odata.odataGet("InformationRegister_ЦеныНоменклатуры/SliceLast()",{$filter:"Номенклатура_Key eq guid'"+item.guid+"'",$top:"100"});
-          if(!Array.isArray(rows)||!rows.length)throw Error("no_slice");
-          const keys=Object.keys(rows[0]).filter(k=>!k.startsWith("odata."));
+          const entity="InformationRegister_ЦеныНоменклатуры/SliceLast()";
+          const control=await odata.odataGet(entity,{$filter:"Номенклатура_Key eq guid'"+item.guid+"'",$top:"100"});
+          if(!Array.isArray(control)||!control.length)throw Error("no_control_slice");
+          const keys=Object.keys(control[0]).filter(k=>!k.startsWith("odata."));
           const typeKey=keys.find(k=>/Вид.*Цен.*_Key/.test(k));
-          const characteristic=keys.find(k=>/Характеристик.*_Key/.test(k));
-          say(typeKey?"PRICE_TYPE_FIELD_FOUND":"PRICE_TYPE_FIELD_NOT_FOUND");
-          say(rows.every(r=>r.Номенклатура_Key===item.guid)?"CONTROL_PRODUCT_SLICE_VALID":"CONTROL_PRODUCT_SLICE_INVALID");
-          if(characteristic)say(rows.every(r=>!r[characteristic]||r[characteristic]==="00000000-0000-0000-0000-000000000000")?"CONTROL_PRICES_WITHOUT_CHARACTERISTICS":"CONTROL_HAS_CHARACTERISTIC_PRICES");
-          say("PRICE_SLICE_AVAILABLE");
+          const charKey=keys.find(k=>/Характеристик.*_Key/.test(k));
+          const currencyKey=keys.find(k=>/Валют.*_Key/.test(k));
+          if(!typeKey||!keys.includes("Номенклатура_Key")||!keys.includes("Цена"))throw Error("unsupported_schema");
+          const empty="00000000-0000-0000-0000-000000000000";
+          const {normalizePriceType}=await import(pathToFileURL(path.join(root,"scripts/price-types.js")).href);
+          const allowed=["retail","discount","wholesale","big_wholesale","promo_retail","promo_wholesale","promo_big_wholesale"];
+          const labels=new Map([["розница","retail"],["скидка","discount"],["опт","wholesale"],["крупный опт","big_wholesale"],["акция розница","promo_retail"],["акция опт","promo_wholesale"],["акция крупный опт","promo_big_wholesale"]]);
+          const kinds=await odata.odataGet("Catalog_ВидыЦен",{$select:"Ref_Key,Description"});
+          const kindMap=new Map();
+          for(const kind of kinds){const label=String(kind.Description||"").trim().toLowerCase().replace(/ё/g,"е").replace(/ +/g," ");if(labels.has(label))kindMap.set(kind.Ref_Key,labels.get(label));}
+          if(kindMap.size!==7||new Set(kindMap.values()).size!==7)throw Error("tariffs_ambiguous");
+          let filter="("+[...kindMap.keys()].map(g=>typeKey+" eq guid'"+g+"'").join(" or ")+")";
+          if(charKey)filter+=" and "+charKey+" eq guid'"+empty+"'";
+          if(currencyKey){
+          const currencies=await odata.odataGet("Catalog_Валюты",{$select:"Ref_Key,Code,Description",$filter:"Code eq '643'"});
+          if(!Array.isArray(currencies)||currencies.length!==1)throw Error("currency_not_validated");
+          filter+=" and "+currencyKey+" eq guid'"+currencies[0].Ref_Key+"'";
+          }
+          phase="FULL_PRICE_READ";
+          const pinned=new Date(Date.now()+3*60*60*1000).toISOString().slice(0,19);
+          const slice="InformationRegister_ЦеныНоменклатуры/SliceLast(Period=datetime'"+pinned+"')";
+          const order=keys.filter(k=>k.endsWith("_Key")).sort().join(",");
+          const selected=[...new Set(["Номенклатура_Key",typeKey,"Цена","Period",...keys.filter(k=>k.endsWith("_Key"))])].join(",");
+          const sourceMap=new Map(),ambiguous=new Set();
+          let offset=0,complete=false;
+          const began=Date.now();
+          for(let page=0;page<200;page++){
+          if(Date.now()-began>8*60*1000)throw Error("audit_timeout");
+          const rows=await odata.odataGet(slice,{$filter:filter,$orderby:order,$select:selected,$top:"5000",$skip:String(offset)});
+          if(!Array.isArray(rows))throw Error("invalid_page");
+          if(!rows.length){complete=true;break;}
+          offset+=rows.length;
+          for(const row of rows){
+          const guid=row.Номенклатура_Key,t=kindMap.get(row[typeKey]),price=Number(row.Цена);
+          if(!guid||!t||!Number.isFinite(price)||price<0)throw Error("invalid_source_price");
+          if(charKey&&row[charKey]&&row[charKey]!==empty)throw Error("characteristic_filter_failed");
+          const key=guid+"|"+t,value=Math.round(price*100)/100;
+          const previous=sourceMap.get(key);
+          if(previous&&previous.price!==value)ambiguous.add(key);
+          else sourceMap.set(key,{productGuid:guid,priceType:t,price:value});
+          }
+          }
+          if(!complete)throw Error("incomplete_source");
+          const expected={retail:160,discount:115,wholesale:95,big_wholesale:85,promo_retail:99,promo_wholesale:79,promo_big_wholesale:79};
+          for(const [t,value] of Object.entries(expected)){const key=item.guid+"|"+t;if(ambiguous.has(key)||sourceMap.get(key)?.price!==value)throw Error("control_mismatch");}
+          say("FULL_CURRENT_1C_PRICE_SLICE_READ");
+          phase="CATALOG_COMPARE";
+          const products=await db.product.findMany({select:{id:true,guid:true,hidden:true,wholesaleStock:true}});
+          const productMap=new Map(products.map(p=>[p.guid,p]));
+          const existing=await db.productPrice.findMany({where:{priceType:{in:allowed}}});
+          const current=new Map(existing.map(p=>[p.productGuid+"|"+p.priceType,p]));
+          const proposed=[],allSource=[];
+          for(const [key,row] of sourceMap){
+          if(!productMap.has(row.productGuid)||ambiguous.has(key))continue;
+          allSource.push(row);
+          const before=current.get(key);
+          if(before?.price!==row.price)proposed.push({...row,before:before?{id:before.id,price:before.price,updatedAt:before.updatedAt}:null});
+          }
+          const changedProducts=new Set(proposed.map(p=>p.productGuid));
+          const promoGuids=new Set(allSource.filter(p=>p.priceType.startsWith("promo_")&&p.price>0).map(p=>p.productGuid));
+          const optGuids=new Set(allSource.filter(p=>["promo_wholesale","promo_big_wholesale"].includes(p.priceType)&&p.price>0).map(p=>p.productGuid));
+          const now=new Date().toISOString();
+          const backupDir=path.join(require("os").homedir(),".kosmetichka-private-backups");
+          fs.mkdirSync(backupDir,{recursive:true,mode:0o700});
+          const report={at:now,pinned,allowed,complete,counts:{catalog:products.length,sourceRows:allSource.length,changedProducts:changedProducts.size,changedPrices:proposed.length,ambiguous:ambiguous.size,promoProducts:promoGuids.size,wholesalePromoProducts:optGuids.size},proposed,allSource,before:existing,sourceDigest:require("crypto").createHash("sha256").update(JSON.stringify(allSource)).digest("hex")};
+          const auditPath=path.join(backupDir,"catalog-price-audit-"+Date.now()+".json");
+          fs.writeFileSync(auditPath,JSON.stringify(report),{mode:0o600,flag:"wx"});
+          const pointer=path.join(backupDir,"catalog-price-audit-latest.json");
+          const pending=pointer+".pending";fs.writeFileSync(pending,JSON.stringify({auditPath}),{mode:0o600});fs.renameSync(pending,pointer);
+          say("FULL_CATALOG_PRICE_AUDIT_COMPLETE");
+          say(proposed.length?"CATALOG_PRICE_DIFFERENCES_FOUND":"CATALOG_PRICES_ALREADY_MATCH_1C");
+          if(ambiguous.size)say("AMBIGUOUS_PRICE_DIMENSIONS_EXCLUDED");
+          say("PRIVATE_AUDIT_AND_PRICE_BACKUP_SAVED");
           }finally{await db.$disconnect();}
           })().catch(()=>{console.error("PRICE_IMPORT_RESULT: AUDIT_FAILED_"+phase);process.exitCode=1;});
           NODE
