@@ -61,7 +61,7 @@ jobs:
           for(const kind of kinds){const label=String(kind.Description||"").trim().toLowerCase().replace(/ё/g,"е").replace(/ +/g," ");if(labels.has(label))kindMap.set(kind.Ref_Key,labels.get(label));}
           if(kindMap.size!==7||new Set(kindMap.values()).size!==7)throw Error("tariffs_ambiguous");
           let filter="("+[...kindMap.keys()].map(g=>typeKey+" eq guid'"+g+"'").join(" or ")+")";
-          if(charKey)filter+=" and "+charKey+" eq guid'"+empty+"'";
+          // Characteristic prices are excluded after reading; avoid an unsupported 1C slice predicate.
           if(currencyKey){
           const currencies=await odata.odataGet("Catalog_Валюты",{$select:"Ref_Key,Code,Description",$filter:"Code eq '643'"});
           if(!Array.isArray(currencies)||currencies.length!==1)throw Error("currency_not_validated");
@@ -74,6 +74,8 @@ jobs:
           const selected=[...new Set(["Номенклатура_Key",typeKey,"Цена","Period",...keys.filter(k=>k.endsWith("_Key"))])].join(",");
           phase="PINNED_SLICE_CHECK";
           await odata.odataGet(slice,{$filter:"Номенклатура_Key eq guid'"+item.guid+"'",$top:"1"});
+          phase="SINGLE_TARIFF_FILTER_CHECK";
+          await odata.odataGet(slice,{$filter:typeKey+" eq guid'"+[...kindMap.keys()][0]+"'",$top:"1"});
           phase="TARIFF_FILTER_CHECK";
           await odata.odataGet(slice,{$filter:filter,$top:"1"});
           phase="SOURCE_SELECT_CHECK";
@@ -93,7 +95,7 @@ jobs:
           for(const row of rows){
           const guid=row.Номенклатура_Key,t=kindMap.get(row[typeKey]),price=Number(row.Цена);
           if(!guid||!t||!Number.isFinite(price)||price<0)throw Error("invalid_source_price");
-          if(charKey&&row[charKey]&&row[charKey]!==empty)throw Error("characteristic_filter_failed");
+          if(charKey&&row[charKey]&&row[charKey]!==empty)continue;
           const key=guid+"|"+t,value=Math.round(price*100)/100;
           const previous=sourceMap.get(key);
           if(previous&&previous.price!==value)ambiguous.add(key);
