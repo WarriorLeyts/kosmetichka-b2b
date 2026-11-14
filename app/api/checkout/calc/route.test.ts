@@ -65,7 +65,7 @@ describe("card purchase quotes", () => {
 
 describe("restored retail bonus spending", () => {
   it.each(["retail", "discount"])("shows bonus accrual and caps %s spending at the 1000 minimum", async (priceType) => {
-    db.customer.findUnique.mockResolvedValue({ id: 1, priceType, phone: "89991234567", loyaltyCard: "9000123" });
+    db.customer.findUnique.mockResolvedValue({ id: 1, priceType, phone: "89991234567", loyaltyCard: "9000123", maxmaRetail: true });
     db.product.findMany.mockResolvedValue([product(1, { retail: 1500, discount: 1500 })]);
     loyalty.calcLoyalty.mockResolvedValue({ promo: null, bonuses: { balance: 900, maxToApply: 900, applied: 0, collected: 45 } });
     const res = await POST(request({ items: [{ id: 1, quantity: 1 }] }));
@@ -73,7 +73,7 @@ describe("restored retail bonus spending", () => {
     expect(await res.json()).toMatchObject({ total: 1500, bonuses: { canSpend: true, balance: 900, maxToApply: 500, applied: 0, collected: 45 } });
   });
   it("recalculates excess spending after a promo code so the total remains at least 1000", async () => {
-    db.customer.findUnique.mockResolvedValue({ id: 1, priceType: "retail", phone: "89991234567", loyaltyCard: "2000123" });
+    db.customer.findUnique.mockResolvedValue({ id: 1, priceType: "retail", phone: "89991234567", loyaltyCard: "2000123", maxmaRetail: true });
     db.product.findMany.mockResolvedValue([product(1, { retail: 1500 })]);
     const bonus = { balance: 900, maxToApply: 900, collected: 30 };
     const promo = { applied: true, discount: 100, name: "Code" };
@@ -84,7 +84,7 @@ describe("restored retail bonus spending", () => {
     expect(loyalty.calcLoyalty).toHaveBeenLastCalledWith(expect.objectContaining({ applyBonuses: 400 }));
   });
   it("keeps wholesale bonus spending forbidden", async () => {
-    db.customer.findUnique.mockResolvedValue({ id: 1, priceType: "wholesale", loyaltyCard: "9000123" });
+    db.customer.findUnique.mockResolvedValue({ id: 1, priceType: "wholesale", loyaltyCard: "9000123", maxmaRetail: true });
     const res = await POST(request({ applyBonuses: 100 }));
     expect(res.status).toBe(400);
     expect(loyalty.calcLoyalty).not.toHaveBeenCalled();

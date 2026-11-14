@@ -1,4 +1,4 @@
-import { cardGivesDiscount } from "@/lib/discountCard";
+import { cardGivesDiscount, cardKind } from "@/lib/discountCard";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { needsRenewal, renewSession } from "@/lib/sessionRenew";
@@ -35,12 +35,13 @@ export async function GET() {
       roleRequestStatus: true,
       loyaltyCard: true,
       maxmaDiscount: true,
+      maxmaRetail: true,
     },
   });
   if (!customer) return NextResponse.json({ customer: null });
   // an active customer stays signed in (lib/sessionRenew.ts)
   if (needsRenewal(payload.iat)) await renewSession("auth_token", { id: customer.id, email: customer.email ?? customer.phone ?? String(customer.id), role: "customer" });
   // hasCard: the card gives the discount price (lib/discountCard.ts); cardLinked: any card is linked
-  const { loyaltyCard, maxmaDiscount, ...rest } = customer;
-  return NextResponse.json({ customer: { ...rest, hasCard: cardGivesDiscount({ loyaltyCard, maxmaDiscount }), cardLinked: Boolean(loyaltyCard?.trim()) } });
+  const { loyaltyCard, maxmaDiscount, maxmaRetail, ...rest } = customer;
+  return NextResponse.json({ customer: { ...rest, hasCard: cardGivesDiscount({ loyaltyCard, maxmaDiscount, maxmaRetail }), cardType: cardKind({ loyaltyCard, maxmaDiscount, maxmaRetail }), cardLinked: Boolean(loyaltyCard?.trim()) } });
 }
