@@ -18,7 +18,7 @@ describe("a customer's 1С group chosen in an order", () => {
 
   it("a new counterparty: in the folder, a buyer, phone for search and as contact info", () => {
     const b = counterpartyBody({ name: " Хеди Осмаева ", phone: "89332158999", parentRef: "folder", template: { СчетУчетаРасчетовСПокупателем_Key: "05652840-e0a9-11f0-ae3b-8cefff82df07", Ответственный_Key: "x" }, phoneKindRef: "kind" });
-    expect(b).toMatchObject({ Description: "Хеди Осмаева", НаименованиеПолное: "Хеди Осмаева", Parent_Key: "folder", Покупатель: true, ВидКонтрагента: "ФизическоеЛицо", НомерТелефонаДляПоиска: "89332158999" });
+    expect(b).toMatchObject({ Description: "Хеди Осмаева 89332158999", НаименованиеПолное: "Хеди Осмаева 89332158999", Parent_Key: "folder", Покупатель: true, ВидКонтрагента: "ФизическоеЛицо", НомерТелефонаДляПоиска: "89332158999", ОсновныеСведения: "Хеди Осмаева\n89332158999" });
     expect(b.СчетУчетаРасчетовСПокупателем_Key).toBe("05652840-e0a9-11f0-ae3b-8cefff82df07");
     expect(b).not.toHaveProperty("Ответственный_Key");
     expect(b.КонтактнаяИнформация?.[0]).toMatchObject({ Тип: "Телефон", Вид_Key: "kind", Представление: "89332158999", НомерТелефона: "89332158999" });
