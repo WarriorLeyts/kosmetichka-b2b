@@ -29,7 +29,8 @@ export async function groupFolders(env = process.env) {
  * @returns {Record<string, any>}
  */
 export function counterpartyBody({ name, phone, parentRef, template = {}, phoneKindRef = null }) {
-  const nm = String(name || "").trim() || phone;
+  const contact = String(name || "").trim().replace(/\s+/g, " ");
+  const nm = [contact, phone].filter(Boolean).join(" ");
   const body = {
     Description: nm,
     НаименованиеПолное: nm,
@@ -41,7 +42,7 @@ export function counterpartyBody({ name, phone, parentRef, template = {}, phoneK
     ВестиРасчетыПоЗаказам: true,
     ВестиУчетОплатыПоСчетам: true,
     ВестиРасчетыПоДокументам: true,
-    ОсновныеСведения: phone ? `${nm}\n${phone}` : nm,
+    ОсновныеСведения: [contact, phone].filter(Boolean).join("\n"),
   };
   for (const k of ACCOUNTS) if (isGuid(template[k])) body[k] = template[k];
   if (phone) {
@@ -95,7 +96,7 @@ export async function assignCounterparty(customer, group, env = process.env) {
     // a site buyer of the template order: his accounts and the phone kind are what a buyer needs
     const sample = isGuid(tpl.Контрагент_Key) ? await odataGet(`${CP}(guid'${tpl.Контрагент_Key}')`, {}, env) : {};
     const phoneKind = (sample.КонтактнаяИнформация || []).find((r) => r.Тип === "Телефон")?.Вид_Key ?? null;
-    const body = counterpartyBody({ name: customer.companyName || customer.name, phone, parentRef, template: sample, phoneKindRef: phoneKind });
+    const body = counterpartyBody({ name: customer.name?.trim() || customer.companyName, phone, parentRef, template: sample, phoneKindRef: phoneKind });
     ref = (await odataCreate(CP, body, env)).Ref_Key;
     created = true;
   }
