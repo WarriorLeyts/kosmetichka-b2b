@@ -12,7 +12,7 @@ describe("1С counterparty selected by linked card", () => {
       if (p.$filter?.includes("Ref_Key")) return [{ Ref_Key: OWNER, DeletionMark: false, IsFolder: false }];
       return [];
     });
-    expect(await findCounterparty(null, "89990000000", {}, "900123")).toBe(OWNER);
+    expect(await findCounterparty(null, "89990000000", process.env, "900123")).toBe(OWNER);
     expect(io.odataGet.mock.calls.some(([, p]) => p.$filter?.includes("НомерТелефонаДляПоиска"))).toBe(false);
     expect(io.odataCreate).not.toHaveBeenCalled();
   });
@@ -20,19 +20,19 @@ describe("1С counterparty selected by linked card", () => {
     io.odataGet.mockImplementation(async (entity: string) => entity === "Catalog_ДисконтныеКарты"
       ? [OWNER, SECOND].map((id) => ({ ВладелецКарты_Key: id, DeletionMark: false }))
       : [OWNER, SECOND].map((id) => ({ Ref_Key: id, DeletionMark: false, IsFolder: false })));
-    await expect(findCardCounterparty("900123", {})).rejects.toThrow("нескольким контрагентам");
+    await expect(findCardCounterparty("900123", process.env)).rejects.toThrow("нескольким контрагентам");
   });
   it("does not use a deleted card, a deleted owner or an owner folder", async () => {
     io.odataGet.mockResolvedValueOnce([{ ВладелецКарты_Key: OWNER, DeletionMark: true }]);
-    expect(await findCardCounterparty("900123", {})).toBeNull();
+    expect(await findCardCounterparty("900123", process.env)).toBeNull();
     for (const flags of [{ DeletionMark: true, IsFolder: false }, { DeletionMark: false, IsFolder: true }]) {
       io.odataGet.mockResolvedValueOnce([{ ВладелецКарты_Key: OWNER, DeletionMark: false }]).mockResolvedValueOnce([{ Ref_Key: OWNER, ...flags }]);
-      expect(await findCardCounterparty("900123", {})).toBeNull();
+      expect(await findCardCounterparty("900123", process.env)).toBeNull();
     }
   });
   it("keeps a staff-assigned valid counterparty id as the first choice", async () => {
     io.odataGet.mockResolvedValue([{ Ref_Key: SECOND, DeletionMark: false }]);
-    expect(await findCounterparty(SECOND, "89990000000", {}, "900123")).toBe(SECOND);
+    expect(await findCounterparty(SECOND, "89990000000", process.env, "900123")).toBe(SECOND);
     expect(io.odataGet).toHaveBeenCalledTimes(1);
   });
 });
