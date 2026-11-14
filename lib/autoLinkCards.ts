@@ -56,7 +56,12 @@ export async function syncPhoneCards() {
       if (c.loyaltyCard === card.number && c.maxmaDiscount === card.discount) continue;
       const other = await prisma.customer.findFirst({ where: { loyaltyCard: card.number, NOT: { id: c.id } }, select: { id: true } });
       if (other) continue;
-      await prisma.customer.updateMany({ where: { id: c.id, phone: c.phone, loyaltyCard: c.loyaltyCard }, data: { loyaltyCard: card.number, maxmaDiscount: card.discount } });
+      try {
+        await prisma.customer.updateMany({ where: { id: c.id, phone: c.phone, loyaltyCard: c.loyaltyCard }, data: { loyaltyCard: card.number, maxmaDiscount: card.discount } });
+      } catch (e) {
+        if ((e as { code?: string }).code !== "P2002") throw e;
+        // Another account linked this card after our check. The database decides ownership atomically.
+      }
     }
   } catch (e) { console.warn("[auto-link-cards]", e instanceof Error ? e.message : e); }
   finally { busy = false; }

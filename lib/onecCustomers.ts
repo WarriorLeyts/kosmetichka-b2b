@@ -23,6 +23,7 @@ export async function assignCustomerGroup(customerId: number, group: string): Pr
   if (!odataReady()) return { ok: false, error: "Нет связи с 1С (OData не настроен)" };
   const customer = await prisma.customer.findUnique({ where: { id: customerId } });
   if (!customer) return { ok: false, error: "Клиент не найден" };
+  if (!["wholesale", "big_wholesale"].includes(customer.priceType)) return { ok: false, error: "Розничные клиенты не создаются в 1С. Заказ отправляется существующему контрагенту по карте или телефону либо на «Покупатель с сайта»." };
   let r: { ref: string; created: boolean; moved: boolean; contractCreated: boolean };
   try {
     r = await assignCounterparty(customer, g);

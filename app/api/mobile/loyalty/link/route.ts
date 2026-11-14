@@ -21,6 +21,8 @@ const codeLimiter = new RateLimiter({ windowMs: 15 * 60_000, max: 10 });
 
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 const bad = (error: string, status = 400) => NextResponse.json({ error }, { status });
+const occupied = () => NextResponse.json({ error: "Эта карта уже привязана к другому аккаунту. Войдите в тот аккаунт или обратитесь к менеджеру.", code: "card_already_linked" }, { status: 409 });
+const claimedByAnother = async (card: string, id: number) => Boolean(await prisma.customer.findFirst({ where: { loyaltyCard: card, NOT: { id } }, select: { id: true } }));
 
 export async function POST(request: Request) {
   const id = await currentCustomerId();
@@ -49,7 +51,13 @@ export async function POST(request: Request) {
       return bad("Программа лояльности недоступна, попробуйте позже", 502);
     }
     if (!card) return bad("Карта не найдена", 404);
-    await prisma.customer.update({ where: { id }, data: { loyaltyCard: card.number, maxmaDiscount: false } });
+    if (await claimedByAnother(card.number, id)) return occupied();
+    try {
+      await prisma.customer.update({ where: { id }, data: { loyaltyCard: card.number, maxmaDiscount: false } });
+    } catch (e) {
+      if ((e as { code?: string }).code === "P2002") return occupied();
+      throw e;
+    }
     // the discount price: «900…» or the card's owner in 1С «Максма Скидка» (checked now, refreshed every 6 h)
     await refreshMaxmaDiscount(id).catch(() => false);
     return NextResponse.json({ card: publicCard(card) });
@@ -69,6 +77,7 @@ export async function POST(request: Request) {
     let card = phone ? await findCard({ phoneNumber: phone }) : null;
     if (!card) card = await findCard({ card: cardNo });
     if (!card) return bad("Карта не найдена. Проверьте номер или оформите карту в магазине.", 404);
+    if (await claimedByAnother(card.number, id)) return occupied();
     const sent = await sendCode(card.number);
     pending.set(id, { card: card.number, hash: sha(sent.code.replace(/\D/g, "")), expiresAt: sent.expiresAt, attempts: 0 });
     return NextResponse.json({ sent: true, phone: maskPhone(card.phone) });

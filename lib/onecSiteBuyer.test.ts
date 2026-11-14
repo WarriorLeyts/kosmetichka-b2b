@@ -10,6 +10,7 @@ let cardOwner = false;
 
 vi.mock("../scripts/onec-odata.js", () => ({
   odataCreate: vi.fn(),
+  odataAll: vi.fn(async () => []),
   odataGet: vi.fn(async (entity: string, params: { $filter?: string } = {}) => {
     const f = params.$filter || "";
     if (entity === "Document_ЗаказПокупателя" && f.startsWith("Date gt")) return [{ Ref_Key: TPL, Number: "СА-000100", Date: "2026-11-01T10:00:00", DeletionMark: false }];
@@ -24,7 +25,7 @@ vi.mock("../scripts/onec-odata.js", () => ({
   }),
 }));
 
-import { prepareOrder } from "../scripts/onec-orders.js";
+import { prepareOrder, clearCounterpartyPhoneCache } from "../scripts/onec-orders.js";
 
 const order = (customer: Record<string, unknown>) => ({
   id: 300,
@@ -35,7 +36,7 @@ const order = (customer: Record<string, unknown>) => ({
 });
 
 describe("not in 1С: the common «Покупатель с сайта»", () => {
-  beforeEach(() => { buyerExists = true; cardOwner = false; });
+  beforeEach(() => { buyerExists = true; cardOwner = false; clearCounterpartyPhoneCache(); });
 
   it("no card → the order goes to «Покупатель с сайта», name and phone first in the comment", async () => {
     const r = await prepareOrder(order({ loyaltyCard: null }));
@@ -55,12 +56,18 @@ describe("not in 1С: the common «Покупатель с сайта»", () => 
     expect(r.body.КонтактноеЛицо).toBe("Аминат");
   });
 
-  it("a card holder must be in 1С: the order waits", async () => {
+  it("a missing card owner and no phone match uses the shared buyer too", async () => {
     const r = await prepareOrder(order({ loyaltyCard: "9000000000001" }));
-    expect(r.siteBuyer).toBe(false);
-    expect(r.problems[0]).toMatch(/с картой не найден в 1С/);
+    expect(r.siteBuyer).toBe(true);
+    expect(r.problems).toEqual([]);
+    expect(r.body.Контрагент_Key).toBe(BUYER);
   });
 
+  it("wholesale customers do not fall back to the retail shared buyer", async () => {
+    const r = await prepareOrder(order({ priceType: "wholesale", loyaltyCard: null }));
+    expect(r.siteBuyer).toBe(false);
+    expect(r.problems[0]).toMatch(/Оптовый покупатель/);
+  });
   it("no «Покупатель с сайта» in 1С → a clear problem", async () => {
     buyerExists = false;
     const r = await prepareOrder(order({ loyaltyCard: null }));

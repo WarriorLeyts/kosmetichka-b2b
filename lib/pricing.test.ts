@@ -195,14 +195,13 @@ describe("cartPriceTier", () => {
 
 // ── minimum order ─────────────────────────────────────────────────────────────
 
-describe("minOrderFor / amountUntilMinOrder — no minimum any more", () => {
-  it("is 0 for everybody", () => {
-    for (const t of [null, { priceType: "retail" }, { priceType: "discount" }, { priceType: "wholesale" }, { priceType: "big_wholesale" }]) {
-      expect(minOrderFor(t)).toBe(0);
-      expect(amountUntilMinOrder([makeItem({ quantity: 1 })], t)).toBe(0);
-    }
-    expect(WHOLESALE_MIN_ORDER).toBe(5_000);
-    expect(BIG_WHOLESALE_MIN_ORDER).toBe(50_000);
+describe("retail minimum", () => {
+  it("keeps wholesale unrestricted and retail at 1000", () => {
+    for (const type of ["retail", "discount"]) expect(minOrderFor({ priceType: type })).toBe(1000);
+    for (const customer of [null, { priceType: "wholesale" }, { priceType: "big_wholesale" }]) expect(minOrderFor(customer)).toBe(0);
+    expect(amountUntilMinOrder([makeItem({ quantity: 1 })], { priceType: "retail" })).toBe(900);
+    expect(minOrderFor({ priceType: "retail" }, [{ quantity: 1, cardRegistration: { fullName: "Тест" } }])).toBe(0);
+    expect(WHOLESALE_MIN_ORDER).toBe(5000);
+    expect(BIG_WHOLESALE_MIN_ORDER).toBe(50000);
   });
 });
-
