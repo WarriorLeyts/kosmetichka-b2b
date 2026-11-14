@@ -100,9 +100,9 @@ describe("Светлая пятница + ОПТ", () => {
   it("retail and discount-card buyers get Акция Розница", async () => {
     db.customer.findUnique.mockResolvedValue(customer("retail"));
     db.product.findMany.mockResolvedValue([product(1, { retail: 490, discount: 440, promo_retail: 399 })]);
-    const r = await order({ items: [{ id: 1, quantity: 1 }] });
+    const r = await order({ items: [{ id: 1, quantity: 3 }] });
     expect(r.status).toBe(200);
-    expect(created?.data.total).toBe(399);
+    expect(created?.data.total).toBe(1197);
     expect(created?.data.items.create[0].price).toBe(399);
   });
 
@@ -163,9 +163,10 @@ describe("«Опт»: the price by the order sum (no minimum)", () => {
     expect(created?.data.items.create[0].price).toBe(671);
   });
 
-  it("retail has no minimum", async () => {
+  it("retail orders below 1000 are rejected", async () => {
     db.customer.findUnique.mockResolvedValue(customer("retail"));
-    expect((await order({ items: [{ id: 2, quantity: 1 }] })).status).toBe(200);
+    expect((await order({ items: [{ id: 2, quantity: 1 }] })).status).toBe(400);
+    expect(created).toBeNull();
   });
 });
 
@@ -181,15 +182,15 @@ describe("delivery: «Заберу в магазине» or an address (not requ
 
   it("pickup: no address on the order", async () => {
     db.customer.findUnique.mockResolvedValue(customer("retail"));
-    expect((await order({ items: [{ id: 2, quantity: 1 }], pickup: true, address: "что-то" })).status).toBe(200);
+    expect((await order({ items: [{ id: 2, quantity: 3 }], pickup: true, address: "что-то" })).status).toBe(200);
     expect((created as unknown as C).data).toMatchObject({ deliveryType: "pickup", deliveryAddress: null });
   });
 
   it("delivery: the given address, else the profile one", async () => {
     db.customer.findUnique.mockResolvedValue(customer("retail"));
-    await order({ items: [{ id: 2, quantity: 1 }], address: "  Грозный,  ул. Мира 3 " });
+    await order({ items: [{ id: 2, quantity: 3 }], address: "  Грозный,  ул. Мира 3 " });
     expect((created as unknown as C).data.deliveryAddress).toBe("Грозный, ул. Мира 3");
-    await order({ items: [{ id: 2, quantity: 1 }] });
+    await order({ items: [{ id: 2, quantity: 3 }] });
     expect((created as unknown as C).data.deliveryAddress).toBe("Махачкала, ул. Ленина, 1");
   });
 });
@@ -206,19 +207,19 @@ describe("MAXMA bonuses", () => {
     db.customer.findUnique.mockResolvedValue(customer(type, { loyaltyCard: "9000123" }));
     maxma.calcLoyalty.mockResolvedValue({ promo: null, bonuses: { balance: 500, maxToApply: 300, applied: 100, collected: 40 }, bonusLines: [100] });
     maxma.setLoyaltyOrderQuery.mockResolvedValue({ applied: 100, collected: 40, bonusRows: [100] });
-    const r = await order({ items: [{ id: 1, quantity: 1 }], applyBonuses: 100 });
+    const r = await order({ items: [{ id: 1, quantity: 2 }], applyBonuses: 100 });
     expect(r.status).toBe(200);
     expect(maxma.setLoyaltyOrderQuery).toHaveBeenCalledTimes(1);
     expect(created?.data.bonusesApplied).toBe(100);
     // «Розница» with a linked card is priced at «Скидка по карте» (lib/siteMode.ts pricingCustomer)
-    expect((await r.json()).total).toBe(1005 - 100);
+    expect((await r.json()).total).toBe(2010 - 100);
   });
 
   it("bonus spending switched off → 400, nothing reserved; retail with a card still at the discount price", async () => {
     flags.bonusOff = true;
     try {
       db.customer.findUnique.mockResolvedValue(customer("retail", { loyaltyCard: "9000123" }));
-      const r = await order({ items: [{ id: 1, quantity: 1 }], applyBonuses: 100 });
+      const r = await order({ items: [{ id: 1, quantity: 2 }], applyBonuses: 100 });
       expect(r.status).toBe(400);
       expect((await r.json()).error).toBe("Списание бонусов отключено");
       expect(maxma.setLoyaltyOrderQuery).not.toHaveBeenCalled();
@@ -239,7 +240,7 @@ describe("MAXMA bonuses", () => {
     db.customer.findUnique.mockResolvedValue(customer("retail", { loyaltyCard: "9000123" }));
     maxma.calcLoyalty.mockResolvedValue({ promo: null, bonuses: { balance: 500, maxToApply: 300, applied: 100, collected: 40 }, bonusLines: [100] });
     maxma.setLoyaltyOrderQuery.mockRejectedValue(new Error("timeout"));
-    const r = await order({ items: [{ id: 1, quantity: 1 }], applyBonuses: 100 });
+    const r = await order({ items: [{ id: 1, quantity: 2 }], applyBonuses: 100 });
     expect(r.status).toBe(409);
     expect((await r.json()).code).toBe("bonuses_unavailable");
     expect(queue.enqueueMaxmaTask).toHaveBeenCalledWith(501, "cancel", null, { run: false });
@@ -330,4 +331,21 @@ describe("paid loyalty card", () => {
     expect(created?.data.items.create[0]).not.toHaveProperty("discount");
     expect(created?.data.items.create[1]).toHaveProperty("discount", 100);
   });
+});
+
+describe("retail minimum with card-only exception", () => {
+ it.each(["retail", "discount"])("%s rejects 999 and accepts exactly 1000", async (priceType) => {
+  db.customer.findUnique.mockResolvedValue(customer(priceType));
+  db.product.findMany.mockResolvedValue([product(1, { retail: 999, discount: 999 })]);
+  let response = await order({ items: [{ id: 1, quantity: 1 }] });
+  expect(response.status).toBe(400); expect(await response.json()).toHaveProperty("code", "minimum_order"); expect(created).toBeNull();
+  db.product.findMany.mockResolvedValue([product(1, { retail: 1000, discount: 1000 })]);
+  response = await order({ items: [{ id: 1, quantity: 1 }] }); expect(response.status).toBe(200);
+ });
+ it("a valid promo cannot bypass the final 1000 minimum", async () => {
+  db.customer.findUnique.mockResolvedValue(customer("retail"));
+  maxma.calcLoyalty.mockResolvedValue({ promo: { applied: true, discount: 200, lines: [200] }, bonuses: null, bonusLines: [0] });
+  const response = await order({ items: [{ id: 1, quantity: 1 }], promocode: "CODE" });
+  expect(response.status).toBe(400); expect(await response.json()).toHaveProperty("code", "minimum_order"); expect(created).toBeNull();
+ });
 });

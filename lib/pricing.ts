@@ -153,17 +153,20 @@ export function nextPriceTier(
   return null;
 }
 
-/** Минимальной суммы заказа больше нет: маленький заказ клиента «Опт» идёт по скидочной цене. */
-export function minOrderFor(_customer: { priceType?: string | null } | null): number {
-  return 0;
+/** Retail orders start at 1 000 ₽; buying just one loyalty card is allowed at 990 ₽. */
+export const RETAIL_MIN_ORDER = 1000;
+export function minOrderFor(customer: { priceType?: string | null } | null, items: { quantity?: number | string; cardRegistration?: unknown }[] = []): number {
+  if (!["retail", "discount"].includes(customer?.priceType ?? "")) return 0;
+  if (items.length === 1 && items[0].cardRegistration && Number(items[0].quantity) === 1) return 0;
+  return RETAIL_MIN_ORDER;
 }
 
-/** Сколько не хватает до минимальной суммы — всегда 0 (минимума нет, см. cartPriceTier). */
+/** Remaining merchandise amount; actual checkout also applies promo codes server-side. */
 export function amountUntilMinOrder(
-  _cart: any[],
-  _customer: { priceType?: string | null } | null
+  cart: any[],
+  customer: { priceType?: string | null } | null
 ): number {
-  return 0;
+  return Math.max(0, minOrderFor(customer, cart) - calculateCart(cart, customer).total);
 }
 
 export type CartPricing = {

@@ -10,6 +10,7 @@ import { verifyCustomerToken } from "@/lib/customerAuth";
 import { sendMail } from "@/lib/mail";
 import { orderCreationLimiter } from "@/lib/rateLimit";
 import { priceOrder, loyaltyLines, type PricedLine } from "@/lib/orderPricing";
+import { minOrderFor } from "@/lib/pricing";
 import type { PriceType, CartPricing } from "@/lib/pricing";
 import {
   BONUS_SPEND_FORBIDDEN,
@@ -195,13 +196,16 @@ async function createOrder(request: Request) {
   }));
   const linesTotal = orderItems.reduce((s, it) => s + it.total, 0);
   const promoDiscount = pricing.discount + (promo?.discount ?? 0);
+  const finalTotal = Math.round((linesTotal - promoDiscount - bonusesApplied) * 100) / 100;
+  const minimum = minOrderFor(customer, items);
+  if (finalTotal < minimum) return NextResponse.json({ error: `Минимальная сумма розничного заказа — ${minimum.toLocaleString("ru-RU")} ₽. Добавьте товары ещё на ${Math.ceil(minimum - finalTotal).toLocaleString("ru-RU")} ₽.`, code: "minimum_order", minimum, total: finalTotal }, { status: 400 });
   const orderData = {
     customerId: Number(payload.id),
     status: "pending",
     priceType: customer.priceType,
     priceTier: tier,
     ...delivery,
-    total: Math.round((linesTotal - promoDiscount - bonusesApplied) * 100) / 100,
+    total: finalTotal,
     comment: orderComment || null,
     ...(promo ? { promoCode } : {}),
     ...(promoDiscount > 0 ? { discount: promoDiscount } : {}),
