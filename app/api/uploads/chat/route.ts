@@ -31,7 +31,7 @@ async function getAnyUser(): Promise<"staff" | number | null> {
 }
 
 const MB = 1024 * 1024;
-const LIMIT = { img: 15 * MB, video: 50 * MB, file: 25 * MB } as const;
+const LIMIT = { img: 15 * MB, video: 50 * MB, audio: 10 * MB, file: 25 * MB } as const;
 /** a customer uploads at most this much a day (audit P2-06: the server disk must not fill up); staff — no quota */
 const CUSTOMER_DAY = 300 * MB;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -70,10 +70,11 @@ export async function POST(request: Request) {
   const t = typeForExt(ext);
   if (!t) {
     return NextResponse.json(
-      { error: "Такой файл нельзя отправить. Можно фото, видео, PDF, документы Word/Excel, архивы." },
+      { error: "Такой файл нельзя отправить. Можно фото, видео, аудио, PDF, документы Word/Excel, архивы." },
       { status: 400 }
     );
   }
+  if (file.size === 0) return NextResponse.json({ error: "Файл пустой — запишите сообщение ещё раз" }, { status: 400 });
   if (file.size > LIMIT[t.kind]) {
     return NextResponse.json({ error: `Файл слишком большой (макс. ${LIMIT[t.kind] / MB} МБ)` }, { status: 400 });
   }

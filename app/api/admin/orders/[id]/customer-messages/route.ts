@@ -91,6 +91,7 @@ export async function POST(
     try {
       const parsed = JSON.parse(displayText);
       if (parsed?._t === "img") displayText = "📷 Менеджер прислал фото";
+      if (parsed?._t === "audio") displayText = "🎤 Менеджер прислал голосовое сообщение";
       else if (parsed?._t === "video") displayText = "🎬 Менеджер прислал видео";
       else if (parsed?._t === "file") displayText = `📎 Менеджер прислал файл: ${parsed.name ?? ""}`;
       else if (parsed?._t === "product")

@@ -121,6 +121,6 @@ export function customerChatTextAllowed(text: string): boolean {
   if (!o || typeof o !== "object" || Array.isArray(o)) return true;
   const card = o as { _t?: unknown; url?: unknown };
   if (card._t === undefined) return true;
-  if (card._t !== "img" && card._t !== "video" && card._t !== "file") return false;
+  if (card._t !== "img" && card._t !== "video" && card._t !== "audio" && card._t !== "file") return false;
   return typeof card.url === "string" && /^\/api\/uploads\/chat\/[\w.-]+$/.test(card.url);
 }

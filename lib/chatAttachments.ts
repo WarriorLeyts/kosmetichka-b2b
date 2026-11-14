@@ -5,13 +5,13 @@
  * Shared by the site, the admin panel and the mobile app.
  */
 
-export type ChatUploadKind = "img" | "video" | "file";
+export type ChatUploadKind = "img" | "video" | "audio" | "file";
 
 export type ChatUpload = { url: string; kind: ChatUploadKind; name: string; size: number; mime: string };
 
 /** what the chat upload accepts (used for <input accept> as well) */
 export const CHAT_ACCEPT =
-  "image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.odt,.ods,.ppt,.pptx,.zip,.rar,.7z";
+  "image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.odt,.ods,.ppt,.pptx,.zip,.rar,.7z";
 
 /** message text for an uploaded attachment */
 export function attachmentMessage(u: ChatUpload): string {
@@ -35,6 +35,7 @@ export function attachmentPreview(text: string): string | null {
     if (o?._t === "product") return `📦 ${o.name ?? "Товар"}`;
     if (o?._t === "img") return "📷 Фото";
     if (o?._t === "video") return "🎬 Видео";
+    if (o?._t === "audio") return "🎤 Голосовое сообщение";
     if (o?._t === "file") return `📎 ${o.name ?? "Файл"}`;
   } catch {}
   return null;
