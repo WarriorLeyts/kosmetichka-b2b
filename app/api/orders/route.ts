@@ -1,3 +1,5 @@
+import { cardOrderComment, cardRegistration, isCardProduct } from "@/lib/cardPurchase";
+import { maxmaPhone } from "@/lib/maxma";
 import { cookies } from "next/headers";
 import { bonusSpendOff, pricingCustomer } from "@/lib/siteMode";
 import { NextResponse } from "next/server";
@@ -141,9 +143,14 @@ async function createOrder(request: Request) {
   // v2/calculate-purchase, like the shop's cash desks). A linked card also gets the accrual.
   const promoCode = typeof promocode === "string" ? promocode.trim().slice(0, 64) : "";
   const hasCard = Boolean(customer.loyaltyCard?.trim());
-  const netLines = loyaltyLines(lines, pricing);
+  const cardLine = lines.find((l) => isCardProduct({ name: l.productName, guid: l.sku }));
+  const registration = cardLine ? cardRegistration(items.find((i: { id: number }) => Number(i.id) === cardLine.productId)?.cardRegistration) : null;
+  const cardPhone = registration ? maxmaPhone(customer.phone ?? "") : null;
+  if (registration && !cardPhone) return NextResponse.json({ error: "Для оформления карты укажите российский телефон в профиле" }, { status: 400 });
+  const orderComment = [typeof comment === "string" ? comment.slice(0, 2000) : "", registration ? cardOrderComment(registration, cardPhone!) : ""].filter(Boolean).join("\n");
+  const netLines = loyaltyLines(lines, pricing).filter((l) => !isCardProduct({ name: l.productName, guid: l.sku }));
   let calc: LoyaltyResult | null = null;
-  if (promoCode || hasCard) {
+  if ((promoCode || hasCard) && netLines.length) {
     try {
       if (!maxmaConfigured()) throw new MaxmaError("not_configured", 503);
       calc = await calcLoyalty({ customer, lines: netLines, promocode: promoCode || null, applyBonuses });
@@ -175,12 +182,15 @@ async function createOrder(request: Request) {
   // MAXMA may allow fewer bonuses than asked (maxToApply / balance): its amount is used
   const bonusesApplied = calc?.bonuses?.applied ?? 0;
   const bonusesCollected = calc?.bonuses?.collected ?? 0;
-  const bonusLines = calc?.bonusLines ?? lines.map(() => 0);
+  let loyaltyIndex = 0;
+  const mapped = lines.map((line) => isCardProduct({ name: line.productName, guid: line.sku }) ? -1 : loyaltyIndex++);
+  const bonusLines = lines.map((_, i) => mapped[i] < 0 ? 0 : calc?.bonusLines?.[mapped[i]] ?? 0);
+  const promoLines = lines.map((_, i) => mapped[i] < 0 ? 0 : promo?.lines?.[mapped[i]] ?? 0);
 
   const orderItems = lines.map(({ sku: _sku, ...line }, i) => ({ // eslint-disable-line @typescript-eslint/no-unused-vars
     ...line,
-    ...((pricing.discounts[i] ?? 0) + (promo?.lines[i] ?? 0) > 0
-      ? { discount: (pricing.discounts[i] ?? 0) + (promo?.lines[i] ?? 0) } : {}),
+    ...((pricing.discounts[i] ?? 0) + (promoLines[i] ?? 0) > 0
+      ? { discount: (pricing.discounts[i] ?? 0) + (promoLines[i] ?? 0) } : {}),
     ...(bonusLines[i] > 0 ? { bonusDiscount: bonusLines[i] } : {}),
   }));
   const linesTotal = orderItems.reduce((s, it) => s + it.total, 0);
@@ -192,7 +202,7 @@ async function createOrder(request: Request) {
     priceTier: tier,
     ...delivery,
     total: Math.round((linesTotal - promoDiscount - bonusesApplied) * 100) / 100,
-    comment: comment || null,
+    comment: orderComment || null,
     ...(promo ? { promoCode } : {}),
     ...(promoDiscount > 0 ? { discount: promoDiscount } : {}),
     ...(bonusesApplied > 0 ? { bonusesApplied } : {}),

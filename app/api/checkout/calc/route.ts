@@ -1,3 +1,4 @@
+import { isCardProduct } from "@/lib/cardPurchase";
 import { cookies } from "next/headers";
 import { bonusSpendOff, pricingCustomer } from "@/lib/siteMode";
 import { NextResponse } from "next/server";
@@ -5,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { checkoutCalcLimiter } from "@/lib/rateLimit";
 import { priceOrder, loyaltyLines } from "@/lib/orderPricing";
-import { BONUS_SPEND_FORBIDDEN, calcLoyalty, canSpendBonuses, maxmaConfigured, type LoyaltyResult } from "@/lib/maxma";
+import { BONUS_SPEND_FORBIDDEN, calcLoyalty, canSpendBonuses, maxmaConfigured, maxmaPhone, type LoyaltyResult } from "@/lib/maxma";
 import { PROMO_NOT_FOR_ITEMS } from "@/lib/promo";
 
 // POST /api/checkout/calc { items: [{ id, quantity, variantName? }], promocode?, applyBonuses? }
@@ -52,8 +53,9 @@ export async function POST(request: Request) {
   let pricing;
   try {
     const priced = await priceOrder(pricingCustomer(customer, request), items);
+    if (priced.lines.some((l) => isCardProduct({ name: l.productName, guid: l.sku })) && !maxmaPhone(customer.phone ?? "")) throw new Error("Для оформления карты укажите российский телефон в профиле");
     pricing = priced.pricing;
-    lines = loyaltyLines(priced.lines, pricing);
+    lines = loyaltyLines(priced.lines, pricing).filter((l) => !isCardProduct({ name: l.productName, guid: l.sku }));
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Не удалось рассчитать корзину" }, { status: 400 });
   }
@@ -68,7 +70,7 @@ export async function POST(request: Request) {
   const hasCard = Boolean(customer.loyaltyCard?.trim());
 
   // Nothing to ask MAXMA about
-  if (!promocode && !hasCard) {
+  if ((!promocode && !hasCard) || !lines.length) {
     return NextResponse.json({ ...automatic, subtotal, promo: null, bonuses: null, total: pricing.total });
   }
   if (!maxmaConfigured()) {

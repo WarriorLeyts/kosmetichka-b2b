@@ -1,3 +1,4 @@
+import { isCardProduct } from "./cardPurchase";
 import { prisma } from "@/lib/prisma";
 import {
   calcLoyalty,
@@ -212,7 +213,7 @@ export async function recalcOrderLoyalty(orderId: number): Promise<LoyaltyRecalc
       price: i.price,
       quantity: i.quantity,
       total: i.total,
-    }));
+    })).filter((line) => !isCardProduct({ name: line.productName, guid: line.sku }));
 
     let calc: LoyaltyResult | null = null;
     if (lines.length > 0) {
@@ -238,9 +239,10 @@ export async function recalcOrderLoyalty(orderId: number): Promise<LoyaltyRecalc
       else if (calc.promo.discount <= 0) reason = PROMO_NOT_FOR_ITEMS;
     }
     const promoApplied = Boolean(code) && !reason;
-    const zeros = items.map(() => 0);
-    const promoLines = promoApplied && calc?.promo ? calc.promo.lines : zeros;
-    const bonusLines = calc ? calc.bonusLines : zeros;
+    let loyaltyIdx = 0;
+    const mapped = items.map((item) => isCardProduct({ name: item.productName, guid: guidById.get(item.productId) }) ? -1 : loyaltyIdx++);
+    const promoLines = items.map((_, idx) => mapped[idx] < 0 || !promoApplied ? 0 : calc?.promo?.lines[mapped[idx]] ?? 0);
+    const bonusLines = items.map((_, idx) => mapped[idx] < 0 ? 0 : calc?.bonusLines[mapped[idx]] ?? 0);
     const discount = sum(promoLines);
     const applied = sum(bonusLines);
     const collected = calc?.bonuses?.collected ?? 0;

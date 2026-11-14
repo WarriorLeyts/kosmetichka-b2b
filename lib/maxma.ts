@@ -73,7 +73,7 @@ function cashbackFor(level: string | null): string | null {
 export function maxmaPhone(value: string): string | null {
   const d = String(value).replace(/\D/g, "");
   if (d.length === 11 && (d.startsWith("7") || d.startsWith("8"))) return "+7" + d.slice(1);
-  if (d.length === 10 && d.startsWith("9")) return "+7" + d;
+  if (d.length === 10) return "+7" + d;
   return null;
 }
 

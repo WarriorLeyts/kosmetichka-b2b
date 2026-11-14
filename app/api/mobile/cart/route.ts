@@ -20,6 +20,10 @@ function cleanLine(raw: unknown): Record<string, unknown> | null {
   for (const k of ["stock", "minOrderQty", "retailPrice", "discountPrice", "wholesalePrice", "bigWholesalePrice", "variantId"]) if (typeof l[k] === "number" && Number.isFinite(l[k])) out[k] = l[k];
   if (Array.isArray(l.images)) out.images = (l.images as unknown[]).slice(0, 1).filter((x) => x && typeof x === "object" && typeof (x as { path?: unknown }).path === "string").map((x) => ({ path: String((x as { path: string }).path).slice(0, 300) }));
   if (l.brand && typeof l.brand === "object" && typeof (l.brand as { name?: unknown }).name === "string") out.brand = { name: String((l.brand as { name: string }).name).slice(0, 200) };
+  if (l.cardRegistration && typeof l.cardRegistration === "object") {
+    const r = l.cardRegistration as Record<string, unknown>;
+    if (typeof r.fullName === "string" && typeof r.birthDate === "string") out.cardRegistration = { fullName: r.fullName.slice(0, 200), birthDate: r.birthDate.slice(0, 10) };
+  }
   return { ...out, ...cleanPromoSnapshot(l) };
 }
 

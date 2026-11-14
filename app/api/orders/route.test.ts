@@ -273,3 +273,61 @@ describe("promo code", () => {
   });
 });
 
+
+describe("paid loyalty card", () => {
+  const registration = { fullName: "Иванова Анна Сергеевна", birthDate: "15.03.1995" };
+  const card = { ...product(3, { retail: 1000, discount: 1 }), name: "Карта Косметичка", stock: 0 };
+  beforeEach(() => {
+    db.customer.findUnique.mockResolvedValue(customer("retail"));
+    db.product.findMany.mockResolvedValue([blush, card]);
+  });
+  it("card + goods: prices goods at discount, card at fixed 990, stores cashier data from the profile phone", async () => {
+    const r = await order({ items: [{ id: 1, quantity: 2 }, { id: 3, quantity: 1, cardRegistration: registration }], comment: "Позвонить", phone: "+79999999999" });
+    expect(r.status).toBe(200);
+    expect(created?.data.total).toBe(1005 * 2 + 990);
+    expect(created?.data.items.create[1]).toMatchObject({ price: 990, quantity: 1 });
+    const data = created?.data as unknown as { comment: string; priceTier: string };
+    expect(data.priceTier).toBe("discount");
+    expect(data.comment).toContain("Позвонить");
+    expect(data.comment).toContain(registration.fullName);
+    expect(data.comment).toContain("15.03.1995");
+    expect(data.comment).toContain("+79001234567");
+    expect(data.comment).not.toContain("79999999999");
+    expect(db.customer.update).not.toHaveBeenCalled();
+  });
+  it("card-only order is 990 without a stock requirement or loyalty call", async () => {
+    expect((await order({ items: [{ id: 3, quantity: 1, cardRegistration: registration }] })).status).toBe(200);
+    expect(created?.data.total).toBe(990);
+    expect(maxma.calcLoyalty).not.toHaveBeenCalled();
+  });
+  it("removing the card restores retail prices without changing the account", async () => {
+    expect((await order({ items: [{ id: 1, quantity: 2 }] })).status).toBe(200);
+    expect(created?.data.total).toBe(1120 * 2);
+  });
+  it.each([
+    [{ id: 3, quantity: 2, cardRegistration: registration }],
+    [{ id: 3, quantity: 1 }],
+    [{ id: 3, quantity: 1, cardRegistration: { ...registration, birthDate: "31.02.1995" } }],
+    [{ id: 1, quantity: 1, cardRegistration: registration }],
+    [{ id: 3, quantity: 1, cardRegistration: registration }, { id: 3, quantity: 1, cardRegistration: registration }],
+  ])("rejects invalid/forged card order %j", async (...items) => {
+    expect((await order({ items })).status).toBe(400);
+    expect(created).toBeNull();
+  });
+  it("existing discount card / wholesale customers cannot order another card", async () => {
+    for (const who of [customer("retail", { loyaltyCard: "900123" }), customer("wholesale")]) {
+      db.customer.findUnique.mockResolvedValue(who);
+      expect((await order({ items: [{ id: 3, quantity: 1, cardRegistration: registration }] })).status).toBe(400);
+    }
+  });
+  it("card receives no promotional discount even when it comes before the goods", async () => {
+    maxma.calcLoyalty.mockResolvedValue({ promo: { applied: true, discount: 100, lines: [100] }, bonuses: null });
+    const r = await order({ items: [{ id: 3, quantity: 1, cardRegistration: registration }, { id: 1, quantity: 1 }], promocode: "PROMO" });
+    expect(r.status).toBe(200);
+    expect(maxma.calcLoyalty.mock.calls[0][0].lines).toHaveLength(1);
+    expect(maxma.calcLoyalty.mock.calls[0][0].lines[0].productName).toBe("Товар 1");
+    expect(created?.data.total).toBe(990 + 1005 - 100);
+    expect(created?.data.items.create[0]).not.toHaveProperty("discount");
+    expect(created?.data.items.create[1]).toHaveProperty("discount", 100);
+  });
+});
