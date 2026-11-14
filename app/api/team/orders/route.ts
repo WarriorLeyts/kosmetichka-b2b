@@ -24,7 +24,7 @@ function businessDayRange(dateStr: string) {
   };
 }
 
-// GET /api/team/orders?date=&customer=&status=&page= — same list as app/admin/orders/page.tsx
+// GET /api/team/orders?date=&customer=&status=&customerType=&page=
 export async function GET(request: NextRequest) {
   const auth = await requireStaff(ADMIN_MANAGER);
   if (!auth.ok) return auth.response;
@@ -32,6 +32,19 @@ export async function GET(request: NextRequest) {
   const mine = orderScopeWhere(await staffScope(auth.session));
 
   const sp = request.nextUrl.searchParams;
+  const customerType = sp.get("customerType") || "";
+  if (customerType && auth.session.role !== "admin") {
+    return NextResponse.json({ error: "Фильтр типа клиента доступен только администратору" }, { status: 403 });
+  }
+  if (customerType && !["retail", "wholesale", "big_wholesale"].includes(customerType)) {
+    return NextResponse.json({ error: "Неверный тип клиента" }, { status: 400 });
+  }
+  // The order keeps its original customer type even if the profile changes later.
+  // A discount card is still retail. Older orders without a snapshot use the profile.
+  const types = customerType === "retail" ? ["retail", "discount"] : [customerType];
+  const typeWhere: Prisma.OrderWhereInput = customerType
+    ? { OR: [{ priceType: { in: types } }, { priceType: null, customer: { priceType: { in: types } } }] }
+    : {};
 
   // Same business-day logic as the page (cutoff 18:30 server time)
   const now = new Date();
@@ -53,7 +66,7 @@ export async function GET(request: NextRequest) {
 
   // the summary tiles: the chosen day (or all dates) and the search, every status
   const scope: Prisma.OrderWhereInput = {
-    AND: [mine],
+    AND: [mine, typeWhere],
     ...(selectedDate ? { createdAt: businessDayRange(selectedDate) } : {}),
     customer: customerSearch
       ? {
@@ -97,7 +110,7 @@ export async function GET(request: NextRequest) {
     // Status chips — always for the current business day
     prisma.order.groupBy({
       by: ["status"],
-      where: { ...mine, createdAt: businessDayRange(businessToday) },
+      where: { AND: [mine, typeWhere], createdAt: businessDayRange(businessToday) },
       _count: { id: true },
     }),
     prisma.order.groupBy({ by: ["status"], where: scope, _count: { id: true }, _sum: { total: true } }),
@@ -146,6 +159,7 @@ export async function GET(request: NextRequest) {
       businessToday,
       customer: customerSearch,
       status: selectedStatus,
+      customerType,
     },
     // Tiles above the list: count and sum per status for the chosen day (or all dates) and search
     counts: {
