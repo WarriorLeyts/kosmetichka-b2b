@@ -54,8 +54,7 @@ export async function POST(request: NextRequest) {
       ]);
       if (moved.count === 0) return false;
       await prisma.orderStatusLog.create({ data: { orderId: order.id, fromStatus: order.status, toStatus, userId: user.id as number } });
-      // back to the manager: the assembly is checked again (as the single status change does)
-      if (earlier) await prisma.orderItemCheck.deleteMany({ where: { orderItem: { orderId: order.id } } });
+      // As with a single status change, keep checks of unchanged order lines.
       return true;
     });
     (ok ? updated : skipped).push(order.id);

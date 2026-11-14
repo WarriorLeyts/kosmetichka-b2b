@@ -25,6 +25,20 @@ const call = (status: string) =>
 beforeEach(() => vi.clearAllMocks());
 
 describe("status → payment", () => {
+  it.each(["consultation", "payment", "pending"])("%s → assembly preserves completed checks and resets only confirmation", async (status) => {
+    db.order.findUnique.mockResolvedValue({ id: 3, status, confirmRequestedAt: new Date(), customerConfirmed: true });
+    expect((await call("assembly")).status).toBe(200);
+    expect(db.orderItemCheck.deleteMany).not.toHaveBeenCalled();
+    expect(db.order.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "assembly", customerConfirmed: false, confirmRequestedAt: null }) }));
+  });
+
+  it("returning to pending and then assembly does not wipe checks either", async () => {
+    db.order.findUnique.mockResolvedValue({ id: 3, status: "assembly" });
+    expect((await call("pending")).status).toBe(200);
+    db.order.findUnique.mockResolvedValue({ id: 3, status: "pending" });
+    expect((await call("assembly")).status).toBe(200);
+    expect(db.orderItemCheck.deleteMany).not.toHaveBeenCalled();
+  });
   it("blocked while waiting for the customer's confirmation", async () => {
     db.order.findUnique.mockResolvedValue({ id: 3, status: "consultation", confirmRequestedAt: new Date() });
     const r = await call("payment");

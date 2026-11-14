@@ -67,6 +67,9 @@ export async function applyPickChecks(orderId: number, actor: { id: number; name
     prisma.orderItemPhoto.deleteMany({ where: { orderItemId: { in: removeIds } } }),
     prisma.orderItem.deleteMany({ where: { id: { in: removeIds } } }),
     ...updates.map((p) => prisma.orderItem.update({ where: { id: p.item.id }, data: { quantity: p.qty, total: p.qty * p.item.price } })),
+    // The remaining quantity has already been collected. The removed/short/spoiled
+    // pieces are recorded in order history below, not applied again on the next pass.
+    ...updates.map((p) => prisma.orderItemCheck.update({ where: { orderItemId: p.item.id }, data: { status: "ok", availableQty: null } })),
   ]);
 
   // «Опт»: the sum fell below 5 000 / 50 000 ₽ → every line at the new price
