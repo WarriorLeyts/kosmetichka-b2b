@@ -6,6 +6,7 @@ const CONTRACT = "33333333-3333-3333-3333-333333333333";
 const ORG = "44444444-4444-4444-4444-444444444444";
 const PROD = "55555555-5555-5555-5555-555555555555";
 let buyerExists = true;
+let cardOwner = false;
 
 vi.mock("../scripts/onec-odata.js", () => ({
   odataCreate: vi.fn(),
@@ -13,6 +14,8 @@ vi.mock("../scripts/onec-odata.js", () => ({
     const f = params.$filter || "";
     if (entity === "Document_ЗаказПокупателя" && f.startsWith("Date gt")) return [{ Ref_Key: TPL, Number: "СА-000100", Date: "2026-11-01T10:00:00", DeletionMark: false }];
     if (entity.startsWith("Document_ЗаказПокупателя(guid")) return { Ref_Key: TPL, Организация_Key: ORG, Запасы: [{}] };
+    if (entity === "Catalog_ДисконтныеКарты") return cardOwner ? [{ ВладелецКарты_Key: BUYER, DeletionMark: false }] : [];
+    if (entity === "Catalog_Контрагенты" && f.includes("Ref_Key eq guid")) return cardOwner ? [{ Ref_Key: BUYER, DeletionMark: false, IsFolder: false }] : [];
     if (entity === "Catalog_Контрагенты" && f.includes("НомерТелефонаДляПоиска")) return [];
     if (entity === "Catalog_Контрагенты" && f.includes("Description eq")) return buyerExists ? [{ Ref_Key: BUYER, DeletionMark: false, IsFolder: false }] : [];
     if (entity === "Catalog_ДоговорыКонтрагентов") return [{ Ref_Key: CONTRACT, Description: "Основной договор", ВидДоговора: "СПокупателем", Организация_Key: ORG, Недействителен: false, DeletionMark: false }];
@@ -32,7 +35,7 @@ const order = (customer: Record<string, unknown>) => ({
 });
 
 describe("not in 1С: the common «Покупатель с сайта»", () => {
-  beforeEach(() => void (buyerExists = true));
+  beforeEach(() => { buyerExists = true; cardOwner = false; });
 
   it("no card → the order goes to «Покупатель с сайта», name and phone first in the comment", async () => {
     const r = await prepareOrder(order({ loyaltyCard: null }));
@@ -40,6 +43,15 @@ describe("not in 1С: the common «Покупатель с сайта»", () => 
     expect(r.siteBuyer).toBe(true);
     expect(r.body.Контрагент_Key).toBe(BUYER);
     expect(r.body.Комментарий).toBe("Клиент: Аминат, 89001112233 | Позвонить");
+    expect(r.body.КонтактноеЛицо).toBe("Аминат");
+  });
+
+  it("uses the linked card's owner when the account phone has no counterparty match", async () => {
+    cardOwner = true;
+    const r = await prepareOrder(order({ loyaltyCard: "9000000000001" }));
+    expect(r.problems).toEqual([]);
+    expect(r.siteBuyer).toBe(false);
+    expect(r.body.Контрагент_Key).toBe(BUYER);
     expect(r.body.КонтактноеЛицо).toBe("Аминат");
   });
 
