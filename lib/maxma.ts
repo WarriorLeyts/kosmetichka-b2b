@@ -11,7 +11,8 @@ export class MaxmaError extends Error {
     public readonly status: number,
     public readonly notFound = false,
     /** What happened, for logs / admin («v2/set-order: HTTP 400 {...}»); never shown to customers */
-    public readonly detail?: string
+    public readonly detail?: string,
+    public readonly apiCode?: number
   ) {
     super(message);
   }
@@ -45,7 +46,8 @@ async function call<T>(method: string, body: unknown): Promise<T> {
     const text = JSON.stringify(data ?? "");
     const notFound = res.status === 404 || /not.?found|не найден|ClientNotFound|CardNotFound/i.test(text);
     if (!notFound) console.error(`[maxma] ${method}`, res.status, text.slice(0, 300));
-    throw new MaxmaError(notFound ? "not_found" : "unavailable", notFound ? 404 : 502, notFound, `${method}: HTTP ${res.status} ${text.slice(0, 200)}`);
+    const apiCode = Number(data?.error?.code ?? data?.errorCode) || undefined;
+    throw new MaxmaError(notFound ? "not_found" : "unavailable", notFound ? 404 : 502, notFound, `${method}: HTTP ${res.status} ${text.slice(0, 200)}`, apiCode);
   }
   return data as T;
 }
@@ -225,6 +227,52 @@ export async function confirmOrder(orderId: number) {
 
 export async function cancelOrder(orderId: number) {
   await call("cancel-order", { orderId: `site-${orderId}` });
+}
+
+type LoyaltyHistoryEntry = { orderId?: string; txid?: string; orderStatus?: string; shop?: { code: string; name: string }; rows?: { sku: string; qty: number }[]; OPERATION_REFUNDED?: { returnId?: string }; OPERATION_CANCELLED?: { returnId?: string } };
+async function lookupLoyaltyHistory(client: Exclude<ClientRef, null>, method: string, matches: (entry: LoyaltyHistoryEntry) => boolean): Promise<LoyaltyHistoryEntry | null> {
+  for (let offset = 0; ; offset += 100) {
+    const data = await call<{ history: LoyaltyHistoryEntry[]; pagination: { total: number } }>(method, { client, pagination: { limit: 100, offset } });
+    if (!Array.isArray(data.history)) throw new MaxmaError("unavailable", 502, false, `${method}: missing history`);
+    const found = data.history.find(matches);
+    if (found) return found;
+    if (data.history.length < 100 || offset + data.history.length >= (data.pagination?.total ?? Infinity)) return null;
+  }
+}
+
+export async function maxmaOrderStatus(orderId: number, client: Exclude<ClientRef, null>) {
+  return (await lookupLoyaltyHistory(client, "get-purchase-history", p => p.orderId === `site-${orderId}` || p.txid === `site-${orderId}`))?.orderStatus ?? null;
+}
+
+/** /cancel-order cannot undo a confirmed order (MAXMA error 32). Use /apply-return instead.
+ * Official protocol: https://api.maxma.com/openapi.yaml — applyReturnRequest.
+ * The purchase's original rows come from MAXMA, so later catalogue/card/price changes cannot alter the return.
+ */
+export async function reverseProcessedOrder(orderId: number, client: Exclude<ClientRef, null>, executedAt: Date) {
+  const purchaseId = `site-${orderId}`;
+  const refundId = `${purchaseId}-refusal`;
+  const purchase = await lookupLoyaltyHistory(client, "get-purchase-history", (p) => p.orderId === purchaseId || p.txid === purchaseId);
+  if (purchase?.orderStatus === "STATUS_CANCELLED") return;
+  if (purchase?.orderStatus !== "STATUS_CONFIRMED") throw new MaxmaError("unavailable", 502, false, `Cannot verify processed order ${purchaseId}`);
+  const alreadyReturned = () => lookupLoyaltyHistory(client, "get-bonus-history", (e) => e.OPERATION_REFUNDED?.returnId === refundId || e.OPERATION_CANCELLED?.returnId === refundId);
+  if (await alreadyReturned()) return;
+  const counts = new Map<string, number>();
+  for (const row of purchase.rows ?? []) {
+    if (!row.sku || !Number.isFinite(row.qty) || row.qty <= 0) throw new MaxmaError("unavailable", 502, false, `Invalid original rows for ${purchaseId}`);
+    counts.set(row.sku, (counts.get(row.sku) ?? 0) + row.qty);
+  }
+  if (!counts.size || !purchase.shop?.code || !purchase.shop.name) throw new MaxmaError("unavailable", 502, false, `Missing original rows/shop for ${purchaseId}`);
+  try {
+    const result = await call<{ confirmation?: { refundId?: string } }>("apply-return", { transaction: { id: refundId, executedAt: executedAt.toISOString(), purchaseId,
+      shopCode: purchase.shop.code, shopName: purchase.shop.name,
+      items: [...counts].map(([sku, itemCount]) => ({ sku, itemCount })),
+    } });
+    if (result.confirmation?.refundId !== refundId) throw new MaxmaError("unavailable", 502, false, `Missing refund confirmation ${refundId}`);
+  } catch (e) {
+    // A lost response may follow a successful refund. Verify its stable ID before retrying.
+    if (await alreadyReturned()) return;
+    throw e;
+  }
 }
 
 // ── Bonuses + promo code in one calculation (v2/calculate-purchase) ─────────
