@@ -1,4 +1,4 @@
-import { BONUS_GROUP, DISCOUNT_GROUP, type CardKind } from "./discountCardRule";
+import { BONUS_GROUP, DISCOUNT_GROUP_REF, type CardKind } from "./discountCardRule";
 export type OneCCardOwner = { Ref_Key: string; Parent_Key?: string; Description?: string; IsFolder?: boolean; DeletionMark?: boolean; НомерТелефонаДляПоиска?: string };
 export type OneCLoyaltyCard = { КодКартыШтрихкод?: string; ВладелецКарты_Key?: string; DeletionMark?: boolean };
 /** Resolve a folder and its ancestors, independent of barcode prefixes. */
@@ -12,7 +12,7 @@ function kindFromIndex(owner: OneCCardOwner, byId: Map<string, OneCCardOwner>): 
     seen.add(ref); const folder = byId.get(ref);
     if (!folder?.IsFolder) break;
     const name = folder.Description?.trim().toLowerCase();
-    if (name === DISCOUNT_GROUP.toLowerCase()) return "discount";
+    if (ref === DISCOUNT_GROUP_REF) return "discount";
     if (name === BONUS_GROUP.toLowerCase()) return "bonus";
     ref = folder.Parent_Key;
   }
