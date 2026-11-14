@@ -52,3 +52,13 @@ describe("checkout campaign totals", () => {
     expect(lines[1].total).toBe(20000);
   });
 });
+
+describe("card purchase quotes", () => {
+  it("agrees with order creation, including the fixed 990 price rather than catalogue prices", async () => {
+    db.customer.findUnique.mockResolvedValue({ id: 1, priceType: "retail", phone: "89991234567", loyaltyCard: null });
+    db.product.findMany.mockResolvedValue([product(1, { retail: 1200, discount: 1000 }), { ...product(3, { retail: 1, discount: 500 }), name: "Карта Косметичка", stock: 0 }]);
+    const r = await POST(request({ items: [{ id: 1, quantity: 2 }, { id: 3, quantity: 1, cardRegistration: { fullName: "Иванова Анна", birthDate: "01.01.1990" } }] }));
+    expect(r.status).toBe(200);
+    expect(await r.json()).toMatchObject({ subtotal: 2990, total: 2990, priceTier: "discount" });
+  });
+});

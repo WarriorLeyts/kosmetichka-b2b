@@ -37,6 +37,8 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { startDiscountCards } = await import("./lib/discountCard");
     startDiscountCards();
+    const { startPhoneCards } = await import("./lib/autoLinkCards");
+    startPhoneCards();
   }
   // All barcodes from 1С: the full check every hour (after each exchange — the products of the exchange)
   if (process.env.NEXT_RUNTIME === "nodejs") {

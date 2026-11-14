@@ -1,3 +1,4 @@
+import { CARD_PRICE, cardRegistration, isCardProduct } from "./cardPurchase";
 import { prisma } from "@/lib/prisma";
 import { calculateCart, priceFor, type PriceType, type CartPricing } from "@/lib/pricing";
 import { customerStock, withFlatPrices } from "@/lib/utils";
@@ -9,6 +10,7 @@ export const MAX_LINE_QTY = 9999;
 export type OrderItemInput = {
   id: number | string;
   quantity: number | string;
+  cardRegistration?: { fullName: string; birthDate: string };
   variantName?: string | null;
   variantImageUrl?: string | null;
 };
@@ -64,18 +66,28 @@ export async function priceOrder(
   });
 
   const productById = new Map(products.map((product) => [product.id, product]));
+  const cardProducts = products.filter(isCardProduct);
+  const cardInputs = items.filter((i) => cardProducts.some((p) => p.id === Number(i.id)));
+  if (items.some((i) => i.cardRegistration && !cardInputs.includes(i))) throw new Error("Данные карты переданы для другого товара");
+  if (cardInputs.length) {
+    if (customer.priceType !== "retail") throw new Error("Оформление карты доступно розничным клиентам без скидочной карты");
+    if (cardInputs.length !== 1 || Number(cardInputs[0].quantity) !== 1 || cardInputs[0].variantName) throw new Error("В заказ можно добавить только одну карту");
+    cardRegistration(cardInputs[0].cardRegistration);
+  }
+
 
   // Build flat product representations for effectivePriceType calculation
   const cartForPricing = items.map((item) => {
     const product = productById.get(Number(item.id));
     return {
       ...withFlatPrices(product ?? { prices: [] }),
+      ...(product && isCardProduct(product) ? { retailPrice: CARD_PRICE, discountPrice: CARD_PRICE, wholesalePrice: CARD_PRICE, bigWholesalePrice: CARD_PRICE, regularPrices: { retailPrice: CARD_PRICE, discountPrice: CARD_PRICE, wholesalePrice: CARD_PRICE, bigWholesalePrice: CARD_PRICE }, promoRetailPrice: null, promoWholesalePrice: null, promoBigWholesalePrice: null } : {}),
       quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
     };
   });
 
   // «Опт»: the price by the order sum (5 000 / 50 000 ₽); the other types: the customer's own
-  const pricing = calculateCart(cartForPricing, customer, now);
+  const pricing = calculateCart(cartForPricing, cardInputs.length ? { ...customer, priceType: "discount" } : customer, now);
   const appliedPriceType = pricing.tier;
 
   const qtyByProduct = new Map<number, number>();
@@ -92,7 +104,7 @@ export async function priceOrder(
     }
 
     // as in priceFor(): a missing / zero price falls back — big wholesale → wholesale → retail
-    const price = priceFor(cartForPricing[index], appliedPriceType, now);
+    const price = isCardProduct(product) ? CARD_PRICE : priceFor(cartForPricing[index], appliedPriceType, now);
     if (price <= 0) {
       throw new Error(`Цена для товара «${product.name}» не найдена. Обратитесь к менеджеру.`);
     }
@@ -111,7 +123,7 @@ export async function priceOrder(
     // warehouse (Product.wholesaleStock), the others — the stock; the same product in several lines
     // (variants) counts together. Unknown stock (null) — not checked, as before.
     const available = customerStock(product.stock, customer.priceType, product.wholesaleStock);
-    if (available != null) {
+    if (!isCardProduct(product) && available != null) {
       const have = Math.max(0, Math.floor(Number(available)));
       if (have <= 0) throw new Error(`«${product.name}» нет в наличии. Удалите этот товар из корзины.`);
       const wanted = qtyByProduct.get(product.id) ?? quantity;
@@ -121,7 +133,7 @@ export async function priceOrder(
     // MOQ check
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const minQty = (product as any).minOrderQty ?? 1;
-    if (quantity < minQty) {
+    if (!isCardProduct(product) && quantity < minQty) {
       throw new Error(`Минимальное количество для «${product.name}» — ${minQty} шт.`);
     }
 
