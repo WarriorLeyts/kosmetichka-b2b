@@ -1,4 +1,5 @@
 import { cardGivesDiscount } from "@/lib/discountCardRule";
+import { bonusesOn } from "@/lib/maxma";
 /** Retail customers («Розница») can register on the website too (was wholesale-only). */
 export const SITE_RETAIL_ENABLED = true;
 
@@ -8,7 +9,7 @@ export const SITE_RETAIL_ENABLED = true;
  * website, now in the phone apps too (APPS_TOO). Turn off: set to false (and the app's src/siteMode.ts).
  */
 export const SITE_RETAIL_DISCOUNT = true;
-/** the same rules in the phone apps (card → discount price, no bonus spending) */
+/** the same card pricing rules in the phone apps */
 export const APPS_TOO = true;
 
 /** The request comes from the website (the browser build of the app sends this header). */
@@ -26,7 +27,7 @@ export function pricingCustomer<T extends { priceType?: string | null; loyaltyCa
   return SITE_RETAIL_DISCOUNT && here && customer.priceType === "retail" && card ? { ...customer, priceType: "discount" } : customer;
 }
 
-/** Bonuses are collected but not spent (owner's decision) — on the website, and with APPS_TOO in the apps. */
-export function bonusSpendOff(request: Request): boolean {
-  return APPS_TOO || fromSite(request);
+/** One switch controls bonus accrual and spending on the website and in the apps. */
+export function bonusSpendOff(_request: Request): boolean {
+  return !bonusesOn();
 }

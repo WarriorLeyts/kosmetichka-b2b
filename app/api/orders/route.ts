@@ -119,7 +119,7 @@ async function createOrder(request: Request) {
   if (applyBonuses > 0 && !canSpendBonuses(customer)) {
     return NextResponse.json({ error: BONUS_SPEND_FORBIDDEN }, { status: 400 });
   }
-  // bonuses are collected, never spent (owner's decision): the website, and the apps too
+  // Honour the shared switch for bonus accrual and spending.
   if (applyBonuses > 0 && bonusSpendOff(request)) {
     return NextResponse.json({ error: "Списание бонусов отключено" }, { status: 400 });
   }
@@ -246,7 +246,7 @@ async function createOrder(request: Request) {
             lineTotals: orderItems.map((it) => it.total),
             promoLines: orderItems.map((it) => it.discount ?? 0),
           });
-          if (!adopted) {
+          if (!adopted || linesTotal - promoDiscount - adopted.applied < minimum) {
             reservation.failed = true;
             throw new Error(`MAXMA reserved ${r.applied} bonuses, order spends ${bonusesApplied}: can't adopt`);
           }
