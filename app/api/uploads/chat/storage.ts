@@ -4,9 +4,14 @@ import { DATA_ROOT } from "@/lib/dataDir";
 /** chat attachments live in data/ (linked from outside the build, survives redeploys) */
 export const CHAT_DIR = path.join(DATA_ROOT, "chat");
 
-type T = { kind: "img" | "video" | "file"; mime: string };
+type T = { kind: "img" | "video" | "audio" | "file"; mime: string };
 
 const TYPES: Record<string, T> = {
+  m4a: { kind: "audio", mime: "audio/mp4" },
+  weba: { kind: "audio", mime: "audio/webm" },
+  mp3: { kind: "audio", mime: "audio/mpeg" },
+  ogg: { kind: "audio", mime: "audio/ogg" },
+  wav: { kind: "audio", mime: "audio/wav" },
   jpg: { kind: "img", mime: "image/jpeg" },
   jpeg: { kind: "img", mime: "image/jpeg" },
   png: { kind: "img", mime: "image/png" },

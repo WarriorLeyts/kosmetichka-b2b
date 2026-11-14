@@ -38,6 +38,7 @@ export function chatPreview(text: string): string {
         return `🛒 Клиент просит добавить: ${name || "товар"}${m.quantity ? ` × ${m.quantity}` : ""}`;
       }
       if (m?._t === "img") return "📷 Фото";
+      if (m?._t === "audio") return "🎤 Голосовое сообщение";
       if (m?._t === "video") return "🎬 Видео";
       if (m?._t === "file") return `📎 Файл${m.name ? `: ${m.name}` : ""}`;
       if (m?._t) return "Сообщение";
