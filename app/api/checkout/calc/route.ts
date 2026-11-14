@@ -8,6 +8,7 @@ import { checkoutCalcLimiter } from "@/lib/rateLimit";
 import { priceOrder, loyaltyLines } from "@/lib/orderPricing";
 import { BONUS_SPEND_FORBIDDEN, calcLoyalty, canSpendBonuses, maxmaConfigured, maxmaPhone, type LoyaltyResult } from "@/lib/maxma";
 import { PROMO_NOT_FOR_ITEMS } from "@/lib/promo";
+import { minOrderFor } from "@/lib/pricing";
 
 // POST /api/checkout/calc { items: [{ id, quantity, variantName? }], promocode?, applyBonuses? }
 // Prices the cart like POST /api/orders and asks MAXMA (one v2/calculate-purchase) for the
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
   const customer = await prisma.customer.findUnique({ where: { id: Number(payload.id) } });
   if (!customer) return NextResponse.json({ error: "Ошибка авторизации" }, { status: 401 });
 
-  // bonuses are collected, never spent: the website, and the apps too
+  // Linked retail bonus and discount cards may accrue and spend bonuses when enabled.
   const canSpend = canSpendBonuses(customer) && !bonusSpendOff(request);
   if (applyBonuses > 0 && !canSpend) return NextResponse.json({ error: BONUS_SPEND_FORBIDDEN }, { status: 400 });
 
@@ -88,6 +89,10 @@ export async function POST(request: Request) {
   let calc: LoyaltyResult;
   try {
     calc = await calcLoyalty({ customer, lines, promocode, applyBonuses, withBalance: true });
+    const room = Math.max(0, Math.floor(pricing.total - (calc.promo?.applied ? calc.promo.discount : 0) - minOrderFor(customer, items)));
+    if ((calc.bonuses?.applied ?? 0) > room) {
+      calc = await calcLoyalty({ customer, lines, promocode, applyBonuses: room, withBalance: true });
+    }
   } catch {
     return NextResponse.json({
       ...automatic,
@@ -110,8 +115,9 @@ export async function POST(request: Request) {
     }
   }
   const b = calc.bonuses;
+  const room = Math.max(0, Math.floor(pricing.total - (promo?.discount ?? 0) - minOrderFor(customer, items)));
   const bonuses = b
-    ? { canSpend, balance: b.balance, maxToApply: b.maxToApply, applied: b.applied, collected: b.collected }
+    ? { canSpend, balance: b.balance, maxToApply: Math.min(b.maxToApply, room), applied: b.applied, collected: b.collected }
     : null;
   return NextResponse.json({
     ...automatic,

@@ -12,9 +12,9 @@ describe("website: retail customers with a card pay the discount price", () => {
     expect(pricingCustomer({ id: 1, priceType: "retail", loyaltyCard: "9000123" }, req(true))).toEqual({ id: 1, priceType: "discount", loyaltyCard: "9000123" });
     expect(pricingCustomer({ id: 1, priceType: "retail", loyaltyCard: "9000123" }, req(false)).priceType).toBe("discount");
   });
-  it("no bonus spending on the website or in the apps", () => {
-    expect(bonusSpendOff(req(true))).toBe(true);
-    expect(bonusSpendOff(req(false))).toBe(true);
+  it("bonus spending is enabled on the website and in the apps when MAXMA_BONUSES is on", () => {
+    expect(bonusSpendOff(req(true))).toBe(false);
+    expect(bonusSpendOff(req(false))).toBe(false);
   });
   it("no card (or unlinked) → retail prices", () => {
     expect(pricingCustomer({ priceType: "retail", loyaltyCard: null }, req(true)).priceType).toBe("retail");
@@ -37,6 +37,8 @@ describe("bonuses switched off (no MAXMA_BONUSES in .env)", () => {
       expect(bonusPriceType("retail")).toBe(false);
       expect(bonusPriceType("discount")).toBe(false);
       expect(canSpendBonuses({ priceType: "retail", loyaltyCard: "9000123" })).toBe(false);
+      expect(bonusSpendOff(req(true))).toBe(true);
+      expect(bonusSpendOff(req(false))).toBe(true);
     } finally {
       process.env.MAXMA_BONUSES = was;
     }

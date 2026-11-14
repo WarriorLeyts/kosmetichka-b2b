@@ -349,3 +349,15 @@ describe("retail minimum with card-only exception", () => {
   expect(response.status).toBe(400); expect(await response.json()).toHaveProperty("code", "minimum_order"); expect(created).toBeNull();
  });
 });
+
+describe("retail minimum after bonus reservation", () => {
+  it("cancels the reservation if MAXMA changes it enough to put the order below 1000", async () => {
+    db.customer.findUnique.mockResolvedValue(customer("retail", { loyaltyCard: "9000123" }));
+    maxma.calcLoyalty.mockResolvedValue({ promo: null, bonuses: { balance: 1500, maxToApply: 1200, applied: 100, collected: 40 }, bonusLines: [100] });
+    maxma.setLoyaltyOrderQuery.mockResolvedValue({ applied: 1200, collected: 20, bonusRows: [1200] });
+    const response = await order({ items: [{ id: 1, quantity: 2 }], applyBonuses: 1200 });
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe("bonuses_unavailable");
+    expect(queue.enqueueMaxmaTask).toHaveBeenCalledWith(501, "cancel", null, { run: false });
+  });
+});
