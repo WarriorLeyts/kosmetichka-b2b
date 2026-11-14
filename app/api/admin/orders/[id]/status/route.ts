@@ -48,16 +48,8 @@ async function changeStatus(
     }
   }
 
-  // If moving back to assembly (or reverting from assembly) — delete existing checks so picker re-checks
-  const movingToEarlierStage =
-    (toStatus === "assembly") ||
-    (toStatus === "pending" || toStatus === "approved");
-  if (movingToEarlierStage) {
-    const items = await prisma.orderItem.findMany({ where: { orderId: order.id } });
-    await prisma.orderItemCheck.deleteMany({
-      where: { orderItemId: { in: items.map((i) => i.id) } },
-    });
-  }
+  // Returning to assembly keeps the work already done. Item edits invalidate only
+  // the affected line's check; newly added lines have no check yet.
 
   // Reset customer confirmation if order moves back to a state requiring re-review
   const resetConfirm = toStatus === "assembly" || toStatus === "consultation" || toStatus === "pending" || toStatus === "approved";

@@ -173,8 +173,13 @@ async function editItems(request: NextRequest, { params }: Props) {
   // the manager set the quantity himself → the assembly mark of that line no longer applies
   // (otherwise «Просрочен 2 шт.» would be taken out of the new quantity again on «Отправить проверку»)
   const origQty = new Map(order.items.map((i) => [i.id, i.quantity]));
-  const changedQtyIds = updates.filter((u) => !removing.has(u.id) && origQty.get(u.id) !== Math.round(Number(u.quantity))).map((u) => u.id);
-  const checkOps = changedQtyIds.length ? [prisma.orderItemCheck.deleteMany({ where: { orderItemId: { in: changedQtyIds } } })] : [];
+  const changedItemIds = updates.filter((u) => {
+    if (removing.has(u.id)) return false;
+    const original = order.items.find((i) => i.id === u.id);
+    return origQty.get(u.id) !== Math.round(Number(u.quantity)) ||
+      (u.variantName !== undefined && (original?.variantName ?? null) !== (u.variantName ?? null));
+  }).map((u) => u.id);
+  const checkOps = changedItemIds.length ? [prisma.orderItemCheck.deleteMany({ where: { orderItemId: { in: changedItemIds } } })] : [];
 
   const updateOps = updates
     .filter((u) => !removing.has(u.id))
