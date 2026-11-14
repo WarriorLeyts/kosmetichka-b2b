@@ -143,12 +143,27 @@ export async function loadOrder(db, id) {
 
 const digits = (s) => String(s || "").replace(/\D/g, "");
 
-/** Counterparty: the customer's 1С id, otherwise one counterparty with his phone. */
-export async function findCounterparty(oneCId, phone, env = process.env) {
+/** A linked card points directly to its owner in 1С, even if the account has another phone. */
+export async function findCardCounterparty(card, env = process.env) {
+  const number = String(card || "").trim();
+  if (!number) return null;
+  const rows = await odataGet("Catalog_ДисконтныеКарты", { $select: "ВладелецКарты_Key,DeletionMark", $filter: `КодКартыШтрихкод eq ${q(number)}` }, env);
+  const owners = [...new Set(rows.filter((r) => !r.DeletionMark && isGuid(r.ВладелецКарты_Key)).map((r) => r.ВладелецКарты_Key))];
+  if (!owners.length) return null;
+  const found = await odataGet("Catalog_Контрагенты", { $select: "Ref_Key,DeletionMark,IsFolder", $filter: owners.map((id) => `Ref_Key eq guid'${id}'`).join(" or ") }, env);
+  const refs = [...new Set(found.filter((r) => !r.DeletionMark && !r.IsFolder && isGuid(r.Ref_Key)).map((r) => r.Ref_Key))];
+  if (refs.length > 1) throw new Error("Карта привязана к нескольким контрагентам в 1С — уточните владельца карты");
+  return refs[0] ?? null;
+}
+
+/** Counterparty: explicit 1С id, linked card's owner, then a unique phone match. */
+export async function findCounterparty(oneCId, phone, env = process.env, loyaltyCard = "") {
   if (isGuid(oneCId)) {
     const r = await odataGet("Catalog_Контрагенты", { $select: "Ref_Key,DeletionMark", $filter: `Ref_Key eq guid'${oneCId}'` }, env);
     if (r[0] && !r[0].DeletionMark) return r[0].Ref_Key;
   }
+  const cardOwner = await findCardCounterparty(loyaltyCard, env);
+  if (cardOwner) return cardOwner;
   let d = digits(phone);
   if (d.length === 11 && d.startsWith("7")) d = "8" + d.slice(1);
   if (d.length === 10) d = "8" + d;
@@ -273,7 +288,7 @@ export async function prepareOrder(order, env = process.env, { createMissingCont
   const problems = [];
   const template = await orderTemplate(env);
   const c = order.customer || {};
-  let counterpartyRef = await findCounterparty(c.oneCId, c.phone, env);
+  let counterpartyRef = await findCounterparty(c.oneCId, c.phone, env, c.loyaltyCard);
   // not in 1С and no loyalty card → the common «Покупатель с сайта» (a card holder must be in 1С)
   let siteBuyer = false;
   if (!counterpartyRef && !String(c.loyaltyCard || "").trim()) {
