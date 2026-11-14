@@ -66,6 +66,8 @@ const maxma = vi.hoisted(() => ({
   setLoyaltyOrderQuery: vi.fn(async () => ({ applied: 0, collected: 0, anonymous: false, bonusRows: [] as number[] })),
   confirmOrder: vi.fn(async () => {}),
   cancelOrder: vi.fn(async () => {}),
+  reverseProcessedOrder: vi.fn(async () => {}),
+  maxmaOrderStatus: vi.fn(async () => "STATUS_CONFIRMED"),
 }));
 vi.mock("@/lib/maxma", async (orig) => ({ ...(await orig<typeof import("./maxma")>()), ...maxma }));
 
@@ -218,5 +220,28 @@ describe("queue runner (mocked prisma)", () => {
     maxma.maxmaConfigured.mockReturnValue(false);
     await enqueueMaxmaTask(12, "confirm");
     expect(store.rows).toHaveLength(0);
+  });
+});
+
+
+describe("cancelling a confirmed loyalty purchase", () => {
+  it("uses apply-return for an already processed order instead of retrying cancel-order forever", async () => {
+    maxma.cancelOrder.mockRejectedValue(new MaxmaError("unavailable", 502, false, "processed", 32));
+    await enqueueMaxmaTask(252, "cancel", { client: { card: "2000123" } } as never);
+    expect(maxma.reverseProcessedOrder).toHaveBeenCalledWith(252, { card: "2000123" }, expect.any(Date));
+    expect(store.rows[0].status).toBe("done");
+  });
+  it("keeps a failed purchase return pending for retry rather than reporting a refund", async () => {
+    maxma.cancelOrder.mockRejectedValue(new MaxmaError("unavailable", 502, false, "processed", 32));
+    maxma.reverseProcessedOrder.mockRejectedValueOnce(new Error("MAXMA offline"));
+    await enqueueMaxmaTask(252, "cancel", { client: { card: "2000123" } } as never);
+    expect(store.rows[0].status).toBe("pending");
+    expect(store.rows[0].lastError).toContain("offline");
+  });
+  it("recognises a confirmation whose successful response was lost, so cancellation can continue", async () => {
+    maxma.confirmOrder.mockRejectedValue(new MaxmaError("unavailable", 502, false, "processed", 32));
+    maxma.maxmaOrderStatus.mockResolvedValueOnce("STATUS_CONFIRMED");
+    await enqueueMaxmaTask(252, "confirm", { client: { card: "2000123" } } as never);
+    expect(store.rows[0].status).toBe("done");
   });
 });

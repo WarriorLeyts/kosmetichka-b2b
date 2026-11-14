@@ -1,4 +1,5 @@
 import { orderTier } from "@/lib/orderTier";
+import { bonusCancellation } from "@/lib/orderRefusal";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { warehouseStockByProductId } from "@/lib/warehouseStock";
@@ -96,6 +97,7 @@ export async function GET(
     maxmaStuckByOrder([order.id]),
   ]);
   const maxmaStuck = maxmaStuckMap.get(order.id) ?? null;
+  const cancelledBonuses = await bonusCancellation(order);
   const productImages = new Map<number, string>();
   for (const img of productImageRows) {
     if (!productImages.has(img.productId)) productImages.set(img.productId, img.path);
@@ -139,6 +141,7 @@ export async function GET(
       discount: order.discount,
       bonusesApplied: order.bonusesApplied,
       bonusesCollected: order.bonusesCollected,
+      bonusCancellation: cancelledBonuses,
       // Promo code / bonuses not synced with MAXMA for over an hour (retry: POST /api/admin/maxma/retry)
       maxmaStuck: Boolean(maxmaStuck),
       ...(maxmaStuck

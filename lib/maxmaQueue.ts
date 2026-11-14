@@ -5,6 +5,9 @@ import {
   confirmOrder,
   maxmaConfigured,
   MaxmaError,
+  reverseProcessedOrder,
+  maxmaPhone,
+  maxmaOrderStatus,
   setLoyaltyOrderQuery,
   type SetOrderQuery,
 } from "@/lib/maxma";
@@ -80,8 +83,28 @@ function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** Use the original queued client when possible; never recalculate loyalty against current prices. */
+async function originalClient(task: { orderId: number; payload: Prisma.JsonValue | null }) {
+  const id = task.orderId;
+  const snapshot = task.payload as { client?: { card: string } | { phoneNumber: string } } | null;
+  let client = snapshot?.client;
+  if (!client) {
+    const previous = await prisma.maxmaTask.findFirst({ where: { orderId: id, action: "set" }, orderBy: { id: "desc" }, select: { payload: true } });
+    client = (previous?.payload as typeof snapshot)?.client;
+  }
+  if (!client) {
+    const order = await prisma.order.findUnique({ where: { id }, select: { customer: { select: { loyaltyCard: true, phone: true } } } });
+    const card = order?.customer.loyaltyCard?.trim();
+    const phone = maxmaPhone(order?.customer.phone ?? "");
+    if (card) client = { card };
+    else if (phone) client = { phoneNumber: phone };
+  }
+  if (!client) throw new Error(`Нет исходной карты/телефона для возврата site-${id}`);
+  return client;
+}
+
 /** Calls MAXMA for one task; throws on failure. */
-async function execute(task: { orderId: number; action: string; payload: Prisma.JsonValue | null }): Promise<void> {
+async function execute(task: { orderId: number; action: string; payload: Prisma.JsonValue | null; createdAt: Date }): Promise<void> {
   const id = task.orderId;
   if (task.action === "set") {
     const query = task.payload as unknown as SetOrderQuery | null;
@@ -96,7 +119,13 @@ async function execute(task: { orderId: number; action: string; payload: Prisma.
     return;
   }
   if (task.action === "confirm") {
-    await confirmOrder(id);
+    try { await confirmOrder(id); }
+    catch (e) {
+      if (!(e instanceof MaxmaError) || e.apiCode !== 32) throw e;
+      const status = await maxmaOrderStatus(id, await originalClient(task));
+      if (status === "STATUS_CONFIRMED" || status === "STATUS_CANCELLED") return;
+      throw e;
+    }
     console.log(`[maxma] confirm-order site-${id} ok`);
     void notifyBonusesAccrued(id);
     return;
@@ -106,6 +135,13 @@ async function execute(task: { orderId: number; action: string; payload: Prisma.
       await cancelOrder(id);
       console.log(`[maxma] cancel-order site-${id} ok`);
     } catch (e) {
+      if (e instanceof MaxmaError && e.apiCode === 32) {
+        // Already confirmed/cancelled: cancel-order alone cannot undo a completed purchase.
+        const client = await originalClient(task);
+        await reverseProcessedOrder(id, client, task.createdAt);
+        console.log(`[maxma] order reversal site-${id} verified`);
+        return;
+      }
       // Never registered (e.g. set-order failed before the order was rolled back): nothing to release
       if (e instanceof MaxmaError && e.notFound) {
         console.log(`[maxma] cancel-order site-${id}: not found in MAXMA, nothing to cancel`);
