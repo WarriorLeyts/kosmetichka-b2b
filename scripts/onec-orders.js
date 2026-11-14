@@ -157,7 +157,7 @@ export async function findCardCounterparty(card, env = process.env) {
 }
 
 /** Counterparty: explicit 1С id, linked card's owner, then a unique phone match. */
-export async function findCounterparty(oneCId, phone, env = process.env, loyaltyCard = null) {
+export async function findCounterparty(oneCId, phone, env = process.env, loyaltyCard = "") {
   if (isGuid(oneCId)) {
     const r = await odataGet("Catalog_Контрагенты", { $select: "Ref_Key,DeletionMark", $filter: `Ref_Key eq guid'${oneCId}'` }, env);
     if (r[0] && !r[0].DeletionMark) return r[0].Ref_Key;
