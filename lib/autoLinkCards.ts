@@ -10,11 +10,14 @@ export function matchPhoneCards(owners: Owner[], cards: Card[]) {
   const groups = new Set(owners.filter((o) => o.IsFolder && o.Description?.trim().toLowerCase() === DISCOUNT_GROUP.toLowerCase()).map((o) => o.Ref_Key));
   const byOwner = new Map(owners.filter((o) => !o.IsFolder).map((o) => [o.Ref_Key, o]));
   const found = new Map<string, { number: string; discount: boolean }[]>();
+  const phonesByCard = new Map<string, Set<string>>();
   for (const card of cards) {
     const owner = byOwner.get(card.ВладелецКарты_Key ?? "");
     const phone = maxmaPhone(owner?.НомерТелефонаДляПоиска ?? "");
     const number = card.КодКартыШтрихкод?.trim();
     if (!phone || !number) continue;
+    const phones = phonesByCard.get(number) ?? new Set<string>();
+    phones.add(phone); phonesByCard.set(number, phones);
     const discount = number.startsWith(DISCOUNT_CARD_PREFIX) || groups.has(owner?.Parent_Key ?? "");
     const list = found.get(phone) ?? [];
     const same = list.find((c) => c.number === number);
@@ -26,7 +29,7 @@ export function matchPhoneCards(owners: Owner[], cards: Card[]) {
   for (const [phone, list] of found) {
     const discounts = list.filter((c) => c.discount);
     const pick = discounts.length ? discounts : list;
-    if (pick.length === 1) result.set(phone, pick[0]);
+    if (pick.length === 1 && phonesByCard.get(pick[0].number)?.size === 1) result.set(phone, pick[0]);
   }
   return result;
 }

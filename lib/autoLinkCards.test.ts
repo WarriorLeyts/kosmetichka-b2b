@@ -25,6 +25,10 @@ describe("phone-matched cash-desk cards", () => {
   it("recognises the configured 1С group even without the 900 prefix", () => {
     expect(matchPhoneCards([{ Ref_Key: "discounts", IsFolder: true, Description: "Максма Скидка" }, owner("89991234567", "owner", { Parent_Key: "discounts" })], [card("123456")]).get("+79991234567")?.discount).toBe(true);
   });
+  it("does not link a card number assigned to two different phones in 1С", () => {
+    const matches = matchPhoneCards([owner("89991234567"), owner("89991111111", "another")], [card("900001"), card("900001", "another")]);
+    expect(matches.size).toBe(0);
+  });
   it("leaves ambiguous cards and a different phone unlinked", () => {
     const matches = matchPhoneCards([owner("89991234567"), owner("89991111111", "another")], [card("900001"), card("900002"), card("990001", "another")]);
     expect(matches.has("+79991234567")).toBe(false);
