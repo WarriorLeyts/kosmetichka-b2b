@@ -263,7 +263,7 @@ export async function reverseProcessedOrder(orderId: number, client: Exclude<Cli
   }
   if (!counts.size || !purchase.shop?.code || !purchase.shop.name) throw new MaxmaError("unavailable", 502, false, `Missing original rows/shop for ${purchaseId}`);
   try {
-    const result = await call<{ confirmation?: { refundId?: string } }>("apply-return", { transaction: { id: refundId, executedAt: executedAt.toISOString(), purchaseId,
+    const result = await call<{ confirmation?: { refundId?: string } }>("apply-return", { transaction: { id: refundId, executedAt: executedAt.toISOString().replace(/\.\d{3}Z$/, "+00:00"), purchaseId,
       shopCode: purchase.shop.code, shopName: purchase.shop.name,
       items: [...counts].map(([sku, itemCount]) => ({ sku, itemCount })),
     } });

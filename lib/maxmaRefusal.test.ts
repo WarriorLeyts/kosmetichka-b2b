@@ -20,6 +20,7 @@ beforeEach(() => {
     if (method === "get-purchase-history") return Response.json({ history: [{ orderId: "site-252", orderStatus: status, txid: "site-252", shop: { code: "online", name: "Интернет-магазин" }, rows: [{ sku: "original-guid", qty: 1 }, { sku: "original-guid", qty: 2 }] }], pagination: { total: 1 } });
     if (method === "get-bonus-history") return Response.json({ history: returned ? [{ OPERATION_REFUNDED: { returnId: "site-252-refusal" } }] : [], pagination: { total: returned ? 1 : 0 } });
     if (method === "apply-return") {
+      expect(body.transaction.executedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
       if (failReturn) throw new Error("network unavailable");
       applications++; returned = true; balance += 630 - 105;
       if (loseReply) throw new Error("lost response after successful return");
@@ -36,7 +37,7 @@ describe("confirmed order reversal", () => {
   it("returns spent bonuses and removes earned bonuses using the original purchase rows", async () => {
     await reverseProcessedOrder(252, client, at);
     expect(balance).toBe(1000);
-    expect(bodies.find(x => x.method === "apply-return")?.body).toEqual({ transaction: { id: "site-252-refusal", executedAt: at.toISOString(), purchaseId: "site-252", shopCode: "online", shopName: "Интернет-магазин", items: [{ sku: "original-guid", itemCount: 3 }] } });
+    expect(bodies.find(x => x.method === "apply-return")?.body).toEqual({ transaction: { id: "site-252-refusal", executedAt: "2026-11-14T13:00:00+00:00", purchaseId: "site-252", shopCode: "online", shopName: "Интернет-магазин", items: [{ sku: "original-guid", itemCount: 3 }] } });
     expect(bodies.some(x => x.method === "adjust-balance")).toBe(false);
   });
   it("never refunds twice, including after the response was lost", async () => {
