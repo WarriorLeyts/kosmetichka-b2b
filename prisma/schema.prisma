@@ -271,6 +271,10 @@ model Customer {
   loyaltyCard String? @unique
   /// the card's owner is in the 1С group «Максма Скидка» (lib/discountCard.ts, refreshed from 1С)
   maxmaDiscount Boolean @default(false)
+  /// Card owner belongs to «Максма Розница»: retail prices and bonuses.
+  maxmaRetail Boolean @default(false)
+  /// Explicitly unlinked cards must not be reattached by the phone sync. Manual linking remains available.
+  loyaltyUnlinkedCards String[] @default([])
   /// asked once right after signing up (app, owner 2026-11-10): «Как вы узнали о нас?»
   referralSource String?
   /// «Вы уже заказывали у нас?» (null — not answered)

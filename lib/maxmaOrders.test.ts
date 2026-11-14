@@ -131,7 +131,7 @@ describe("recalcOrderLoyalty — promo code", () => {
 });
 
 describe("recalcOrderLoyalty — bonuses", () => {
-  const cardCustomer = { phone: "89001234567", loyaltyCard: "2000123", priceType: "retail" };
+  const cardCustomer = { phone: "89001234567", loyaltyCard: "2000123", maxmaRetail: true, priceType: "retail" };
   const bonusOrder = {
     id: 8,
     promoCode: null,

@@ -19,12 +19,12 @@ export function fromSite(request: Request): boolean {
 
 /**
  * The customer as the prices see him: «Розница» with a discount card → «Скидка по карте». A discount card:
- * number «900…» or its owner in the 1С group «Максма Скидка» (lib/discountCard.ts).
+ * its owner belongs to the 1С group «Максма Скидка» (lib/discountCard.ts).
  */
-export function pricingCustomer<T extends { priceType?: string | null; loyaltyCard?: string | null; maxmaDiscount?: boolean | null }>(customer: T, request: Request): T {
+export function pricingCustomer<T extends { priceType?: string | null; loyaltyCard?: string | null; maxmaDiscount?: boolean | null; maxmaRetail?: boolean | null }>(customer: T, request: Request): T {
   const card = cardGivesDiscount(customer);
   const here = APPS_TOO || fromSite(request);
-  return SITE_RETAIL_DISCOUNT && here && customer.priceType === "retail" && card ? { ...customer, priceType: "discount" } : customer;
+  return SITE_RETAIL_DISCOUNT && here && ["retail", "discount"].includes(customer.priceType ?? "") ? { ...customer, priceType: card ? "discount" : "retail" } : customer;
 }
 
 /** One switch controls bonus accrual and spending on the website and in the apps. */
