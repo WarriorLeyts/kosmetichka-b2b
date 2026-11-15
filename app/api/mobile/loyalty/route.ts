@@ -40,6 +40,11 @@ export async function GET() {
 export async function DELETE() {
   const id = await currentCustomerId();
   if (!id) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
-  await prisma.customer.update({ where: { id }, data: { loyaltyCard: null, maxmaDiscount: false } });
+  const customer = await prisma.customer.findUnique({ where: { id }, select: { loyaltyCard: true } });
+  if (!customer) return NextResponse.json({ error: "Клиент не найден" }, { status: 404 });
+  const changed = await prisma.customer.updateMany({ where: { id, loyaltyCard: customer.loyaltyCard }, data: { loyaltyCard: null, maxmaDiscount: false, maxmaRetail: false,
+    ...(customer.loyaltyCard ? { loyaltyUnlinkedCards: { push: customer.loyaltyCard } } : {}),
+  } });
+  if (changed.count !== 1) return NextResponse.json({ error: "Привязка карты изменилась. Обновите профиль и повторите отвязку." }, { status: 409 });
   return NextResponse.json({ ok: true });
 }

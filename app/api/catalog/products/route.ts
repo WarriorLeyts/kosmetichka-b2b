@@ -138,7 +138,7 @@ export async function GET(request: Request) {
   const isAuthenticated = Boolean(payload?.id) || ["admin", "manager", "picker"].includes(String(staff?.role ?? ""));
   // a wholesale customer sees what he may order: the shop minus its 12 + the warehouse (Product.wholesaleStock)
   const viewer = payload?.id
-    ? await prisma.customer.findUnique({ where: { id: Number(payload.id) }, select: { priceType: true, loyaltyCard: true, maxmaDiscount: true } })
+    ? await prisma.customer.findUnique({ where: { id: Number(payload.id) }, select: { priceType: true, loyaltyCard: true, maxmaDiscount: true, maxmaRetail: true } })
     : null;
   const priceType = viewer?.priceType ?? null;
   const wholesale = isWholesaleType(priceType);

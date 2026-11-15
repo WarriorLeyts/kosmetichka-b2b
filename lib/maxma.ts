@@ -1,3 +1,4 @@
+import { cardKind } from "./discountCardRule";
 /**
  * MAXMA loyalty API (the same account 1C works with).
  * Env: MAXMA_API_KEY (X-Processing-Key), MAXMA_API_URL (default https://api.maxma.com),
@@ -283,6 +284,8 @@ export type LoyaltyCustomer = {
   /** Linked MAXMA card (Customer.loyaltyCard) */
   loyaltyCard?: string | null;
   priceType?: string | null;
+  maxmaDiscount?: boolean | null;
+  maxmaRetail?: boolean | null;
 };
 
 /**
@@ -304,7 +307,7 @@ export function bonusesOn(): boolean {
 
 /** Bonuses may be spent (and are accrued) only for retail buyers with a linked card. */
 export function canSpendBonuses(c: LoyaltyCustomer | null | undefined): boolean {
-  return Boolean(c?.loyaltyCard?.trim()) && bonusPriceType(c?.priceType);
+  return Boolean(c && cardKind(c)) && bonusPriceType(c?.priceType);
 }
 
 export const BONUS_SPEND_FORBIDDEN = "Списание бонусов доступно только розничным покупателям с картой";
@@ -348,7 +351,7 @@ type ClientRef = { card: string } | { phoneNumber: string } | null;
 function clientRef(c: LoyaltyCustomer): ClientRef {
   // bonuses (spending AND accrual) only for retail buyers (bonus or discount card); wholesale /
   // big wholesale orders go without the card, so MAXMA neither reserves nor accrues anything for them
-  const card = bonusPriceType(c.priceType) ? c.loyaltyCard?.trim() : "";
+  const card = canSpendBonuses(c) ? c.loyaltyCard?.trim() : "";
   if (card) return { card };
   // No card: the phone identifies the client for the promo code only (as before), no bonuses
   const phone = c.phone ? maxmaPhone(c.phone) : null;

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../../_auth";
 import { findCard, maskPhone, MaxmaError, maxmaConfigured, maxmaPhone, publicCard, sendCode } from "@/lib/maxma";
 import { RateLimiter } from "@/lib/rateLimit";
-import { refreshMaxmaDiscount } from "@/lib/discountCard";
+import { cardKindIn1C } from "@/lib/discountCard";
 
 /**
  * Linking a MAXMA card in the app («Добавить карту»):
@@ -52,15 +52,16 @@ export async function POST(request: Request) {
     }
     if (!card) return bad("Карта не найдена", 404);
     if (await claimedByAnother(card.number, id)) return occupied();
+    const kind = await cardKindIn1C(card.number);
+    if (kind === null) return bad("Не удалось проверить тип карты в 1С. Попробуйте позже.", 503);
+    if (kind === "unrecognized") return bad("Карта не найдена в группах «Максма Скидка» или «Максма Розница». Обратитесь к сотруднику магазина.", 422);
     try {
-      await prisma.customer.update({ where: { id }, data: { loyaltyCard: card.number, maxmaDiscount: false } });
+      await prisma.customer.update({ where: { id }, data: { loyaltyCard: card.number, maxmaDiscount: kind === "discount", maxmaRetail: kind === "bonus" } });
     } catch (e) {
       if ((e as { code?: string }).code === "P2002") return occupied();
       throw e;
     }
-    // the discount price: «900…» or the card's owner in 1С «Максма Скидка» (checked now, refreshed every 6 h)
-    await refreshMaxmaDiscount(id).catch(() => false);
-    return NextResponse.json({ card: publicCard(card) });
+    return NextResponse.json({ card: publicCard(card), hasCard: kind === "discount", cardLinked: true, cardType: kind });
   }
 
   // ── step 1: find the card and send the code ──
@@ -78,6 +79,9 @@ export async function POST(request: Request) {
     if (!card) card = await findCard({ card: cardNo });
     if (!card) return bad("Карта не найдена. Проверьте номер или оформите карту в магазине.", 404);
     if (await claimedByAnother(card.number, id)) return occupied();
+    const kind = await cardKindIn1C(card.number);
+    if (kind === null) return bad("Не удалось проверить тип карты в 1С. Попробуйте позже.", 503);
+    if (kind === "unrecognized") return bad("Карта не найдена в группах «Максма Скидка» или «Максма Розница». Обратитесь к сотруднику магазина.", 422);
     const sent = await sendCode(card.number);
     pending.set(id, { card: card.number, hash: sha(sent.code.replace(/\D/g, "")), expiresAt: sent.expiresAt, attempts: 0 });
     return NextResponse.json({ sent: true, phone: maskPhone(card.phone) });

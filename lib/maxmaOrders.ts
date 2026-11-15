@@ -185,7 +185,7 @@ export async function recalcOrderLoyalty(orderId: number): Promise<LoyaltyRecalc
         bonusesApplied: true,
         bonusesCollected: true,
         priceType: true,
-        customer: { select: { phone: true, loyaltyCard: true, priceType: true } },
+        customer: { select: { phone: true, loyaltyCard: true, priceType: true, maxmaDiscount: true, maxmaRetail: true } },
         items: {
           orderBy: { id: "asc" },
           select: { id: true, productId: true, productName: true, price: true, quantity: true, total: true, discount: true, bonusDiscount: true },

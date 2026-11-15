@@ -1,4 +1,4 @@
-import { cardGivesDiscount } from "@/lib/discountCard";
+import { cardGivesDiscount, cardKind } from "@/lib/discountCard";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
@@ -30,11 +30,11 @@ const SELECT = {
 export async function GET() {
   const id = await currentCustomerId();
   if (!id) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
-  const row = await prisma.customer.findUnique({ where: { id }, select: { ...SELECT, loyaltyCard: true, maxmaDiscount: true } });
+  const row = await prisma.customer.findUnique({ where: { id }, select: { ...SELECT, loyaltyCard: true, maxmaDiscount: true, maxmaRetail: true } });
   if (!row) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
   // hasCard: the card gives the discount price (lib/discountCard.ts); cardLinked: any card is linked
-  const { loyaltyCard, maxmaDiscount, ...customer } = row;
-  return NextResponse.json({ customer: { ...customer, hasCard: cardGivesDiscount({ loyaltyCard, maxmaDiscount }), cardLinked: Boolean(loyaltyCard?.trim()) } });
+  const { loyaltyCard, maxmaDiscount, maxmaRetail, ...customer } = row;
+  return NextResponse.json({ customer: { ...customer, hasCard: cardGivesDiscount({ loyaltyCard, maxmaDiscount, maxmaRetail }), cardType: cardKind({ loyaltyCard, maxmaDiscount, maxmaRetail }), cardLinked: Boolean(loyaltyCard?.trim()) } });
 }
 
 const ERRORS: Record<string, string> = {
@@ -165,6 +165,8 @@ export async function DELETE(request: Request) {
         address: null,
         loyaltyCard: null,
         maxmaDiscount: false,
+        maxmaRetail: false,
+        loyaltyUnlinkedCards: [],
         oneCId: null,
         password: random,
         isActive: false,

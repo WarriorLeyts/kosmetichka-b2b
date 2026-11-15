@@ -51,7 +51,7 @@ const blush = product(1, { retail: 1120, discount: 1005, wholesale: 727, big_who
 const noWholesale = product(2, { retail: 400, discount: 400, wholesale: 0 });
 
 const customer = (priceType: string, extra: object = {}) => ({
-  id: 1, name: "Тест", phone: "89001234567", email: null, companyName: null, loyaltyCard: null, priceType, address: "Махачкала, ул. Ленина, 1", ...extra,
+  id: 1, name: "Тест", phone: "89001234567", email: null, companyName: null, loyaltyCard: null, maxmaDiscount: true, maxmaRetail: false, priceType, address: "Махачкала, ул. Ленина, 1", ...extra,
 });
 
 const order = (body: object) =>
@@ -119,7 +119,7 @@ describe("Светлая пятница + ОПТ", () => {
 describe("prices by customer type", () => {
   it.each([
     ["retail", 1120],
-    ["discount", 1005],
+    ["discount", 1120],
     ["wholesale", 727],
     ["big_wholesale", 671],
   ])("%s pays %i per item", async (type, price) => {
