@@ -8,7 +8,7 @@ export const assortmentSchema = z.object({
     name: z.string().trim().max(120),
     available: z.boolean().default(true),
     sortOrder: z.number().int().min(0).max(1000).optional(),
-  })).max(60),
+  })).max(200, "В одном товаре можно выбрать до 200 видов"),
 }).superRefine(({ variants }, ctx) => {
   if (new Set(variants.map(v => v.imageId)).size !== variants.length)
     ctx.addIssue({ code: "custom", message: "Одно фото можно выбрать только один раз" });

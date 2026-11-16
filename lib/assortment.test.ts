@@ -9,6 +9,21 @@ import { cmlComment } from "./commerceml";
 import { cmlComment as commentJs } from "../scripts/onec-order-comment.js";
 beforeEach(() => { vi.clearAllMocks(); db.$transaction.mockImplementation(fn => fn(tx)); db.product.findUnique.mockResolvedValue(null); });
 describe("photo assortment", () => {
+  it("saves all 69 selected perfume photos without truncating the assortment", async () => {
+    const variants = Array.from({ length: 69 }, (_, i) => ({ imageId: i + 1, name: "", sortOrder: i }));
+    const input = assortmentSchema.parse({ enabled: true, variants });
+    tx.product.findUnique.mockResolvedValue({ id: 1, images: variants.map(v => ({ id: v.imageId })), variants: [] });
+    await saveAssortment(1, input);
+    expect(tx.productVariant.create).toHaveBeenCalledTimes(69);
+    expect(tx.productVariant.create).toHaveBeenLastCalledWith({ data: { productId: 1, imageId: 69, name: "Вариант 69", available: true, sortOrder: 68 } });
+  });
+  it("accepts 200 kinds and explains the limit in Russian when exceeded", () => {
+    const variants = Array.from({ length: 201 }, (_, i) => ({ imageId: i + 1, name: "" }));
+    expect(assortmentSchema.safeParse({ variants: variants.slice(0, 200) }).success).toBe(true);
+    const result = assortmentSchema.safeParse({ variants });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues[0].message).toBe("В одном товаре можно выбрать до 200 видов");
+  });
   it("rejects duplicate photo and ambiguous names", () => {
     expect(assortmentSchema.safeParse({ variants: [{ imageId: 1, name: "Роза" }, { imageId: 1, name: "Ваниль" }] }).success).toBe(false);
     expect(assortmentSchema.safeParse({ variants: [{ imageId: 1, name: "Роза" }, { imageId: 2, name: "роза" }] }).success).toBe(false);
