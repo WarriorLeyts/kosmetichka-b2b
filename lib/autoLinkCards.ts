@@ -1,74 +1,91 @@
 import { prisma } from "./prisma";
-import { maxmaPhone } from "./maxma";
-import { DISCOUNT_GROUP } from "./discountCardRule";
-import { odataAll, odataConfigured } from "../scripts/onec-odata.js";
+import { findCard, maxmaConfigured, maxmaPhone } from "./maxma";
+import { cardInDiscountGroup, refreshMaxmaDiscount } from "./discountCard";
 
-type Owner = { Ref_Key: string; Parent_Key?: string; Description?: string; IsFolder?: boolean; НомерТелефонаДляПоиска?: string };
-type Card = { КодКартыШтрихкод?: string; ВладелецКарты_Key?: string };
-/** Normalised exact matches only; ambiguous cards are left for manual linking. */
-export function matchPhoneCards(owners: Owner[], cards: Card[]) {
-  const groups = new Set(owners.filter((o) => o.IsFolder && o.Description?.trim().toLowerCase() === DISCOUNT_GROUP.toLowerCase()).map((o) => o.Ref_Key));
-  const byOwner = new Map(owners.filter((o) => !o.IsFolder).map((o) => [o.Ref_Key, o]));
-  const found = new Map<string, { number: string; discount: boolean }[]>();
-  const phonesByCard = new Map<string, Set<string>>();
-  for (const card of cards) {
-    const owner = byOwner.get(card.ВладелецКарты_Key ?? "");
-    const phone = maxmaPhone(owner?.НомерТелефонаДляПоиска ?? "");
-    const number = card.КодКартыШтрихкод?.trim();
-    if (!phone || !number) continue;
-    const phones = phonesByCard.get(number) ?? new Set<string>();
-    phones.add(phone); phonesByCard.set(number, phones);
-    const discount = groups.has(owner?.Parent_Key ?? "");
-    const list = found.get(phone) ?? [];
-    const same = list.find((c) => c.number === number);
-    if (same) same.discount ||= discount;
-    else list.push({ number, discount });
-    found.set(phone, list);
+type CustomerCard = {
+  id: number;
+  phone: string | null;
+  loyaltyCard: string | null;
+  maxmaDiscount: boolean;
+  priceType: string;
+  isActive: boolean;
+  isApproved: boolean;
+};
+const select = { id: true, phone: true, loyaltyCard: true, maxmaDiscount: true, priceType: true, isActive: true, isApproved: true } as const;
+const eligible = (c: CustomerCard) => c.isActive && c.isApproved && ["retail", "discount"].includes(c.priceType);
+
+async function syncCustomer(c: CustomerCard, accounts: CustomerCard[]) {
+  if (!eligible(c)) return;
+  const refreshExisting = async () => {
+    if (c.loyaltyCard) await refreshMaxmaDiscount(c.id);
+  };
+  const phone = maxmaPhone(c.phone ?? "");
+  if (!maxmaConfigured() || !phone || accounts.filter((a) => maxmaPhone(a.phone ?? "") === phone).length !== 1) {
+    await refreshExisting();
+    return;
   }
-  const result = new Map<string, { number: string; discount: boolean }>();
-  for (const [phone, list] of found) {
-    const discounts = list.filter((c) => c.discount);
-    const pick = discounts.length ? discounts : list;
-    if (pick.length === 1 && phonesByCard.get(pick[0].number)?.size === 1) result.set(phone, pick[0]);
+  const card = await findCard({ phoneNumber: phone });
+  // MAXMA owns the current card number; exact phone matching is required for automatic linking.
+  if (!card || maxmaPhone(card.phone ?? "") !== phone || c.loyaltyCard === card.number) {
+    await refreshExisting();
+    return;
   }
-  return result;
+  let discount = false;
+  if (c.loyaltyCard) {
+    // A manual card confirmed on another phone must never be silently replaced.
+    const oldCard = await findCard({ card: c.loyaltyCard });
+    if (oldCard && maxmaPhone(oldCard.phone ?? "") !== phone) return;
+    // The cashier changes the card number on conversion to discount. Wait for 1C confirmation;
+    // a bonus card or an unavailable 1C must not replace an existing card (discount has priority).
+    if (await cardInDiscountGroup(card.number) !== true) {
+      await refreshExisting();
+      return;
+    }
+    discount = true;
+  }
+  const other = await prisma.customer.findFirst({ where: { loyaltyCard: card.number, NOT: { id: c.id } }, select: { id: true } });
+  if (other) return;
+  try {
+    const result = await prisma.customer.updateMany({
+      where: { id: c.id, phone: c.phone, loyaltyCard: c.loyaltyCard, maxmaDiscount: c.maxmaDiscount, priceType: c.priceType, isActive: true, isApproved: true },
+      data: { loyaltyCard: card.number, maxmaDiscount: discount },
+    });
+    // Save the card before checking 1C: a 1C outage must not prevent a MAXMA card being linked.
+    if (result.count && !discount) await refreshMaxmaDiscount(c.id);
+  } catch (e) {
+    if ((e as { code?: string }).code !== "P2002") throw e;
+    // Another account claimed the card concurrently; the unique constraint decides ownership.
+  }
 }
+
+/** Starts immediately after successful SMS-verified retail registration; failures retry in the worker. */
+export async function syncCustomerCard(customerId: number) {
+  try {
+    const accounts = await prisma.customer.findMany({ where: { phone: { not: null } }, select });
+    const c = accounts.find((a) => a.id === customerId);
+    if (c) await syncCustomer(c, accounts);
+  } catch {
+    console.warn("[auto-link-cards] Customer card sync failed; will retry");
+  }
+}
+
 let busy = false;
-/** One minute polling: a cash-desk card is linked without relying on the card already being in MAXMA. */
+/** Retry MAXMA discovery, follow confirmed discount-card replacements and refresh 1C groups once a minute. */
 export async function syncPhoneCards() {
-  if (busy || !odataConfigured()) return;
+  if (busy) return;
   busy = true;
   try {
-    const [owners, cards, customers] = await Promise.all([
-      odataAll("Catalog_Контрагенты", { $filter: "DeletionMark eq false", $select: "Ref_Key,Parent_Key,Description,IsFolder,НомерТелефонаДляПоиска" }),
-      odataAll("Catalog_ДисконтныеКарты", { $filter: "DeletionMark eq false", $select: "КодКартыШтрихкод,ВладелецКарты_Key" }),
-      prisma.customer.findMany({ where: { phone: { not: null } }, select: { id: true, phone: true, loyaltyCard: true, maxmaDiscount: true } }),
-    ]);
-    const matches = matchPhoneCards(owners, cards);
-    const accounts = new Map<string, number>();
-    for (const c of customers) { const p = maxmaPhone(c.phone ?? ""); if (p) accounts.set(p, (accounts.get(p) ?? 0) + 1); }
-    for (const c of customers) {
-      const phone = maxmaPhone(c.phone ?? "");
-      const card = phone ? matches.get(phone) : null;
-      if (!card || accounts.get(phone!) !== 1) continue;
-      // A card manually confirmed on another phone is never silently replaced or stolen.
-      if (c.loyaltyCard && c.loyaltyCard !== card.number && !card.discount) continue;
-      if (c.loyaltyCard === card.number && c.maxmaDiscount === card.discount) continue;
-      const other = await prisma.customer.findFirst({ where: { loyaltyCard: card.number, NOT: { id: c.id } }, select: { id: true } });
-      if (other) continue;
-      try {
-        await prisma.customer.updateMany({ where: { id: c.id, phone: c.phone, loyaltyCard: c.loyaltyCard }, data: { loyaltyCard: card.number, maxmaDiscount: card.discount } });
-      } catch (e) {
-        if ((e as { code?: string }).code !== "P2002") throw e;
-        // Another account linked this card after our check. The database decides ownership atomically.
-      }
+    const accounts = await prisma.customer.findMany({ where: { phone: { not: null } }, select });
+    for (const c of accounts) {
+      try { await syncCustomer(c, accounts); }
+      catch { console.warn("[auto-link-cards] Customer card sync failed; will retry"); }
     }
-  } catch (e) { console.warn("[auto-link-cards]", e instanceof Error ? e.message : e); }
+  } catch { console.warn("[auto-link-cards] Card sync failed; will retry"); }
   finally { busy = false; }
 }
 let started = false;
 export function startPhoneCards() {
-  if (started || !odataConfigured()) return;
+  if (started) return;
   started = true;
   const first = setTimeout(() => void syncPhoneCards(), 5_000); first.unref?.();
   setInterval(() => void syncPhoneCards(), 60_000).unref?.();

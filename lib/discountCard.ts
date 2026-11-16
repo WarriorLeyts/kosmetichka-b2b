@@ -17,6 +17,7 @@ async function discountGroupRef(): Promise<string | null> {
 
 /** Is the owner of this card (1С «Дисконтные карты» → «Владелец карты») in «Максма Скидка»? null — 1С didn't answer. */
 export async function cardInDiscountGroup(card: string): Promise<boolean | null> {
+  if (!odataConfigured()) return null;
   try {
     const group = await discountGroupRef();
     if (!group) return false;
@@ -39,7 +40,11 @@ export async function refreshMaxmaDiscount(customerId: number): Promise<boolean>
   const card = c?.loyaltyCard?.replace(/\s/g, "");
   const want = card ? await cardInDiscountGroup(card) : false;
   if (want === null || !c) return Boolean(c?.maxmaDiscount);
-  if (want !== c.maxmaDiscount) await prisma.customer.update({ where: { id: customerId }, data: { maxmaDiscount: want } });
+  if (want !== c.maxmaDiscount) await prisma.customer.updateMany({
+    // Do not apply the old card's group if it was unlinked/replaced while 1C was answering.
+    where: { id: customerId, loyaltyCard: c.loyaltyCard, maxmaDiscount: c.maxmaDiscount },
+    data: { maxmaDiscount: want },
+  });
   return want;
 }
 
