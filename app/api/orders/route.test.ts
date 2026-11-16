@@ -197,14 +197,14 @@ describe("delivery: «Заберу в магазине» or an address (not requ
 
 describe("MAXMA bonuses", () => {
   it("wholesale with a card can't spend bonuses", async () => {
-    db.customer.findUnique.mockResolvedValue(customer("wholesale", { loyaltyCard: "9000123" }));
+    db.customer.findUnique.mockResolvedValue(customer("wholesale", { loyaltyCard: "9000123", maxmaDiscount: true }));
     const r = await order({ items: [{ id: 1, quantity: 7 }], applyBonuses: 100 });
     expect(r.status).toBe(400);
     expect(db.order.create).not.toHaveBeenCalled();
   });
 
   it.each(["retail", "discount"])("%s with a card spends bonuses (reserved before the order is saved)", async (type) => {
-    db.customer.findUnique.mockResolvedValue(customer(type, { loyaltyCard: "9000123" }));
+    db.customer.findUnique.mockResolvedValue(customer(type, { loyaltyCard: "9000123", maxmaDiscount: true }));
     maxma.calcLoyalty.mockResolvedValue({ promo: null, bonuses: { balance: 500, maxToApply: 300, applied: 100, collected: 40 }, bonusLines: [100] });
     maxma.setLoyaltyOrderQuery.mockResolvedValue({ applied: 100, collected: 40, bonusRows: [100] });
     const r = await order({ items: [{ id: 1, quantity: 2 }], applyBonuses: 100 });
@@ -218,7 +218,7 @@ describe("MAXMA bonuses", () => {
   it("bonus spending switched off → 400, nothing reserved; retail with a card still at the discount price", async () => {
     flags.bonusOff = true;
     try {
-      db.customer.findUnique.mockResolvedValue(customer("retail", { loyaltyCard: "9000123" }));
+      db.customer.findUnique.mockResolvedValue(customer("retail", { loyaltyCard: "9000123", maxmaDiscount: true }));
       const r = await order({ items: [{ id: 1, quantity: 2 }], applyBonuses: 100 });
       expect(r.status).toBe(400);
       expect((await r.json()).error).toBe("Списание бонусов отключено");
@@ -230,6 +230,13 @@ describe("MAXMA bonuses", () => {
     }
   });
 
+  it.each([false, true])("900 card uses group membership (%s) for the saved order price", async (maxmaDiscount) => {
+    db.customer.findUnique.mockResolvedValue(customer("retail", { loyaltyCard: "9000123", maxmaDiscount }));
+    const response = await order({ items: [{ id: 1, quantity: 1 }] });
+    expect(response.status).toBe(200);
+    expect(created?.data.total).toBe(maxmaDiscount ? 1005 : 1120);
+  });
+
   it("retail without a card → retail price", async () => {
     db.customer.findUnique.mockResolvedValue(customer("retail"));
     const r = await order({ items: [{ id: 1, quantity: 1 }] });
@@ -237,7 +244,7 @@ describe("MAXMA bonuses", () => {
   });
 
   it("MAXMA not answering on reservation → 409, order not saved, cancel queued", async () => {
-    db.customer.findUnique.mockResolvedValue(customer("retail", { loyaltyCard: "9000123" }));
+    db.customer.findUnique.mockResolvedValue(customer("retail", { loyaltyCard: "9000123", maxmaDiscount: true }));
     maxma.calcLoyalty.mockResolvedValue({ promo: null, bonuses: { balance: 500, maxToApply: 300, applied: 100, collected: 40 }, bonusLines: [100] });
     maxma.setLoyaltyOrderQuery.mockRejectedValue(new Error("timeout"));
     const r = await order({ items: [{ id: 1, quantity: 2 }], applyBonuses: 100 });
@@ -247,7 +254,7 @@ describe("MAXMA bonuses", () => {
   });
 
   it("wholesale with a card: MAXMA calculation without the card (no accrual)", async () => {
-    db.customer.findUnique.mockResolvedValue(customer("wholesale", { loyaltyCard: "9000123" }));
+    db.customer.findUnique.mockResolvedValue(customer("wholesale", { loyaltyCard: "9000123", maxmaDiscount: true }));
     maxma.calcLoyalty.mockResolvedValue({ promo: null, bonuses: null, bonusLines: [0] });
     const r = await order({ items: [{ id: 1, quantity: 7 }] });
     expect(r.status).toBe(200);
@@ -316,7 +323,7 @@ describe("paid loyalty card", () => {
     expect(created).toBeNull();
   });
   it("existing discount card / wholesale customers cannot order another card", async () => {
-    for (const who of [customer("retail", { loyaltyCard: "900123" }), customer("wholesale")]) {
+    for (const who of [customer("retail", { loyaltyCard: "900123", maxmaDiscount: true }), customer("wholesale")]) {
       db.customer.findUnique.mockResolvedValue(who);
       expect((await order({ items: [{ id: 3, quantity: 1, cardRegistration: registration }] })).status).toBe(400);
     }
@@ -352,7 +359,7 @@ describe("retail minimum with card-only exception", () => {
 
 describe("retail minimum after bonus reservation", () => {
   it("cancels the reservation if MAXMA changes it enough to put the order below 1000", async () => {
-    db.customer.findUnique.mockResolvedValue(customer("retail", { loyaltyCard: "9000123" }));
+    db.customer.findUnique.mockResolvedValue(customer("retail", { loyaltyCard: "9000123", maxmaDiscount: true }));
     maxma.calcLoyalty.mockResolvedValue({ promo: null, bonuses: { balance: 1500, maxToApply: 1200, applied: 100, collected: 40 }, bonusLines: [100] });
     maxma.setLoyaltyOrderQuery.mockResolvedValue({ applied: 1200, collected: 20, bonusRows: [1200] });
     const response = await order({ items: [{ id: 1, quantity: 2 }], applyBonuses: 1200 });

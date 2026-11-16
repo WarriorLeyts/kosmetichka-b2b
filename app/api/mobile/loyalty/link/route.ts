@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       if ((e as { code?: string }).code === "P2002") return occupied();
       throw e;
     }
-    // the discount price: «900…» or the card's owner in 1С «Максма Скидка» (checked now, refreshed every 6 h)
+    // the discount price: the card's owner in 1С «Максма Скидка» (checked now, refreshed every 6 h)
     await refreshMaxmaDiscount(id).catch(() => false);
     return NextResponse.json({ card: publicCard(card) });
   }

@@ -1,6 +1,6 @@
 import { prisma } from "./prisma";
 import { maxmaPhone } from "./maxma";
-import { DISCOUNT_CARD_PREFIX, DISCOUNT_GROUP } from "./discountCardRule";
+import { DISCOUNT_GROUP } from "./discountCardRule";
 import { odataAll, odataConfigured } from "../scripts/onec-odata.js";
 
 type Owner = { Ref_Key: string; Parent_Key?: string; Description?: string; IsFolder?: boolean; НомерТелефонаДляПоиска?: string };
@@ -18,7 +18,7 @@ export function matchPhoneCards(owners: Owner[], cards: Card[]) {
     if (!phone || !number) continue;
     const phones = phonesByCard.get(number) ?? new Set<string>();
     phones.add(phone); phonesByCard.set(number, phones);
-    const discount = number.startsWith(DISCOUNT_CARD_PREFIX) || groups.has(owner?.Parent_Key ?? "");
+    const discount = groups.has(owner?.Parent_Key ?? "");
     const list = found.get(phone) ?? [];
     const same = list.find((c) => c.number === number);
     if (same) same.discount ||= discount;
