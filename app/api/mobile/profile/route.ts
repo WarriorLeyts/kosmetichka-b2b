@@ -122,7 +122,7 @@ export async function PATCH(request: Request) {
     data.passwordChangedAt = new Date(); // other devices are signed out
   }
 
-  if (smsCodeId) await spendSmsCode(smsCodeId); // spent only now: every other check has passed
+  if (smsCodeId) { await spendSmsCode(smsCodeId); data.phoneUnverified = false; } // spent only now: every other check has passed
   const customer = await prisma.customer.update({ where: { id }, data, select: SELECT });
   if (data.passwordChangedAt) {
     const me = await prisma.customer.findUnique({ where: { id }, select: { id: true, email: true, phone: true, role: true } });

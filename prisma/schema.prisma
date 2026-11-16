@@ -237,6 +237,8 @@ model Customer {
   passwordChangedAt DateTime?
   companyName String?
   phone       String? @unique
+  /// Contact-only phone from email registration; never use it for automatic identity/card linking.
+  phoneUnverified Boolean @default(false)
   email       String?
 
   inn     String?
@@ -927,4 +929,17 @@ model CmsSetting {
   value     Json
   updatedAt DateTime @updatedAt
   updatedBy String?
+}
+
+
+model RegistrationEmailCode {
+  id String @id
+  email String
+  phone String
+  codeHash String
+  attempts Int @default(0)
+  used Boolean @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([email, createdAt])
 }

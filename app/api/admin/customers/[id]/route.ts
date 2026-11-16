@@ -27,7 +27,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body || typeof body !== "object") return NextResponse.json({ error: "Пустой запрос" }, { status: 400 });
 
-  const current = await prisma.customer.findUnique({ where: { id }, select: { priceType: true, wholesaleAccess: true } });
+  const current = await prisma.customer.findUnique({ where: { id }, select: { priceType: true, wholesaleAccess: true, phone: true } });
   if (!current) return NextResponse.json({ error: "Клиент не найден" }, { status: 404 });
 
   const data: Prisma.CustomerUpdateInput = {};
@@ -37,6 +37,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     // phone is unique: empty → null, not ""
     (data as Record<string, unknown>)[f] = f === "phone" ? v || null : v;
   }
+  if (body.phone !== undefined && data.phone !== current.phone) data.phoneUnverified = true;
   if (body.manager !== undefined) data.manager = String(body.manager ?? "").trim() || null;
   if (body.oneCId !== undefined) data.oneCId = String(body.oneCId ?? "").trim() || null;
 
