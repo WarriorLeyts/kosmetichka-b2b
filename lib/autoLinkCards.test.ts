@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const db = vi.hoisted(() => ({ customer: { findMany: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() } }));
 const maxma = vi.hoisted(() => ({ findCard: vi.fn(), maxmaConfigured: vi.fn() }));
-const group = vi.hoisted(() => ({ refreshMaxmaDiscount: vi.fn() }));
+const group = vi.hoisted(() => ({ refreshMaxmaDiscount: vi.fn(), cardInDiscountGroup: vi.fn() }));
 vi.mock("./prisma", () => ({ prisma: db }));
 vi.mock("./maxma", async (original) => ({ ...await original<typeof import("./maxma")>(), ...maxma }));
 vi.mock("./discountCard", () => group);
@@ -16,6 +16,7 @@ beforeEach(() => {
   maxma.maxmaConfigured.mockReturnValue(true);
   maxma.findCard.mockResolvedValue({ number: "990123", phone: "+7 (999) 123-45-67" });
   group.refreshMaxmaDiscount.mockResolvedValue(false);
+  group.cardInDiscountGroup.mockResolvedValue(false);
 });
 
 describe("MAXMA phone linking", () => {
@@ -23,7 +24,7 @@ describe("MAXMA phone linking", () => {
     db.customer.findMany.mockResolvedValue([customer({ phone })]);
     await syncCustomerCard(1);
     expect(maxma.findCard).toHaveBeenCalledWith({ phoneNumber: "+79991234567" });
-    expect(db.customer.updateMany).toHaveBeenCalledWith({ where: { id: 1, phone, loyaltyCard: null, priceType: "retail", isActive: true, isApproved: true }, data: { loyaltyCard: "990123", maxmaDiscount: false } });
+    expect(db.customer.updateMany).toHaveBeenCalledWith({ where: { id: 1, phone, loyaltyCard: null, maxmaDiscount: false, priceType: "retail", isActive: true, isApproved: true }, data: { loyaltyCard: "990123", maxmaDiscount: false } });
     expect(group.refreshMaxmaDiscount).toHaveBeenCalledWith(1);
   });
   it("checks the group after saving the card, independently of its prefix", async () => {
@@ -55,10 +56,10 @@ describe("MAXMA phone linking", () => {
     await syncCustomerCard(1);
     expect(maxma.findCard).not.toHaveBeenCalled();
   });
-  it("preserves an existing card and refreshes its group without replacing its number", async () => {
+  it("refreshes the group when MAXMA still has the same card", async () => {
     db.customer.findMany.mockResolvedValue([customer({ loyaltyCard: "990123" })]);
     await syncPhoneCards();
-    expect(maxma.findCard).not.toHaveBeenCalled();
+    expect(maxma.findCard).toHaveBeenCalledWith({ phoneNumber: "+79991234567" });
     expect(db.customer.updateMany).not.toHaveBeenCalled();
     expect(group.refreshMaxmaDiscount).toHaveBeenCalledWith(1);
   });
@@ -90,5 +91,41 @@ describe("MAXMA phone linking", () => {
     maxma.maxmaConfigured.mockReturnValue(false);
     await syncCustomerCard(1);
     expect(maxma.findCard).not.toHaveBeenCalled();
+  });
+});
+
+describe("MAXMA changes the card number on conversion to discount", () => {
+  beforeEach(() => {
+    db.customer.findMany.mockResolvedValue([customer({ loyaltyCard: "old-bonus" })]);
+    maxma.findCard.mockImplementation(async ({ card }) => card ? null : { number: "new-discount", phone: "+79991234567" });
+    group.cardInDiscountGroup.mockResolvedValue(true);
+  });
+  it("replaces the old bonus card with MAXMA's current discount card on the same phone", async () => {
+    await syncPhoneCards();
+    expect(group.cardInDiscountGroup).toHaveBeenCalledWith("new-discount");
+    expect(db.customer.updateMany).toHaveBeenCalledWith({
+      where: { id: 1, phone: "89991234567", loyaltyCard: "old-bonus", maxmaDiscount: false, priceType: "retail", isActive: true, isApproved: true },
+      data: { loyaltyCard: "new-discount", maxmaDiscount: true },
+    });
+  });
+  it.each([false, null])("does not replace the card before discount confirmation (%s)", async (status) => {
+    group.cardInDiscountGroup.mockResolvedValue(status);
+    await syncPhoneCards();
+    expect(db.customer.updateMany).not.toHaveBeenCalled();
+  });
+  it("preserves a manually linked card belonging to another phone", async () => {
+    maxma.findCard.mockImplementation(async ({ card }) => ({ number: card || "new-discount", phone: card ? "+79991111111" : "+79991234567" }));
+    await syncPhoneCards();
+    expect(db.customer.updateMany).not.toHaveBeenCalled();
+  });
+  it("does not replace with a card already claimed by another account", async () => {
+    db.customer.findFirst.mockResolvedValue({ id: 2 });
+    await syncPhoneCards();
+    expect(db.customer.updateMany).not.toHaveBeenCalled();
+  });
+  it("preserves the current card on a MAXMA outage", async () => {
+    maxma.findCard.mockRejectedValue(new Error("offline"));
+    await syncPhoneCards();
+    expect(db.customer.updateMany).not.toHaveBeenCalled();
   });
 });

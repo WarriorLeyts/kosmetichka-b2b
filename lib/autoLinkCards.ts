@@ -1,6 +1,6 @@
 import { prisma } from "./prisma";
 import { findCard, maxmaConfigured, maxmaPhone } from "./maxma";
-import { refreshMaxmaDiscount } from "./discountCard";
+import { cardInDiscountGroup, refreshMaxmaDiscount } from "./discountCard";
 
 type CustomerCard = {
   id: number;
@@ -16,27 +16,42 @@ const eligible = (c: CustomerCard) => c.isActive && c.isApproved && ["retail", "
 
 async function syncCustomer(c: CustomerCard, accounts: CustomerCard[]) {
   if (!eligible(c)) return;
-  // An existing card keeps its number (including manually confirmed cards).
-  // Moving its owner into/out of the 1C group only changes its pricing status.
-  if (c.loyaltyCard) {
-    await refreshMaxmaDiscount(c.id);
+  const refreshExisting = async () => {
+    if (c.loyaltyCard) await refreshMaxmaDiscount(c.id);
+  };
+  const phone = maxmaPhone(c.phone ?? "");
+  if (!maxmaConfigured() || !phone || accounts.filter((a) => maxmaPhone(a.phone ?? "") === phone).length !== 1) {
+    await refreshExisting();
     return;
   }
-  if (!maxmaConfigured()) return;
-  const phone = maxmaPhone(c.phone ?? "");
-  if (!phone || accounts.filter((a) => maxmaPhone(a.phone ?? "") === phone).length !== 1) return;
   const card = await findCard({ phoneNumber: phone });
-  // MAXMA is the source of the card; a missing/mismatched owner phone is not proof of ownership.
-  if (!card || maxmaPhone(card.phone ?? "") !== phone) return;
+  // MAXMA owns the current card number; exact phone matching is required for automatic linking.
+  if (!card || maxmaPhone(card.phone ?? "") !== phone || c.loyaltyCard === card.number) {
+    await refreshExisting();
+    return;
+  }
+  let discount = false;
+  if (c.loyaltyCard) {
+    // A manual card confirmed on another phone must never be silently replaced.
+    const oldCard = await findCard({ card: c.loyaltyCard });
+    if (oldCard && maxmaPhone(oldCard.phone ?? "") !== phone) return;
+    // The cashier changes the card number on conversion to discount. Wait for 1C confirmation;
+    // a bonus card or an unavailable 1C must not replace an existing card (discount has priority).
+    if (await cardInDiscountGroup(card.number) !== true) {
+      await refreshExisting();
+      return;
+    }
+    discount = true;
+  }
   const other = await prisma.customer.findFirst({ where: { loyaltyCard: card.number, NOT: { id: c.id } }, select: { id: true } });
   if (other) return;
   try {
     const result = await prisma.customer.updateMany({
-      where: { id: c.id, phone: c.phone, loyaltyCard: null, priceType: c.priceType, isActive: true, isApproved: true },
-      data: { loyaltyCard: card.number, maxmaDiscount: false },
+      where: { id: c.id, phone: c.phone, loyaltyCard: c.loyaltyCard, maxmaDiscount: c.maxmaDiscount, priceType: c.priceType, isActive: true, isApproved: true },
+      data: { loyaltyCard: card.number, maxmaDiscount: discount },
     });
     // Save the card before checking 1C: a 1C outage must not prevent a MAXMA card being linked.
-    if (result.count) await refreshMaxmaDiscount(c.id);
+    if (result.count && !discount) await refreshMaxmaDiscount(c.id);
   } catch (e) {
     if ((e as { code?: string }).code !== "P2002") throw e;
     // Another account claimed the card concurrently; the unique constraint decides ownership.
@@ -55,7 +70,7 @@ export async function syncCustomerCard(customerId: number) {
 }
 
 let busy = false;
-/** Retry missing MAXMA cards and refresh the group of linked retail cards once a minute. */
+/** Retry MAXMA discovery, follow confirmed discount-card replacements and refresh 1C groups once a minute. */
 export async function syncPhoneCards() {
   if (busy) return;
   busy = true;
