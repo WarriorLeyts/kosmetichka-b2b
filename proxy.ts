@@ -30,6 +30,15 @@ export async function proxy(request: NextRequest) {
       return new NextResponse("User-agent: *\nDisallow: /\n", { headers: { "Content-Type": "text/plain" } });
     }
     if (!cmsPassThrough(pathname)) {
+      // CMS pages only render UI; mutations use /api/*, not Server Actions.
+      // Reject unsupported methods before Next tries to decode a multipart POST
+      // as an action (malformed bodies otherwise become server errors).
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return new NextResponse("Method not allowed", {
+          status: 405,
+          headers: { Allow: "GET, HEAD", "X-Robots-Tag": "noindex, nofollow" },
+        });
+      }
       // the panel's addresses have no /cms prefix: admin.kosmetichka-opt.ru/products → app/cms/products
       if (pathname === "/cms" || pathname.startsWith("/cms/")) {
         const url = request.nextUrl.clone();
