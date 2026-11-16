@@ -1,3 +1,4 @@
+import { variantImageUrl } from "./assortment";
 import { CARD_PRICE, cardRegistration, isCardProduct } from "./cardPurchase";
 import { prisma } from "@/lib/prisma";
 import { calculateCart, priceFor, type PriceType, type CartPricing } from "@/lib/pricing";
@@ -11,6 +12,7 @@ export type OrderItemInput = {
   id: number | string;
   quantity: number | string;
   cardRegistration?: { fullName: string; birthDate: string };
+  variantId?: number;
   variantName?: string | null;
   variantImageUrl?: string | null;
 };
@@ -62,7 +64,7 @@ export async function priceOrder(
 
   const products = await prisma.product.findMany({
     where: { id: { in: productIds } },
-    include: { prices: true },
+    include: { prices: true, variants: { include: { image: true } } },
   });
 
   const productById = new Map(products.map((product) => [product.id, product]));
@@ -130,10 +132,16 @@ export async function priceOrder(
       if (wanted > have) throw new Error(`«${product.name}»: в наличии ${have} шт. Уменьшите количество в корзине.`);
     }
 
+    const variant = product.assortmentEnabled ? product.variants.find(v =>
+      item.variantId != null ? v.id === Number(item.variantId) : v.name === item.variantName
+    ) : null;
+    if (product.assortmentEnabled && (!variant || !variant.available))
+      throw new Error(`«${product.name}»: выбранный вид недоступен. Выберите варианты заново.`);
+
     // MOQ check
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const minQty = (product as any).minOrderQty ?? 1;
-    if (!isCardProduct(product) && quantity < minQty) {
+    if (!isCardProduct(product) && (product.assortmentEnabled ? qtyByProduct.get(product.id)! : quantity) < minQty) {
       throw new Error(`Минимальное количество для «${product.name}» — ${minQty} шт.`);
     }
 
@@ -144,8 +152,8 @@ export async function priceOrder(
       quantity,
       price,
       total: price * quantity,
-      variantName: item.variantName ?? null,
-      variantImageUrl: item.variantImageUrl ?? null,
+      variantName: variant?.name ?? item.variantName ?? null,
+      variantImageUrl: variant ? variantImageUrl(variant.image.path) : item.variantImageUrl ?? null,
       sku: product.guid || String(product.id),
     };
   });

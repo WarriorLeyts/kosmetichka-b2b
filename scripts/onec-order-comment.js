@@ -1,7 +1,8 @@
+import { assortmentComment } from "./assortment-lines.js";
 // Order comment for 1С with the promo code / spent bonuses — the same text as cmlComment in lib/commerceml.ts
 // (a test keeps them equal).
 export function cmlComment(order) {
-  const comment = order.comment || "";
+  const comment = [order.comment, assortmentComment(order.items)].filter(Boolean).join(" | ");
   const bonuses = Math.max(0, order.bonusesApplied ?? 0);
   if (!order.promoCode && bonuses <= 0) return comment;
   const parts = [];

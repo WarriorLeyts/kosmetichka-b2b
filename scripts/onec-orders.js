@@ -1,3 +1,4 @@
+import { aggregateAssortmentLines } from "./assortment-lines.js";
 // Site order → «Заказ покупателя» in 1С over OData (instead of 1С fetching orders by the standard exchange).
 // Same document the 1С integration made: number «СА-000209», unposted, the service fields copied from the
 // latest site order in 1С (СА-…). No database client here: lib/onecOrders.ts claims, retries and acks.
@@ -75,7 +76,7 @@ export function buildOrderBody(order, ctx) {
 
   const tplLine = (tpl.Запасы || [])[0] || {};
   const store = body.СтруктурнаяЕдиницаРезерв_Key;
-  body.Запасы = order.items.map((it, i) => {
+  body.Запасы = aggregateAssortmentLines(order.items).map((it, i) => {
     const total = Number(it.total) || 0;
     const disc = Math.min(Math.max(0, Number(it.discount) || 0) + Math.max(0, Number(it.bonusDiscount) || 0), Math.max(0, total));
     const sum = round2(total - disc);

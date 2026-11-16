@@ -1,3 +1,4 @@
+import { aggregateAssortmentLines } from "@/scripts/assortment-lines.js";
 import { NextRequest, NextResponse } from "next/server";
 import { syncKeyOk } from "@/lib/syncKey";
 import { prisma } from "@/lib/prisma";
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
       const phone = customer.phone || "";
       const name = escapeXml(customer.companyName || customer.name || "");
 
-      const itemsXml = order.items
+      const itemsXml = aggregateAssortmentLines(order.items)
         .map(
           (item) => `    <Товар>
       <Ид>${escapeXml(productGuidMap.get(item.productId) || String(item.productId))}</Ид>

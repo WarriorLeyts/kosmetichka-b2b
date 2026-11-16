@@ -1,3 +1,4 @@
+import { assortmentComment } from "../scripts/assortment-lines.js";
 /**
  * Promo-code bits of the CommerceML order export (1C). Without a promo code every
  * helper returns exactly what the export had before (empty string / original value).
@@ -56,12 +57,13 @@ ${indent}</Скидки>`;
 
 /** Order comment with the promo code / spent bonuses appended (unchanged without them). */
 export function cmlComment(order: {
+  items?: { productName: string; variantName?: string | null; quantity: number }[];
   comment: string | null;
   promoCode?: string | null;
   discount?: number | null;
   bonusesApplied?: number | null;
 }): string {
-  const comment = order.comment || "";
+  const comment = [order.comment, assortmentComment(order.items)].filter(Boolean).join(" | ");
   const bonuses = Math.max(0, order.bonusesApplied ?? 0);
   if (!order.promoCode && bonuses <= 0) return comment;
   const parts: string[] = [];

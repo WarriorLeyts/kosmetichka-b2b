@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { AssortmentEditor } from "./AssortmentEditor";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ExternalLink, GripVertical, ImagePlus, Lock, Plus, RefreshCw, RotateCcw, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -399,6 +400,8 @@ export function ProductEditor({ id }: { id: number }) {
               снимут.
             </p>
           </Card>
+
+          <AssortmentEditor id={id} photoKey={p.images.map(i => i.id + ":" + i.path).join("|")} />
 
           {/* ── Фотографии ── */}
           <Card className="p-5">

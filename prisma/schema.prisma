@@ -64,6 +64,7 @@ model Product {
 
   /// Admin panel (admin.kosmetichka-opt.ru): the product is not shown to customers (catalogue, search,
   /// product page, related strips, sitemap). Prices / stock still come from 1C.
+  assortmentEnabled Boolean @default(false)
   hidden          Boolean @default(false)
   /// the description was edited in the admin panel — the 1C import no longer overwrites it
   descriptionManual Boolean @default(false)
@@ -205,6 +206,7 @@ model ProductVariant {
   id        Int          @id @default(autoincrement())
   productId Int
   product   Product      @relation(fields: [productId], references: [id])
+  available Boolean @default(true)
   imageId   Int
   image     ProductImage @relation(fields: [imageId], references: [id])
   name      String
