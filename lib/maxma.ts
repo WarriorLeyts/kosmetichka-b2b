@@ -73,6 +73,7 @@ function cashbackFor(level: string | null): string | null {
 
 /** Digits of a Russian phone → +7XXXXXXXXXX, or null. */
 export function maxmaPhone(value: string): string | null {
+  if (String(value).trim().startsWith("+") && !String(value).trim().startsWith("+7")) return null;
   const d = String(value).replace(/\D/g, "");
   if (d.length === 11 && (d.startsWith("7") || d.startsWith("8"))) return "+7" + d.slice(1);
   if (d.length === 10) return "+7" + d;

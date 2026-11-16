@@ -1,3 +1,4 @@
+import { verifyRegistrationEmail, consumeRegistrationEmail } from "@/lib/registrationEmail";
 import { syncCustomerCard } from "@/lib/autoLinkCards";
 import { after, NextResponse } from "next/server";
 import path from "path";
@@ -7,7 +8,7 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { createToken } from "@/lib/auth";
-import { normalizePhone, toSmsAeroPhone } from "@/lib/phone";
+import { normalizePhone, toSmsAeroPhone, foreignContactPhone, registrationEmail } from "@/lib/phone";
 import { getClientIp } from "@/lib/rateLimit";
 import { isWholesaleRole } from "@/lib/roles";
 import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
@@ -85,43 +86,21 @@ export async function POST(request: Request) {
     );
   }
 
-  // ─── Проверка SMS-кода ────────────────────────────────────────
-  if (!smsCode) {
-    return NextResponse.json(
-      { error: "Введите код подтверждения из SMS" },
-      { status: 400 }
-    );
+  const foreignPhone = body.foreignPhone === true;
+  const cleanPhone = foreignPhone ? foreignContactPhone(phone) : normalizePhone(phone);
+  const cleanEmail = registrationEmail(email);
+  if (!cleanPhone || !cleanEmail) return NextResponse.json({ error: "Проверьте номер телефона и email" }, { status: 400 });
+  let emailVerification: string | null = null;
+  let smsRecord: { id: number } | null = null;
+  if (foreignPhone) {
+    emailVerification = await verifyRegistrationEmail(body.emailChallengeId, cleanEmail, cleanPhone, body.emailCode);
+    if (!emailVerification) return NextResponse.json({ error: "Неверный или истёкший код из письма. Запросите новый код при необходимости." }, { status: 400 });
+  } else {
+    const smsPhone = toSmsAeroPhone(phone || "");
+    if (!smsPhone || !smsCode) return NextResponse.json({ error: "Проверьте телефон и введите код из SMS" }, { status: 400 });
+    smsRecord = await prisma.smsCode.findFirst({ where: { phone: smsPhone, code: String(smsCode).trim(), used: false, expiresAt: { gte: new Date() } }, orderBy: { createdAt: "desc" } });
+    if (!smsRecord) return NextResponse.json({ error: "Неверный или истёкший код подтверждения" }, { status: 400 });
   }
-
-  const smsPhone = toSmsAeroPhone(phone || "");
-
-  if (!smsPhone) {
-    return NextResponse.json(
-      { error: "Неверный формат номера телефона" },
-      { status: 400 }
-    );
-  }
-
-  const smsRecord = await prisma.smsCode.findFirst({
-    where: {
-      phone: smsPhone,
-      code: String(smsCode).trim(),
-      used: false,
-      expiresAt: { gte: new Date() },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  if (!smsRecord) {
-    return NextResponse.json(
-      { error: "Неверный или истёкший код подтверждения" },
-      { status: 400 }
-    );
-  }
-
-  // ─── Основная логика регистрации ─────────────────────────────
-  const cleanPhone = normalizePhone(phone);
-  const cleanEmail = String(email || "").trim().toLowerCase();
 
   // Валидируем поля ДО инвалидации SMS-кода — иначе код сгорает при неполной форме
   if (!name || !cleanPhone || !cleanEmail || !password) {
@@ -150,7 +129,7 @@ export async function POST(request: Request) {
   // «Неактуальные» sign-up (staff set it aside) registering again with the same phone: his data and
   // photos are replaced and the request is back in «Ожидают»
   const again =
-    exists && !exists.isApproved && exists.isActive && exists.requestStaleAt && exists.phone === cleanPhone ? exists : null;
+    exists && !exists.isApproved && exists.isActive && exists.requestStaleAt && exists.phone === cleanPhone && (!foreignPhone || exists.email === cleanEmail) ? exists : null;
   if (again && exists!.email !== cleanEmail && (await prisma.customer.findFirst({ where: { email: cleanEmail, id: { not: again.id } } }))) {
     return NextResponse.json({ error: "Этот email уже занят другим клиентом" }, { status: 400 });
   }
@@ -161,13 +140,12 @@ export async function POST(request: Request) {
     );
   }
 
-  // Помечаем код как использованный (только после всех проверок)
-  await prisma.smsCode.update({
-    where: { id: smsRecord.id },
-    data: { used: true },
-  });
+  if (emailVerification && !(await consumeRegistrationEmail(emailVerification))) {
+    return NextResponse.json({ error: "Код уже использован или истёк. Запросите новый." }, { status: 400 });
+  }
+  if (smsRecord) await prisma.smsCode.update({ where: { id: smsRecord.id }, data: { used: true } });
 
-  const oneCCustomer = await prisma.oneCCustomer.findFirst({
+  const oneCCustomer = foreignPhone ? null : await prisma.oneCCustomer.findFirst({
     where: {
       OR: [
         { phone: cleanPhone },
@@ -204,6 +182,7 @@ export async function POST(request: Request) {
       address,
       ...(shop ? { shopType: shop.shopType, shopLink: shop.shopLink } : {}),
       phone: cleanPhone,
+      phoneUnverified: foreignPhone,
       email: cleanEmail,
       password: hashedPassword,
 
@@ -234,7 +213,7 @@ export async function POST(request: Request) {
       })
     : await prisma.customer.create({ data: customerData });
   // The phone was confirmed above. Start card discovery now, without delaying registration on MAXMA/1C.
-  if (shouldAutoApprove && effectivePriceType === "retail") {
+  if (!foreignPhone && shouldAutoApprove && effectivePriceType === "retail") {
     after(() => syncCustomerCard(customer.id));
   }
   if (again) console.log(`[register] customer ${again.id}: «Неактуальная» sign-up sent again`);

@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ after: vi.fn(), syncCustomerCard: vi.fn(), setCookie: vi.fn() }));
+const mocks = vi.hoisted(() => ({ after: vi.fn(), syncCustomerCard: vi.fn(), setCookie: vi.fn(), verifyRegistrationEmail: vi.fn(), consumeRegistrationEmail: vi.fn() }));
 const db = vi.hoisted(() => ({
   customer: { findFirst: vi.fn(), create: vi.fn() },
   oneCCustomer: { findFirst: vi.fn() },
   smsCode: { findFirst: vi.fn(), update: vi.fn() },
 }));
+vi.mock("@/lib/registrationEmail", () => ({ verifyRegistrationEmail: mocks.verifyRegistrationEmail, consumeRegistrationEmail: mocks.consumeRegistrationEmail }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 vi.mock("@/lib/autoLinkCards", () => ({ syncCustomerCard: mocks.syncCustomerCard }));
 vi.mock("next/server", async (original) => ({ ...await original<typeof import("next/server")>(), after: mocks.after }));
@@ -51,5 +52,40 @@ describe("registration card discovery", () => {
     db.oneCCustomer.findFirst.mockResolvedValue({ priceType: "wholesale" });
     expect((await POST(request())).status).toBe(200);
     expect(mocks.after).not.toHaveBeenCalled();
+  });
+});
+
+describe("registration by email for foreign contact numbers", () => {
+  const foreign = () => request({ foreignPhone: true, phone: "+995 555 123 456", emailChallengeId: "challenge", emailCode: "123456", smsCode: "" });
+  it("verifies email, saves a contact-only international phone and never auto-links identities", async () => {
+    mocks.verifyRegistrationEmail.mockResolvedValue("challenge");
+    mocks.consumeRegistrationEmail.mockResolvedValue(true);
+    expect((await POST(foreign())).status).toBe(200);
+    expect(mocks.verifyRegistrationEmail).toHaveBeenCalledWith("challenge", "test@example.com", "+995555123456", "123456");
+    expect(db.customer.create).toHaveBeenCalledWith({ data: expect.objectContaining({ phone: "+995555123456", phoneUnverified: true }) });
+    expect(db.smsCode.findFirst).not.toHaveBeenCalled();
+    expect(db.oneCCustomer.findFirst).not.toHaveBeenCalled();
+    expect(mocks.after).not.toHaveBeenCalled();
+  });
+  it("rejects an incorrect email code", async () => {
+    mocks.verifyRegistrationEmail.mockResolvedValue(null);
+    expect((await POST(foreign())).status).toBe(400);
+    expect(db.customer.create).not.toHaveBeenCalled();
+  });
+  it("rejects replay of a consumed email challenge", async () => {
+    mocks.verifyRegistrationEmail.mockResolvedValue("challenge");
+    mocks.consumeRegistrationEmail.mockResolvedValue(false);
+    expect((await POST(foreign())).status).toBe(400);
+    expect(db.customer.create).not.toHaveBeenCalled();
+  });
+  it("does not allow the email mode for a +7 phone", async () => {
+    expect((await POST(request({ foreignPhone: true, phone: "+79154509717" }))).status).toBe(400);
+    expect(mocks.verifyRegistrationEmail).not.toHaveBeenCalled();
+  });
+  it("cannot take over a stale application using an unverified phone and a different email", async () => {
+    mocks.verifyRegistrationEmail.mockResolvedValue("challenge");
+    db.customer.findFirst.mockResolvedValue({ id: 2, isActive: true, isApproved: false, requestStaleAt: new Date(), phone: "+995555123456", email: "owner@example.com" });
+    expect((await POST(foreign())).status).toBe(400);
+    expect(db.customer.create).not.toHaveBeenCalled();
   });
 });

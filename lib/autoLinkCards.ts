@@ -5,14 +5,15 @@ import { cardInDiscountGroup, refreshMaxmaDiscount } from "./discountCard";
 type CustomerCard = {
   id: number;
   phone: string | null;
+  phoneUnverified?: boolean;
   loyaltyCard: string | null;
   maxmaDiscount: boolean;
   priceType: string;
   isActive: boolean;
   isApproved: boolean;
 };
-const select = { id: true, phone: true, loyaltyCard: true, maxmaDiscount: true, priceType: true, isActive: true, isApproved: true } as const;
-const eligible = (c: CustomerCard) => c.isActive && c.isApproved && ["retail", "discount"].includes(c.priceType);
+const select = { id: true, phone: true, phoneUnverified: true, loyaltyCard: true, maxmaDiscount: true, priceType: true, isActive: true, isApproved: true } as const;
+const eligible = (c: CustomerCard) => !c.phoneUnverified && c.isActive && c.isApproved && ["retail", "discount"].includes(c.priceType);
 
 async function syncCustomer(c: CustomerCard, accounts: CustomerCard[]) {
   if (!eligible(c)) return;
@@ -47,7 +48,7 @@ async function syncCustomer(c: CustomerCard, accounts: CustomerCard[]) {
   if (other) return;
   try {
     const result = await prisma.customer.updateMany({
-      where: { id: c.id, phone: c.phone, loyaltyCard: c.loyaltyCard, maxmaDiscount: c.maxmaDiscount, priceType: c.priceType, isActive: true, isApproved: true },
+      where: { id: c.id, phone: c.phone, phoneUnverified: false, loyaltyCard: c.loyaltyCard, maxmaDiscount: c.maxmaDiscount, priceType: c.priceType, isActive: true, isApproved: true },
       data: { loyaltyCard: card.number, maxmaDiscount: discount },
     });
     // Save the card before checking 1C: a 1C outage must not prevent a MAXMA card being linked.
