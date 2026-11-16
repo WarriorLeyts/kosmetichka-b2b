@@ -1,3 +1,6 @@
+import path from "path";
+import { unlink } from "fs/promises";
+import { PROOF_DIR } from "@/lib/proofs";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
@@ -69,4 +72,45 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     throw e;
   }
   return NextResponse.json({ success: true });
+}
+
+
+/** Delete only accounts without orders. 1C and MAXMA records are not modified. */
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!(await requireAdmin())) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
+  const admin = await requireAdminRole();
+  if (!admin) return NextResponse.json({ error: "Удалять клиентов может только администратор" }, { status: 403 });
+  const id = Number((await params).id);
+  if (!Number.isSafeInteger(id) || id <= 0) return NextResponse.json({ error: "Неверный id" }, { status: 400 });
+  const hasOrders = () => NextResponse.json({ error: "У клиента есть заказы. Удаление невозможно — заблокируйте клиента.", code: "customer_has_orders" }, { status: 409 });
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const customer = await tx.customer.findUnique({
+        where: { id },
+        select: { proofs: { select: { file: true } }, _count: { select: { orders: true } } },
+      });
+      if (!customer) return { status: "missing" as const };
+      if (customer._count.orders) return { status: "orders" as const };
+      // Recheck at deletion time; the Order foreign key also protects against concurrent checkout.
+      const deleted = await tx.customer.deleteMany({ where: { id, orders: { none: {} } } });
+      if (!deleted.count) return { status: "orders" as const };
+      await tx.adminAuditLog.create({ data: {
+        userId: Number(admin.id), userName: String(admin.email ?? "admin"),
+        action: "delete", entity: "customer", entityId: String(id), summary: `Удалён клиент №${id} без заказов`,
+      } });
+      return { status: "deleted" as const, proofs: customer.proofs };
+    });
+    if (result.status === "missing") return NextResponse.json({ error: "Клиент не найден" }, { status: 404 });
+    if (result.status === "orders") return hasOrders();
+    // Rows are cascaded by the database; remove uploaded proof files only after commit.
+    await Promise.all(result.proofs.map(async ({ file }) => {
+      if (path.basename(file) !== file) return;
+      try { await unlink(path.join(PROOF_DIR, file)); }
+      catch (e) { if ((e as NodeJS.ErrnoException).code !== "ENOENT") console.warn("[customer-delete] Could not remove proof file"); }
+    }));
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    if ((e as { code?: string }).code === "P2003") return hasOrders();
+    throw e;
+  }
 }
