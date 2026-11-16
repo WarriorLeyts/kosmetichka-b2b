@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { odataConfigured, odataGet } from "../scripts/onec-odata.js";
 
-export { DISCOUNT_CARD_PREFIX, DISCOUNT_GROUP, cardGivesDiscount } from "./discountCardRule";
+export { DISCOUNT_GROUP, cardGivesDiscount } from "./discountCardRule";
 import { DISCOUNT_GROUP } from "./discountCardRule";
 
 const ZERO = "00000000-0000-0000-0000-000000000000";

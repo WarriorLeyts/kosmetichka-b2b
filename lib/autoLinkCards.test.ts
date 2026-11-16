@@ -13,14 +13,14 @@ describe("phone-matched cash-desk cards", () => {
   it.each(["8 (999) 123-45-67", "+7-999-123-45-67", "79991234567", "999-123-45-67"])("normalises %s without changing subscriber digits", (phone) => {
     const normal = maxmaPhone(phone);
     expect(normal).toBe("+79991234567");
-    expect(matchPhoneCards([owner(phone)], [card("900123")]).get(normal!)).toEqual({ number: "900123", discount: true });
+    expect(matchPhoneCards([owner(phone)], [card("900123")]).get(normal!)).toEqual({ number: "900123", discount: false });
   });
   it.each(["123", "999123456", "799912345678", "not a phone"])("does not guess missing digits in %s", (phone) => {
     expect(matchPhoneCards([owner(phone)], [card("900123")]).size).toBe(0);
   });
   it("upgrades a bonus card on the same phone to the unique discount card", () => {
-    const matches = matchPhoneCards([owner("89991234567")], [card("990000"), card("900000")]);
-    expect(matches.get("+79991234567")?.number).toBe("900000");
+    const matches = matchPhoneCards([{ Ref_Key: "discounts", IsFolder: true, Description: "Максма Скидка" }, owner("89991234567"), owner("89991234567", "discount-owner", { Parent_Key: "discounts" })], [card("900000"), card("990000", "discount-owner")]);
+    expect(matches.get("+79991234567")?.number).toBe("990000");
   });
   it("recognises the configured 1С group even without the 900 prefix", () => {
     expect(matchPhoneCards([{ Ref_Key: "discounts", IsFolder: true, Description: "Максма Скидка" }, owner("89991234567", "owner", { Parent_Key: "discounts" })], [card("123456")]).get("+79991234567")?.discount).toBe(true);
@@ -44,7 +44,15 @@ describe("automatic linking safeguards", () => {
     odata.odataAll.mockImplementation(async (entity) => entity === "Catalog_Контрагенты" ? [owner("+7-999-123-45-67")] : [card("900001")]);
     db.customer.updateMany.mockClear();
     await syncPhoneCards();
-    expect(db.customer.updateMany).toHaveBeenCalledWith({ where: { id: 1, phone: "8 (999) 123-45-67", loyaltyCard: null }, data: { loyaltyCard: "900001", maxmaDiscount: true } });
+    expect(db.customer.updateMany).toHaveBeenCalledWith({ where: { id: 1, phone: "8 (999) 123-45-67", loyaltyCard: null }, data: { loyaltyCard: "900001", maxmaDiscount: false } });
+  });
+  it("removes a previously prefix-based discount from an already linked card", async () => {
+    db.customer.findMany.mockResolvedValue([{ id: 1, phone: "89991234567", loyaltyCard: "900001", maxmaDiscount: true }]);
+    db.customer.findFirst.mockResolvedValue(null);
+    odata.odataAll.mockImplementation(async (entity) => entity === "Catalog_Контрагенты" ? [owner("89991234567")] : [card("900001")]);
+    db.customer.updateMany.mockClear();
+    await syncPhoneCards();
+    expect(db.customer.updateMany).toHaveBeenCalledWith({ where: { id: 1, phone: "89991234567", loyaltyCard: "900001" }, data: { loyaltyCard: "900001", maxmaDiscount: false } });
   });
   it("does not steal a card already linked to another account", async () => {
     db.customer.findMany.mockResolvedValue([{ id: 1, phone: "89991234567", loyaltyCard: null, maxmaDiscount: false }]);

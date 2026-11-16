@@ -4,7 +4,7 @@ import { bonusesOn } from "@/lib/maxma";
 export const SITE_RETAIL_ENABLED = true;
 
 /**
- * A retail customer («Розница») with a MAXMA loyalty card linked pays the discount price («Скидка по
+ * A retail customer («Розница») with a discount card linked pays the discount price («Скидка по
  * карте») — in the catalogue, the cart and the order; without the card — retail. First on the
  * website, now in the phone apps too (APPS_TOO). Turn off: set to false (and the app's src/siteMode.ts).
  */
@@ -19,7 +19,7 @@ export function fromSite(request: Request): boolean {
 
 /**
  * The customer as the prices see him: «Розница» with a discount card → «Скидка по карте». A discount card:
- * number «900…» or its owner in the 1С group «Максма Скидка» (lib/discountCard.ts).
+ * its owner is in the 1С group «Максма Скидка» (lib/discountCard.ts).
  */
 export function pricingCustomer<T extends { priceType?: string | null; loyaltyCard?: string | null; maxmaDiscount?: boolean | null }>(customer: T, request: Request): T {
   const card = cardGivesDiscount(customer);
