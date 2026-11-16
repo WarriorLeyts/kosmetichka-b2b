@@ -213,6 +213,7 @@ export async function GET(request: Request) {
     brand: true,
     images: { take: 1, orderBy: [{ sortOrder: "asc" as const }, { id: "asc" as const }] },
     prices: true,
+    variants: { where: { available: true }, orderBy: { sortOrder: "asc" as const }, select: { id: true, name: true, imageId: true, image: { select: { path: true } } } },
   };
   // ?lite=1 (mobile apps): no description — it is ~65% of the page and cards don't show it
   const omit = searchParams.get("lite") === "1" ? { description: true } : undefined;

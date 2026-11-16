@@ -14,7 +14,7 @@ export async function GET(
   const { id } = await params;
 
   const variants = await prisma.productVariant.findMany({
-    where: { productId: Number(id) },
+    where: { productId: Number(id), available: true, product: { assortmentEnabled: true, hidden: false } },
     include: { image: { select: { id: true, path: true } } },
     orderBy: { sortOrder: "asc" },
   });
@@ -32,7 +32,7 @@ export async function GET(
       headers: {
         // Браузер кэширует ответ на 60 секунд, CDN/прокси — на 5 минут.
         // Варианты меняются редко (только при синхронизации с 1С).
-        "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
+        "Cache-Control": "public, max-age=0, must-revalidate",
       },
     }
   );

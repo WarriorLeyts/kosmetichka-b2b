@@ -25,6 +25,7 @@ export async function GET(
       images: { orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
       prices: true,
       variants: {
+        where: { available: true },
         include: { image: true },
         orderBy: { sortOrder: "asc" },
       },
