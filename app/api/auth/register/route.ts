@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { syncCustomerCard } from "@/lib/autoLinkCards";
+import { after, NextResponse } from "next/server";
 import path from "path";
 import { unlink } from "fs/promises";
 import { PROOF_DIR, createProofToken, shopFields } from "@/lib/proofs";
@@ -232,6 +233,10 @@ export async function POST(request: Request) {
         },
       })
     : await prisma.customer.create({ data: customerData });
+  // The phone was confirmed above. Start card discovery now, without delaying registration on MAXMA/1C.
+  if (shouldAutoApprove && effectivePriceType === "retail") {
+    after(() => syncCustomerCard(customer.id));
+  }
   if (again) console.log(`[register] customer ${again.id}: «Неактуальная» sign-up sent again`);
 
   // staff decide on wholesale sign-ups (retail is approved at once): approve the account and / or «Крупный опт»
