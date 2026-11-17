@@ -1,6 +1,9 @@
 import { cardGivesDiscount } from "@/lib/discountCard";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import path from "path";
+import { unlink } from "fs/promises";
+import { PROOF_DIR } from "@/lib/proofs";
 import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../_auth";
 import { renewCustomerSession } from "@/lib/customerAuth";
@@ -133,8 +136,9 @@ export async function PATCH(request: Request) {
 
 /**
  * DELETE /api/mobile/profile { password } — the customer deletes their account (App Store /
- * Google Play requirement, 152-ФЗ). Personal data is erased; orders stay (accounting) but no
- * longer point to a person; the account is blocked, so every session ends at once.
+ * Google Play). Profile, saved lists and wholesale proof files are erased. Order records
+ * are retained separately; do not promise that their free text / delivery address is anonymized.
+ * The account is blocked, so every customer session ends at once.
  */
 export async function DELETE(request: Request) {
   const id = await currentCustomerId();
@@ -142,13 +146,16 @@ export async function DELETE(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const password = String(body?.password ?? "");
-  const stored = await prisma.customer.findUnique({ where: { id }, select: { password: true, email: true } });
+  const stored = await prisma.customer.findUnique({ where: { id }, select: { password: true, email: true, proofs: { select: { file: true } } } });
   const ok = stored && password ? await bcrypt.compare(password, stored.password) : false;
   if (!ok) return NextResponse.json({ error: "Неверный пароль", code: "current_password_wrong" }, { status: 400 });
 
   const random = await bcrypt.hash(crypto.randomUUID(), 10);
   await prisma.$transaction([
     prisma.wishlistItem.deleteMany({ where: { customerId: id } }),
+    prisma.customerCart.deleteMany({ where: { customerId: id } }),
+    prisma.customerFavorites.deleteMany({ where: { customerId: id } }),
+    prisma.customerProof.deleteMany({ where: { customerId: id } }),
     prisma.pushToken.deleteMany({ where: { customerId: id } }),
     prisma.webPushSubscription.deleteMany({ where: { customerId: id } }),
     prisma.notification.deleteMany({ where: { customerId: id } }),
@@ -157,6 +164,16 @@ export async function DELETE(request: Request) {
       where: { id },
       data: {
         name: "Удалённый аккаунт",
+        shopType: null,
+        shopLink: null,
+        referralSource: null,
+        orderedBefore: null,
+        surveyAt: null,
+        manager: null,
+        pushPromo: false,
+        isApproved: false,
+        wholesaleAccess: null,
+        passwordChangedAt: new Date(),
         companyName: null,
         phone: null,
         email: null,
@@ -174,6 +191,12 @@ export async function DELETE(request: Request) {
       },
     }),
   ]);
+  // Files become unreachable when their proof rows are removed; delete disk copies after commit.
+  await Promise.all((stored?.proofs ?? []).map(async ({ file }) => {
+    if (path.basename(file) !== file) return;
+    try { await unlink(path.join(PROOF_DIR, file)); }
+    catch (e) { if ((e as NodeJS.ErrnoException).code !== "ENOENT") console.warn("[account-delete] Could not remove proof file"); }
+  }));
   console.log(`[account] customer ${id} deleted their account`);
 
   const res = NextResponse.json({ success: true });

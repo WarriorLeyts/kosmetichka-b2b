@@ -73,7 +73,9 @@ function LegacyContactsPage() {
           <section className="mb-8">
             <h2 className="text-base font-bold text-slate-700 mb-3">Связаться с нами</h2>
             <div className="rounded-xl bg-pink-50 border border-pink-100 px-4 py-4 text-sm text-slate-600 space-y-2">
-              <p>По вопросам заказов и сотрудничества обращайтесь к вашему менеджеру или через личный кабинет на сайте.</p>
+              <p>Обратиться в поддержку можно без регистрации. По существующим заказам можно также написать менеджеру в чате заказа.</p>
+              <p><a href="tel:+79389059494" className="font-medium text-pink-600">+7 938 905-94-94</a></p>
+              <p><a href="mailto:kosmetichka.upl@gmail.com" className="font-medium text-pink-600">kosmetichka.upl@gmail.com</a></p>
               <p className="mt-2">
                 <span className="text-slate-400">Сайт: </span>
                 <span className="font-medium">kosmetichka-opt.ru</span>

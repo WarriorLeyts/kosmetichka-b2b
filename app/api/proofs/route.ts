@@ -20,6 +20,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: bearer ? "Время загрузки истекло — напишите менеджеру" : "Нужно войти" }, { status: 401 });
   }
 
+  // A previously issued applicant token must stop working after account deletion / blocking.
+  const customer = await prisma.customer.findUnique({ where: { id: customerId }, select: { isActive: true } });
+  if (!customer?.isActive) return NextResponse.json({ error: "Аккаунт недоступен" }, { status: 401 });
+
   const form = await request.formData().catch(() => null);
   const file = form?.get("file");
   if (!(file instanceof File)) return NextResponse.json({ error: "Файл не найден" }, { status: 400 });
