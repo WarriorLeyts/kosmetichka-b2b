@@ -1,3 +1,4 @@
+import { becameOrderable, availableForSubscriber } from "./restock-availability.js";
 import { PrismaClient } from "@prisma/client";
 import { XMLParser } from "fast-xml-parser";
 import nodemailer from "nodemailer";
@@ -71,14 +72,15 @@ async function notifyRestockInApp(items, notifiedIds) {
 async function sendWishlistNotifications(productIds) {
   if (!productIds.length) return;
 
-  const items = await prisma.wishlistItem.findMany({
+  const candidates = await prisma.wishlistItem.findMany({
     where: { productId: { in: productIds }, notified: false },
     include: {
-      customer: { select: { id: true, email: true, name: true } },
-      product:  { select: { id: true, name: true } },
+      customer: { select: { id: true, email: true, name: true, priceType: true, isActive: true } },
+      product:  { select: { id: true, name: true, stock: true, wholesaleStock: true } },
     },
   });
 
+  const items = candidates.filter((item) => availableForSubscriber(item.customer, item.product));
   if (!items.length) return;
 
   const transporter = nodemailer.createTransport({
@@ -233,10 +235,10 @@ async function main() {
   if (watchedIds.size > 0) {
     const products = await prisma.product.findMany({
       where: { id: { in: [...watchedIds] } },
-      select: { id: true, stock: true },
+      select: { id: true, stock: true, wholesaleStock: true },
     });
     for (const p of products) {
-      prevStocks.set(p.id, p.stock ?? 0);
+      prevStocks.set(p.id, { stock: p.stock ?? 0, wholesaleStock: p.wholesaleStock ?? 0 });
     }
   }
 
@@ -307,8 +309,8 @@ async function main() {
 
     // Проверяем появился ли товар в наличии
     if (watchedIds.has(product.id)) {
-      const prevStock = prevStocks.get(product.id) ?? 0;
-      if (prevStock <= 0 && newStock > 0) {
+      const previous = prevStocks.get(product.id);
+      if (becameOrderable(previous, { stock: newStock, wholesaleStock: newWholesale })) {
         cameIntoStock.push(product.id);
       }
     }
