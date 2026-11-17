@@ -1,3 +1,4 @@
+import { LEGACY_CAMPAIGN } from "@/lib/campaign";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
@@ -41,3 +42,5 @@ describe("only edited lines lose their assembly mark", () => {
     expect(db.orderItemCheck.deleteMany).toHaveBeenCalledWith({ where: { orderItemId: { in: [42] } } });
   });
 });
+
+vi.mock("@/lib/campaignSettings", () => ({ getCampaign: async () => LEGACY_CAMPAIGN }));

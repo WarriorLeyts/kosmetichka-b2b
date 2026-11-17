@@ -1,3 +1,4 @@
+import { LEGACY_CAMPAIGN } from "@/lib/campaign";
 import { describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({
@@ -48,3 +49,5 @@ describe("promotion filter combined with catalog filters",()=>{
     }finally{clock.mockRestore();}
   });
 });
+
+vi.mock("@/lib/campaignSettings", () => ({ getCampaign: async () => LEGACY_CAMPAIGN }));

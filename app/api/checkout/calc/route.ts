@@ -52,10 +52,12 @@ export async function POST(request: Request) {
 
   let lines;
   let pricing;
+  let campaignName;
   try {
     const priced = await priceOrder(pricingCustomer(customer, request), items);
     if (priced.lines.some((l) => isCardProduct({ name: l.productName, guid: l.sku })) && !maxmaPhone(customer.phone ?? "")) throw new Error("Для оформления карты укажите российский телефон в профиле");
     pricing = priced.pricing;
+    campaignName = priced.campaign.name;
     lines = loyaltyLines(priced.lines, pricing).filter((l) => !isCardProduct({ name: l.productName, guid: l.sku }));
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Не удалось рассчитать корзину" }, { status: 400 });
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
   const automatic = {
     priceTier: pricing.tier,
     wholesalePromo: pricing.percent > 0 ? {
-      name: "Светлая пятница + ОПТ", percent: pricing.percent,
+      name: campaignName, percent: pricing.percent,
       eligibleSubtotal: pricing.eligibleSubtotal, discount: pricing.discount,
     } : null,
   };

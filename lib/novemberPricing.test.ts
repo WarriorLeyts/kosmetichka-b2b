@@ -1,6 +1,6 @@
 import { describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { calculateCart, cartPriceTier, priceFor, novemberPromoActive, bigWholesaleMinOrder, cleanPromoSnapshot } from "./pricing";
+import { calculateCart, cartPriceTier, priceFor, pricingCampaignActive, bigWholesaleMinOrder, cleanPromoSnapshot } from "./pricing";
 import { normalizePriceType } from "../scripts/price-types.js";
 
 const during = Date.parse("2026-11-13T12:00:00+03:00");
@@ -28,10 +28,10 @@ describe("1C campaign prices", () => {
     }
   });
   it("runs from 13 November through 30 November in Moscow", () => {
-    assert.equal(novemberPromoActive(before), false);
-    assert.equal(novemberPromoActive(before + 1), true);
-    assert.equal(novemberPromoActive(after - 1), true);
-    assert.equal(novemberPromoActive(after), false);
+    assert.equal(pricingCampaignActive(before), false);
+    assert.equal(pricingCampaignActive(before + 1), true);
+    assert.equal(pricingCampaignActive(after - 1), true);
+    assert.equal(pricingCampaignActive(after), false);
     assert.equal(bigWholesaleMinOrder(during), 25_000);
     assert.equal(bigWholesaleMinOrder(after), 50_000);
     assert.equal(priceFor(screenshot, "retail", after), 490);

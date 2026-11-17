@@ -1,3 +1,4 @@
+import { getCampaign } from "@/lib/campaignSettings";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
@@ -102,6 +103,7 @@ async function editItems(request: NextRequest, { params }: Props) {
   if (newItems.length > 0) {
     // at the order's current prices («Опт»: by its sum); repriceOrder below moves every line if the sum crosses 5 000 / 50 000 ₽
     const type = orderTier(order);
+    const campaign = await getCampaign();
     const products = await prisma.product.findMany({
       where: { id: { in: newItems.map((ni) => Number(ni.productId)) } },
       select: { id: true, name: true, barcode: true, prices: { select: { priceType: true, price: true } }, variants: { select: { name: true } } },
@@ -112,7 +114,7 @@ async function editItems(request: NextRequest, { params }: Props) {
       if (!p) return NextResponse.json({ error: `Товар ${ni.productId} не найден` }, { status: 400 });
       const pm = Object.fromEntries(p.prices.map((x) => [x.priceType, Number(x.price)]));
       const price = Math.round(
-        priceFor({ retailPrice: pm.retail, discountPrice: pm.discount, wholesalePrice: pm.wholesale, bigWholesalePrice: pm.big_wholesale }, type)
+        priceFor({ retailPrice: pm.retail, discountPrice: pm.discount, wholesalePrice: pm.wholesale, bigWholesalePrice: pm.big_wholesale, promoRetailPrice: pm.promo_retail, promoWholesalePrice: pm.promo_wholesale, promoBigWholesalePrice: pm.promo_big_wholesale }, type, Date.now(), campaign)
       );
       if (!price) return NextResponse.json({ error: `Цена для товара «${p.name}» не найдена` }, { status: 400 });
       ni.price = price;

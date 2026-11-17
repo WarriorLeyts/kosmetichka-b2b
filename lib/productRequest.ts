@@ -1,3 +1,4 @@
+import { getCampaign } from "@/lib/campaignSettings";
 import { prisma } from "@/lib/prisma";
 import { priceFor, resolveCustomerPriceType } from "@/lib/pricing";
 
@@ -49,9 +50,10 @@ export async function buildProductRequest(
   const variant = wanted ? product.variants.find((v) => v.name === wanted) ?? null : null;
   if (wanted && !variant) return { error: "Такого варианта у товара нет" };
 
+  const campaign = await getCampaign();
   const pm = Object.fromEntries(product.prices.map((p) => [p.priceType, Number(p.price)]));
   const price = Math.round(
-    priceFor({ retailPrice: pm.retail, discountPrice: pm.discount, wholesalePrice: pm.wholesale, bigWholesalePrice: pm.big_wholesale }, resolveCustomerPriceType(customer))
+    priceFor({ retailPrice: pm.retail, discountPrice: pm.discount, wholesalePrice: pm.wholesale, bigWholesalePrice: pm.big_wholesale, promoRetailPrice: pm.promo_retail, promoWholesalePrice: pm.promo_wholesale, promoBigWholesalePrice: pm.promo_big_wholesale }, resolveCustomerPriceType(customer), Date.now(), campaign)
   );
 
   return {

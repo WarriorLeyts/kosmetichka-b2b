@@ -1,3 +1,4 @@
+import { LEGACY_CAMPAIGN } from "@/lib/campaign";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const tx = vi.hoisted(() => ({ product: { findUnique: vi.fn(), update: vi.fn() }, productVariant: { update: vi.fn(), create: vi.fn(), deleteMany: vi.fn() } }));
 const db = vi.hoisted(() => ({ product: { findUnique: vi.fn(), findMany: vi.fn() }, $transaction: vi.fn() }));
@@ -60,3 +61,5 @@ describe("photo assortment", () => {
     expect(commentJs(order)).toBe(cmlComment(order));
   });
 });
+
+vi.mock("@/lib/campaignSettings", () => ({ getCampaign: async () => LEGACY_CAMPAIGN }));

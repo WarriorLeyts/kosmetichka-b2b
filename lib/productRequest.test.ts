@@ -1,3 +1,4 @@
+import { LEGACY_CAMPAIGN } from "@/lib/campaign";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const db = vi.hoisted(() => ({ product: { findUnique: vi.fn() } }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
@@ -33,3 +34,5 @@ describe("«Добавить товар» card from the customer's chat", () => 
     expect(await buildProductRequest({}, { productId: 9, quantity: 1 })).toHaveProperty("error");
   });
 });
+
+vi.mock("@/lib/campaignSettings", () => ({ getCampaign: async () => LEGACY_CAMPAIGN }));

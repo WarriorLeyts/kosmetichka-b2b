@@ -1,3 +1,5 @@
+import { getCampaign } from "@/lib/campaignSettings";
+import type { Campaign } from "@/lib/campaign";
 import { promotionProductsWhere } from "@/lib/promotionProducts";
 import { NextResponse } from "next/server";
 import { productSearchWhere } from "@/lib/productSearch";
@@ -9,7 +11,7 @@ import { customerStock, guestStock, isWholesaleType, withFlatPrices, maskWholesa
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { verifyToken } from "@/lib/auth";
 import { createHash } from "crypto";
-import { resolveCustomerPriceType, priceFor, novemberPromoActive, type PriceType } from "@/lib/pricing";
+import { resolveCustomerPriceType, priceFor, pricingCampaignActive, type PriceType } from "@/lib/pricing";
 import { pricingCustomer } from "@/lib/siteMode";
 
 const SORTS = ["popularity", "price_asc", "price_desc", "name"] as const;
@@ -107,9 +109,9 @@ async function pageInStockFirst(where: any, orderBy: any[], page: number, limit:
  * and the price sort go by it, so «до 500 ₽» shows what costs up to 500 ₽ for him. Guests see the
  * card price (discount → retail), never the wholesale one.
  */
-function shownPrices(idx: PriceIndex, type: PriceType): Map<string, number> {
+function shownPrices(idx: PriceIndex, type: PriceType, campaign: Campaign): Map<string, number> {
   const now = Date.now();
-  const key = `${type}:${novemberPromoActive(now)}`;
+  const key = `${type}:${pricingCampaignActive(now, campaign) && campaign.usePromoPrices}`;
   const hit = idx.shown.get(key);
   if (hit) return hit;
   const out = new Map<string, number>();
@@ -118,7 +120,7 @@ function shownPrices(idx: PriceIndex, type: PriceType): Map<string, number> {
     const price = priceFor({ retailPrice: idx.retail.get(guid), discountPrice: idx.discount.get(guid),
       wholesalePrice: idx.wholesale.get(guid), bigWholesalePrice: idx.big.get(guid),
       promoRetailPrice: idx.promoRetail.get(guid), promoWholesalePrice: idx.promoWholesale.get(guid),
-      promoBigWholesalePrice: idx.promoBig.get(guid) }, type, now);
+      promoBigWholesalePrice: idx.promoBig.get(guid) }, type, now, campaign);
     if (price > 0) out.set(guid, price);
   }
   idx.shown.set(key, out);
@@ -126,6 +128,7 @@ function shownPrices(idx: PriceIndex, type: PriceType): Map<string, number> {
 }
 
 export async function GET(request: Request) {
+  const campaign = await getCampaign();
   const { searchParams } = new URL(request.url);
 
   // Проверяем авторизацию
@@ -187,7 +190,7 @@ export async function GET(request: Request) {
     ...(onlyStock ? (wholesale ? { wholesaleStock: { gt: 0 } } : { stock: { gt: 0 } }) : {}),
     ...(quick.includes("new") ? { id: { in: novelIds } } : {}),
     // «Со скидкой»: a flag kept by import-prices.js (was an IN-list of thousands of guids — audit PERF-02)
-    ...(quick.includes("sale") ? novemberPromoActive() ? { OR: [
+    ...(quick.includes("sale") ? (pricingCampaignActive(Date.now(), campaign) && campaign.usePromoPrices) ? { OR: [
       { hasDiscount: true },
       { prices: { some: { priceType: shownType === "big_wholesale" ? "promo_big_wholesale"
         : shownType === "wholesale" ? "promo_wholesale" : "promo_retail", price: { gt: 0 } } } },
@@ -206,7 +209,7 @@ export async function GET(request: Request) {
       : {}),
   };
 
-  if (quick.includes("promo")) where.AND = [...(where.AND ?? []), promotionProductsWhere(shownType)];
+  if (quick.includes("promo")) where.AND = [...(where.AND ?? []), promotionProductsWhere(shownType, Date.now(), campaign)];
 
   const include = {
     category: true,
@@ -221,7 +224,7 @@ export async function GET(request: Request) {
   // «Новинка» / «Снова в наличии» on the cards (lib/arrivals.ts): what came in 10 days and this customer can buy
   const arrLabels = await arrivalLabels(wholesale);
   const applyPrices = (product: any) => {
-    const flat = withArrivalLabel(withFlatPrices(product), arrLabels);
+    const flat = withArrivalLabel(withFlatPrices(product, campaign), arrLabels);
     if (!isAuthenticated) return maskGuestPrices(flat);
     return wholesale ? { ...flat, stock: customerStock(flat.stock, priceType, product.wholesaleStock) } : flat;
   };
@@ -232,7 +235,7 @@ export async function GET(request: Request) {
     const prices = await priceIndex();
     // by the prices this viewer sees — a guest never by wholesale ones (he could narrow the range down
     // and work out the hidden wholesale price of any product)
-    const priceList = shownPrices(prices, shownType);
+    const priceList = shownPrices(prices, shownType, campaign);
     const merged: string[] = [];
     for (const [guid, price] of priceList) {
       if (priceMin !== null && price < priceMin) continue;
@@ -341,7 +344,7 @@ export async function GET(request: Request) {
 
   // ── Steps 1–3: price range / sale → guid constraint (from the cached index) ──
   const prices = await priceIndex();
-  const priceList = shownPrices(prices, shownType);
+  const priceList = shownPrices(prices, shownType, campaign);
   const priceGuids = await priceFilterGuids();
   if (priceGuids) where.guid = { in: priceGuids };
 
@@ -369,7 +372,7 @@ export async function GET(request: Request) {
   // The sorted id list for these filters is cached for a minute: scrolling pages 2, 3, … and
   // other customers with the same filters reuse it instead of loading ~12k rows each time
   // (under load the price sort used to take seconds).
-  const sortKey = createHash("sha1").update(JSON.stringify([where, sort, prices.at, shownType, wholesale, novemberPromoActive()])).digest("hex");
+  const sortKey = createHash("sha1").update(JSON.stringify([where, sort, prices.at, shownType, wholesale, (pricingCampaignActive(Date.now(), campaign) && campaign.usePromoPrices)])).digest("hex");
   let sortedIds = sortedMemo.get(sortKey);
   if (!sortedIds || Date.now() - sortedIds.at > 60_000) {
     const matched = await prisma.product.findMany({

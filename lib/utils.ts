@@ -1,3 +1,4 @@
+import { LEGACY_CAMPAIGN, type Campaign } from "./campaign";
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { promotionalPrice } from "./pricing";
@@ -15,7 +16,7 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function withFlatPrices<
   T extends { prices?: { priceType: string; price: number }[] }
->(product: T) {
+>(product: T, campaign: Campaign = LEGACY_CAMPAIGN) {
   const retailPrice =
     product.prices?.find((p) => p.priceType === "retail")?.price ?? 0;
   const wholesalePrice =
@@ -34,10 +35,10 @@ export function withFlatPrices<
   };
   // Keep the existing API fields useful to older apps as well as the site's priceFor().
   const now = Date.now();
-  return { ...flat, retailPrice: promotionalPrice(flat, "retail", now) ?? retailPrice,
-    discountPrice: promotionalPrice(flat, "discount", now) ?? discountPrice,
-    wholesalePrice: promotionalPrice(flat, "wholesale", now) ?? wholesalePrice,
-    bigWholesalePrice: promotionalPrice(flat, "big_wholesale", now) ?? bigWholesalePrice };
+  return { ...flat, retailPrice: promotionalPrice(flat, "retail", now, campaign) ?? retailPrice,
+    discountPrice: promotionalPrice(flat, "discount", now, campaign) ?? discountPrice,
+    wholesalePrice: promotionalPrice(flat, "wholesale", now, campaign) ?? wholesalePrice,
+    bigWholesalePrice: promotionalPrice(flat, "big_wholesale", now, campaign) ?? bigWholesalePrice };
 }
 
 /** New promotional fields and the regular-price snapshot must follow the guest price mask too. */

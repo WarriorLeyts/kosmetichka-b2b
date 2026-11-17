@@ -1,3 +1,4 @@
+import { LEGACY_CAMPAIGN } from "@/lib/campaign";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { calculateCart, priceFor, promotionalPrice, cartPriceTier, nextPriceTier } from "./pricing";
 const { findMany } = vi.hoisted(() => ({ findMany: vi.fn() }));
@@ -48,3 +49,5 @@ describe("the retail campaign price in the wholesale discount tier", () => {
     expect(result.pricing.total).toBe(1699);
   });
 });
+
+vi.mock("@/lib/campaignSettings", () => ({ getCampaign: async () => LEGACY_CAMPAIGN }));

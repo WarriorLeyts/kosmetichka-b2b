@@ -1,3 +1,5 @@
+import type { Campaign } from "./campaign";
+import { getCampaign } from "./campaignSettings";
 import { variantImageUrl } from "./assortment";
 import { CARD_PRICE, cardRegistration, isCardProduct } from "./cardPurchase";
 import { prisma } from "@/lib/prisma";
@@ -58,7 +60,8 @@ export async function priceOrder(
   customer: { priceType?: string | null },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   items: any[]
-): Promise<{ lines: PricedLine[]; tier: PriceType; pricing: CartPricing }> {
+): Promise<{ lines: PricedLine[]; tier: PriceType; pricing: CartPricing; campaign: Campaign }> {
+  const campaign = await getCampaign();
   const now = Date.now();
   const productIds: number[] = items.map((item) => Number(item.id));
 
@@ -82,14 +85,14 @@ export async function priceOrder(
   const cartForPricing = items.map((item) => {
     const product = productById.get(Number(item.id));
     return {
-      ...withFlatPrices(product ?? { prices: [] }),
+      ...withFlatPrices(product ?? { prices: [] }, campaign),
       ...(product && isCardProduct(product) ? { retailPrice: CARD_PRICE, discountPrice: CARD_PRICE, wholesalePrice: CARD_PRICE, bigWholesalePrice: CARD_PRICE, regularPrices: { retailPrice: CARD_PRICE, discountPrice: CARD_PRICE, wholesalePrice: CARD_PRICE, bigWholesalePrice: CARD_PRICE }, promoRetailPrice: null, promoWholesalePrice: null, promoBigWholesalePrice: null } : {}),
       quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
     };
   });
 
   // «Опт»: the price by the order sum (5 000 / 50 000 ₽); the other types: the customer's own
-  const pricing = calculateCart(cartForPricing, cardInputs.length ? { ...customer, priceType: "discount" } : customer, now);
+  const pricing = calculateCart(cartForPricing, cardInputs.length ? { ...customer, priceType: "discount" } : customer, now, campaign);
   const appliedPriceType = pricing.tier;
 
   const qtyByProduct = new Map<number, number>();
@@ -106,7 +109,7 @@ export async function priceOrder(
     }
 
     // as in priceFor(): a missing / zero price falls back — big wholesale → wholesale → retail
-    const price = isCardProduct(product) ? CARD_PRICE : priceFor(cartForPricing[index], appliedPriceType, now);
+    const price = isCardProduct(product) ? CARD_PRICE : priceFor(cartForPricing[index], appliedPriceType, now, campaign);
     if (price <= 0) {
       throw new Error(`Цена для товара «${product.name}» не найдена. Обратитесь к менеджеру.`);
     }
@@ -157,7 +160,7 @@ export async function priceOrder(
       sku: product.guid || String(product.id),
     };
   });
-  return { lines, tier: appliedPriceType, pricing };
+  return { lines, tier: appliedPriceType, pricing, campaign };
 }
 
 /**
