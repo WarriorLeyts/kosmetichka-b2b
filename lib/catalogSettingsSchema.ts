@@ -6,9 +6,10 @@ import { z } from "zod";
  */
 export const CATALOG_SETTINGS_KEY = "catalog";
 
-export const QUICK_KEYS = ["new", "sale", "gift"] as const;
+export const QUICK_KEYS = ["new", "back", "sale", "gift"] as const;
 export const QUICK_DEFAULTS: Record<(typeof QUICK_KEYS)[number], string> = {
   new: "Новинки",
+  back: "Снова в наличии",
   sale: "Со скидкой",
   gift: "Подарочные наборы",
 };
