@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import fs from "fs";
-import path from "path";
-import { DATA_ROOT } from "@/lib/dataDir";
+import { MAX_UPLOAD_BYTES, saveImageWithOriginal, UploadError } from "@/lib/cms/upload";
 
 export async function POST(
   request: NextRequest,
@@ -35,23 +33,20 @@ export async function POST(
     return NextResponse.json({ error: "Недопустимый тип файла" }, { status: 400 });
   }
 
-  // Save to data/1c/uploads/products/
-  const uploadDir = path.join(DATA_ROOT, "1c", "uploads", "products");
-  fs.mkdirSync(uploadDir, { recursive: true });
-
-  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const filename = `${productId}_${Date.now()}.${ext}`;
-  const filePath = path.join(uploadDir, filename);
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  fs.writeFileSync(filePath, buffer);
-
-  const relPath = `uploads/products/${filename}`;
+  if (file.size > MAX_UPLOAD_BYTES) return NextResponse.json({ error: "Файл больше 15 МБ" }, { status: 400 });
+  let saved: Awaited<ReturnType<typeof saveImageWithOriginal>>;
+  try {
+    saved = await saveImageWithOriginal(Buffer.from(await file.arrayBuffer()), "products", 2000);
+  } catch (error) {
+    if (error instanceof UploadError) return NextResponse.json({ error: error.message }, { status: 400 });
+    throw error;
+  }
+  const relPath = saved.path;
 
   // Delete old images and create new one
   await prisma.productImage.deleteMany({ where: { productId } });
   const image = await prisma.productImage.create({
-    data: { productId, path: relPath },
+    data: { productId, path: relPath, original: saved.original },
   });
 
   return NextResponse.json({ success: true, path: relPath, id: image.id });
