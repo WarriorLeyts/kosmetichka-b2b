@@ -59,7 +59,8 @@ type ArrivalLabel = "new" | "back";
 const labelCache = new Map<string, { at: number; map: Map<number, ArrivalLabel> }>();
 
 export async function arrivalLabels(wholesale: boolean): Promise<Map<number, ArrivalLabel>> {
-  const key = wholesale ? "w" : "r";
+  const settings = await getArrivalSettings();
+  const key = `${wholesale ? "w" : "r"}:${settings.newDays}:${settings.backDays}`;
   const hit = labelCache.get(key);
   if (hit && Date.now() - hit.at < 5 * 60_000) return hit.map;
   let list: Arrival[] = [];
