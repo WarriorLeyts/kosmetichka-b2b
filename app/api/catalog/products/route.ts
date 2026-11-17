@@ -180,7 +180,9 @@ export async function GET(request: Request) {
 
   // «Новинки»: products that came to the company for the first time in the last 10 days (the first receipt in
   // 1С, lib/arrivals.ts) and this customer can buy now — not «appeared on the site», which mixed in old goods
-  const novelIds = quick.includes("new") ? (await listArrivals({ wholesale, limit: 2000 })).filter((a) => a.isNew).map((a) => a.productId) : [];
+  const arrivalFilter = quick.includes("new") || quick.includes("back");
+  const arrivalIds = arrivalFilter ? (await listArrivals({ wholesale, limit: Number.MAX_SAFE_INTEGER }))
+    .filter((a) => a.isNew ? quick.includes("new") : quick.includes("back")).map((a) => a.productId) : [];
 
   const where: any = {
     // скрытые в админ-панели товары покупатели не видят (корзина — ?ids= ниже — их ещё показывает)
@@ -188,7 +190,7 @@ export async function GET(request: Request) {
     ...(categoryGuids.length > 0 ? { categoryGuid: { in: categoryGuids } } : {}),
     ...(brandGuids.length > 0 ? { brandGuid: { in: brandGuids } } : {}),
     ...(onlyStock ? (wholesale ? { wholesaleStock: { gt: 0 } } : { stock: { gt: 0 } }) : {}),
-    ...(quick.includes("new") ? { id: { in: novelIds } } : {}),
+    ...(arrivalFilter ? { id: { in: arrivalIds } } : {}),
     // «Со скидкой»: a flag kept by import-prices.js (was an IN-list of thousands of guids — audit PERF-02)
     ...(quick.includes("sale") ? (pricingCampaignActive(Date.now(), campaign) && campaign.usePromoPrices) ? { OR: [
       { hasDiscount: true },

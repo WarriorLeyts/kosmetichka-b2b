@@ -51,3 +51,23 @@ describe("promotion filter combined with catalog filters",()=>{
 });
 
 vi.mock("@/lib/campaignSettings", () => ({ getCampaign: async () => LEGACY_CAMPAIGN }));
+
+vi.mock("@/lib/arrivals", async (original) => ({
+  ...await original<typeof import("@/lib/arrivals")>(),
+  listArrivals: vi.fn(async () => [
+    { productId: 11, isNew: true, arrivedAt: new Date(), places: ["shop"] },
+    { productId: 22, isNew: false, arrivedAt: new Date(), places: ["shop"] },
+  ]),
+}));
+
+describe("arrival quick filters", () => {
+  it.each([["new", [11]], ["back", [22]], ["new&quick=back", [11, 22]]])("filters the full catalog and facets by %s", async (quick, ids) => {
+    db.product.groupBy.mockResolvedValue([]);
+    db.brand.findMany.mockResolvedValue([]);
+    await GET(new Request(`http://x/api/catalog/products?facets=brand&quick=${quick}&search=крем`));
+    const where = db.product.groupBy.mock.calls.at(-1)![0].where;
+    expect(where.id).toEqual({ in: ids });
+    expect(where.AND).toBeTruthy();
+    expect(where.hidden).toBe(false);
+  });
+});
