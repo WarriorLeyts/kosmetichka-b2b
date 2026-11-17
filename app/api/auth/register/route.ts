@@ -15,6 +15,7 @@ import { SITE_RETAIL_ENABLED } from "@/lib/siteMode";
 import { ADDRESS_REQUIRED, cleanAddress, needsShopAddress } from "@/lib/shopAddress";
 import { registrationPriceType } from "@/lib/oneCPriceType";
 import { notifyStaffLater } from "@/lib/staffNotify";
+import { IMPORT_GROUPS } from "@/scripts/onec-groups.js";
 
 async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
   const serverKey = process.env.SMARTCAPTCHA_SERVER_KEY;
@@ -162,13 +163,12 @@ export async function POST(request: Request) {
   // asked for «Крупный опт»: the manager sees it in «Заявки на опт»
   const wantsBig = priceType === "big_wholesale";
 
-  // Auto-approve retail/discount customers; wholesale types need manager confirmation
-  // Exception: always auto-approve if linked to 1C record
-  // in 1C: approved at once, but wholesale only when 1C has him as wholesale too (a 1C retail customer who
-  // picks «Опт» waits for the manager like anybody else)
+  // A verified-phone match in an imported manager group is an existing customer.
+  // Approval does not depend on the 1C price type (it may be retail or missing).
+  // Price access remains governed separately by registrationPriceType above.
   const shouldAutoApprove =
     AUTO_APPROVE_TYPES.has(effectivePriceType) ||
-    (Boolean(oneCCustomer) && (!isWholesaleRole(effectivePriceType) || isWholesaleRole(oneCCustomer?.priceType)));
+    Boolean(oneCCustomer && IMPORT_GROUPS.includes(oneCCustomer.manager?.trim() || ""));
 
   if (again) {
     // the old photos / videos go: the customer sends new ones (up to the same 10 files)
