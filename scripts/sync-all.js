@@ -16,6 +16,8 @@ const scripts = [
   ...(odata ? ["import-barcodes.js"] : []),
   // «Новые поступления» (receipts to the warehouse, transfers to the shop) — rebuilt for the last days
   ...(odata ? ["import-arrivals.js"] : []),
+  // Prebuild display copies after imports; no image conversion on the first customer visit.
+  "prepare-product-thumbs.js",
 ];
 
 console.log("=== 1C Sync started:", new Date().toLocaleString("ru-RU"), "===");

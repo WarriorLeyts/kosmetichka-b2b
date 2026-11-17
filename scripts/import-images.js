@@ -44,6 +44,8 @@ async function compressInPlace(filePath) {
     const ext = path.extname(filePath).toLowerCase();
     if (![".jpg", ".jpeg", ".png", ".webp"].includes(ext)) return;
     const input = fs.readFileSync(filePath);
+    // Already compact: do not re-encode on every exchange or invalidate ready thumbnails.
+    if (input.length < 300 * 1024) return;
     const MAX_PX = 1200;
     const pipeline = sharp(input).resize(MAX_PX, MAX_PX, {
       fit: "inside",

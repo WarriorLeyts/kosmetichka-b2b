@@ -3,6 +3,7 @@ import path from "path";
 import crypto from "crypto";
 import sharp from "sharp";
 import { DATA_ROOT } from "@/lib/dataDir";
+import { thumbResponse } from "@/lib/thumb";
 
 sharp.cache(false);
 
@@ -59,6 +60,13 @@ export async function saveImageWithOriginal(
     fs.mkdirSync(odir, { recursive: true });
     fs.writeFileSync(path.join(odir, `${base}.${ext}`), data);
     original = `uploads/originals/${folder}/${base}.${ext}`;
+  }
+  // Prepare the sizes actually used by the catalog, gallery and variant picker before
+  // publishing the photo. First visitors should not pay the conversion cost.
+  if (folder === "products") {
+    for (const width of [160, 480, 800]) {
+      await thumbResponse(path.join(DATA_ROOT, "1c"), path.join(dir, name), width);
+    }
   }
   const outMeta = await sharp(out).metadata();
   return { path: `uploads/${folder}/${name}`, original, width: outMeta.width ?? 0, height: outMeta.height ?? 0 };
