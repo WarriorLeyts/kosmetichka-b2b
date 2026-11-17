@@ -1,3 +1,4 @@
+import { getCampaign } from "@/lib/campaignSettings";
 import { cache } from "react";
 import { notFound, permanentRedirect } from "next/navigation";
 import { parseProductParam, productPath } from "@/lib/productSlug";
@@ -78,6 +79,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ProductPage({ params }: Props) {
+  const campaign = await getCampaign();
   const { id } = await params;
 
   // /product/12 и /product/12-shampun-fino — один товар; ключ — id, текст после него — ЧПУ
@@ -145,8 +147,8 @@ export default async function ProductPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
       />
       <ProductPageClient
-        product={withFlatPrices(product)}
-        relatedProducts={relatedProducts.map(withFlatPrices)}
+        product={withFlatPrices(product, campaign)}
+        relatedProducts={relatedProducts.map(p => withFlatPrices(p, campaign))}
       />
       <ProductSections product={product} />
     </>

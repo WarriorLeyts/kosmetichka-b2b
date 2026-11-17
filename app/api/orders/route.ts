@@ -340,7 +340,7 @@ async function createOrder(request: Request) {
           </table>
           <div style="border-top:2px solid #1e293b;padding-top:12px;text-align:right;">
             ${order.discount > 0 || order.bonusesApplied > 0 ? `<div style="font-size:14px;color:#475569;margin-bottom:4px;">Сумма без скидки: ${(order.total + order.discount + order.bonusesApplied).toLocaleString("ru-RU")} ₽</div>` : ""}
-            ${pricing.discount > 0 ? `<div style="font-size:14px;color:#16a34a;margin-bottom:6px;">Светлая пятница + ОПТ (${pricing.percent}%): −${pricing.discount.toLocaleString("ru-RU")} ₽</div>` : ""}
+            ${pricing.discount > 0 ? `<div style="font-size:14px;color:#16a34a;margin-bottom:6px;">Скидка по акции (${pricing.percent}%): −${pricing.discount.toLocaleString("ru-RU")} ₽</div>` : ""}
             ${promo ? `<div style="font-size:14px;color:#16a34a;margin-bottom:6px;">Скидка по промокоду ${escHtml(promoCode)}: −${promo.discount.toLocaleString("ru-RU")} ₽</div>` : ""}
             ${order.bonusesApplied > 0 ? `<div style="font-size:14px;color:#16a34a;margin-bottom:6px;">Списано бонусов: ${order.bonusesApplied.toLocaleString("ru-RU")}</div>` : ""}
             <strong style="font-size:16px;color:#1e293b;">Итого: ${order.total.toLocaleString("ru-RU")} ₽</strong>
@@ -374,7 +374,7 @@ async function createOrder(request: Request) {
           <p style="margin:0 0 8px;color:#475569;"><b>Клиент:</b> ${clientName}</p>
           ${clientPhone ? `<p style="margin:0 0 8px;color:#475569;"><b>Телефон:</b> ${clientPhone}</p>` : ""}
           <p style="margin:0 0 ${promo || order.bonusesApplied > 0 || order.bonusesCollected > 0 ? 8 : 24}px;color:#475569;"><b>Сумма:</b> ${order.total} ₽</p>
-          ${pricing.discount > 0 ? `<p style="margin:0 0 8px;color:#475569;"><b>Светлая пятница + ОПТ:</b> ${pricing.percent}% — скидка ${pricing.discount} ₽</p>` : ""}
+          ${pricing.discount > 0 ? `<p style="margin:0 0 8px;color:#475569;"><b>Скидка по акции:</b> ${pricing.percent}% — скидка ${pricing.discount} ₽</p>` : ""}
           ${promo ? `<p style="margin:0 0 8px;color:#475569;"><b>Промокод:</b> ${escHtml(promoCode)} — скидка ${promo.discount} ₽</p>` : ""}
           ${order.bonusesApplied > 0 ? `<p style="margin:0 0 8px;color:#475569;"><b>Списано бонусов:</b> ${order.bonusesApplied}</p>` : ""}
           ${order.bonusesCollected > 0 ? `<p style="margin:0 0 8px;color:#475569;"><b>Будет начислено:</b> ${order.bonusesCollected} бонусов</p>` : ""}

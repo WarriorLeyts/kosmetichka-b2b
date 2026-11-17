@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { PricingEditor } from "./PricingEditor";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { cmsApi, fmtDate } from "@/lib/cms/client";
@@ -8,7 +9,7 @@ import { PROMO_COLORS, promoActive, promoSchema, type PromoSettings } from "@/li
 import { Badge, Btn, Card, Field, Input, PageHeader, Toggle } from "@/components/cms/ui";
 
 type Banner = { id: number; title: string; active: boolean; image: string | null; imageMobile: string | null; hasDesktop: boolean; hasMobile: boolean; link: string | null };
-type Data = { settings: PromoSettings; updatedAt: string | null; updatedBy: string | null; banners: Banner[] };
+type Data = { published: PromoSettings; hasDraft: boolean; revision: string | null; draftRevision: string | null; settings: PromoSettings; updatedAt: string | null; updatedBy: string | null; banners: Banner[] };
 
 /** «2026-11-13» (a Moscow day) ↔ the stored moments: the start at 00:00 of the first day, the end at 00:00 after the last day */
 const dayToStart = (d: string) => (d ? `${d}T00:00:00+03:00` : null);
@@ -29,6 +30,7 @@ const LINKS = [
 export function PromoClient({ canEdit }: { canEdit: boolean }) {
   const [data, setData] = useState<Data | null>(null);
   const [p, setP] = useState<PromoSettings | null>(null);
+  const [verified, setVerified] = useState("");
   const [saved, setSaved] = useState("");
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -62,19 +64,17 @@ export function PromoClient({ canEdit }: { canEdit: boolean }) {
         ? { tone: "neutral" as const, text: "Закончилась — сайт в обычном виде" }
         : { tone: "amber" as const, text: `Начнётся ${p.startsAt ? new Date(p.startsAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : ""}` };
 
-  const save = async (next = p) => {
+  const save = async (action: "draft" | "publish") => {
+    const next = p;
     const v = promoSchema.safeParse(next);
     if (!v.success) return toast.error(v.error.issues[0]?.message ?? "Проверьте поля");
-    if (next.enabled && !next.endsAt) {
-      // an open end is allowed, but say it
-      toast.info("Без даты окончания акция будет идти, пока её не выключат");
-    }
     setBusy(true);
     try {
-      await cmsApi("/api/cms/settings/promo", { method: "PUT", body: next });
-      setP(next);
-      setSaved(JSON.stringify(next));
-      toast.success("Сохранено. Сайт и приложения подхватят в течение пары минут");
+      const result = await cmsApi<Data>("/api/cms/settings/promo", { method: "PUT", body: { settings: next, action, revision: data.revision, draftRevision: data.draftRevision } });
+      setData(result);
+      setP(result.settings);
+      setSaved(JSON.stringify(result.settings));
+      toast.success(action === "draft" ? "Черновик сохранён. Действующая акция не изменена" : "Опубликовано. Условия и оформление обновятся на сайте");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Ошибка");
     } finally {
@@ -89,18 +89,23 @@ export function PromoClient({ canEdit }: { canEdit: boolean }) {
     <div className="max-w-5xl pb-16">
       <PageHeader
         title="Акция"
-        subtitle="Оформление сайта и приложения на время акции. Включается и выключается само по датам (время московское). Цены и скидки — из 1С, здесь только вид."
+        subtitle="Подготовьте условия и оформление в черновике, проверьте расчёт и опубликуйте. Даты — по Москве. Цены товаров загружаются из 1С."
         actions={
           <>
-            <Badge tone={status.tone}>{status.text}</Badge>
+            <Badge tone={status.tone}>После публикации: {status.text}</Badge>
             {canEdit ? (
-              <Btn onClick={() => save()} loading={busy} disabled={!dirty}>
-                Сохранить
-              </Btn>
+              <><Btn onClick={() => save("draft")} loading={busy} disabled={!dirty}>Сохранить черновик</Btn>
+              <Btn onClick={() => save("publish")} loading={busy} disabled={p.enabled && verified !== JSON.stringify(p)}>Опубликовать</Btn></>
             ) : null}
           </>
         }
       />
+      <Card className="mb-4 space-y-2 p-4">
+        <p className="text-sm"><strong>На сайте:</strong> {data.published.name || "Без названия"} · {promoActive(data.published, now) ? "идёт" : data.published.enabled ? "вне срока действия" : "выключена"}</p>
+        <p className="text-sm text-neutral-500">{data.hasDraft || dirty ? "Вы редактируете черновик. До публикации покупатели видят прежнюю акцию." : "Можно подготовить следующую акцию, не меняя действующую."} Публикация заменяет текущую акцию, включая её сроки и условия.</p>
+        {canEdit && <Btn disabled={busy} onClick={() => { set({ enabled: false, name: "", startsAt: null, endsAt: null, bannerIds: [], strip: { ...p.strip, text: "" } }); setVerified(""); }}>Подготовить новую акцию</Btn>}
+        {p.enabled && verified !== JSON.stringify(p) && <p className="text-xs text-neutral-500">Перед публикацией проверьте расчёт ниже. Изменение условий требует повторной проверки.</p>}
+      </Card>
       {!canEdit ? <p className="mb-3 text-xs text-amber-700">Менять акцию может администратор.</p> : null}
       {data.updatedAt ? (
         <p className="-mt-2 mb-3 text-xs text-neutral-500">
@@ -112,8 +117,8 @@ export function PromoClient({ canEdit }: { canEdit: boolean }) {
       <div className="grid gap-4 lg:grid-cols-[3fr_2fr]">
         <div className="space-y-4">
           <Card className="space-y-3 p-5">
-            <Toggle checked={p.enabled} onChange={(v) => set({ enabled: v })} label="Акция включена" />
-            <Field label="Название (для себя)">
+            <Toggle disabled={!canEdit} checked={p.enabled} onChange={(v) => set({ enabled: v })} label="Включить акцию при публикации" />
+            <Field label="Название акции">
               <Input value={p.name} maxLength={80} onChange={(e) => set({ name: e.target.value })} placeholder="Светлая пятница" disabled={!canEdit} />
             </Field>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -126,6 +131,7 @@ export function PromoClient({ canEdit }: { canEdit: boolean }) {
             </div>
           </Card>
 
+          <PricingEditor p={p} set={set} canEdit={canEdit} onVerified={setVerified} />
           <Card className="space-y-3 p-5">
             <div className="font-medium">Цвет</div>
             <p className="text-xs text-neutral-500">Заменяет фиолетовый акцент: кнопки, вкладки, выделенные пункты, ссылки. Логотип и расположение не меняются.</p>
@@ -150,7 +156,7 @@ export function PromoClient({ canEdit }: { canEdit: boolean }) {
           </Card>
 
           <Card className="space-y-3 p-5">
-            <Toggle checked={p.strip.enabled} onChange={(v) => set({ strip: { ...p.strip, enabled: v } })} label="Полоска над шапкой на всех страницах" />
+            <Toggle disabled={!canEdit} checked={p.strip.enabled} onChange={(v) => set({ strip: { ...p.strip, enabled: v } })} label="Полоска над шапкой на всех страницах" />
             {p.strip.enabled ? (
               <>
                 <Field label="Текст" hint={`${p.strip.text.length} / 120`}>
@@ -179,7 +185,7 @@ export function PromoClient({ canEdit }: { canEdit: boolean }) {
                     />
                   </div>
                 </Field>
-                <Toggle checked={p.strip.countdown} onChange={(v) => set({ strip: { ...p.strip, countdown: v } })} label="Обратный отсчёт до конца акции" />
+                <Toggle disabled={!canEdit} checked={p.strip.countdown} onChange={(v) => set({ strip: { ...p.strip, countdown: v } })} label="Обратный отсчёт до конца акции" />
               </>
             ) : null}
           </Card>
@@ -229,7 +235,7 @@ export function PromoClient({ canEdit }: { canEdit: boolean }) {
           </Card>
 
           <Card className="p-5">
-            <Toggle checked={p.saleFirst} onChange={(v) => set({ saleFirst: v })} label="Кнопка «Со скидкой» первой и выделена (главная и каталог)" />
+            <Toggle disabled={!canEdit} checked={p.saleFirst} onChange={(v) => set({ saleFirst: v })} label="Кнопка «Со скидкой» первой и выделена (главная и каталог)" />
           </Card>
         </div>
 

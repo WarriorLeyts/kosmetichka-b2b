@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveImageUrl } from "@/lib/image";
-import { PROMO_SETTINGS_KEY, promoActive, readPromo } from "@/lib/promoSchema";
+import { PROMO_SETTINGS_KEY, promoActive, readPromo, campaignFromPromo } from "@/lib/promoSchema";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +19,9 @@ export async function GET() {
   }
   const p = readPromo(raw);
   const now = new Date();
+  const campaign = campaignFromPromo(p);
   if (!p.enabled || (p.endsAt && now >= new Date(p.endsAt))) {
-    return NextResponse.json({ promo: null }, { headers: { "Cache-Control": "public, max-age=60" } });
+    return NextResponse.json({ promo: null, campaign }, { headers: { "Cache-Control": "public, max-age=60" } });
   }
   const found = p.bannerIds.length
     ? await prisma.banner.findMany({ where: { id: { in: p.bannerIds }, active: true, deletedAt: null } }).catch(() => [])
@@ -40,6 +41,7 @@ export async function GET() {
     }));
   return NextResponse.json(
     {
+      campaign,
       promo: {
         name: p.name,
         startsAt: p.startsAt,

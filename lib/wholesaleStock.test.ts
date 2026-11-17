@@ -1,3 +1,4 @@
+import { LEGACY_CAMPAIGN } from "@/lib/campaign";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const db = vi.hoisted(() => ({ product: { findMany: vi.fn() } }));
@@ -81,3 +82,5 @@ describe("priceOrder: wholesalers only what they may order", () => {
     expect((await priceOrder({ priceType: "retail" }, [{ id: 1, quantity: 3 }])).lines).toHaveLength(1);
   });
 });
+
+vi.mock("@/lib/campaignSettings", () => ({ getCampaign: async () => LEGACY_CAMPAIGN }));

@@ -1,3 +1,4 @@
+import { LEGACY_CAMPAIGN, campaignActive, campaignPercent, type Campaign } from "./campaign";
 /**
  * Centralised pricing logic (the apps keep an identical copy in src/pricing.ts).
  *
@@ -18,24 +19,17 @@
 export const WHOLESALE_MIN_ORDER = 5_000;
 export const BIG_WHOLESALE_MIN_ORDER = 50_000;
 
-export const NOVEMBER_PROMO = {
-  name: "Светлая пятница + ОПТ",
-  startsAt: "2026-11-13T00:00:00+03:00",
-  endsAt: "2026-12-01T00:00:00+03:00",
-  bigWholesaleMin: 25_000,
-} as const;
-
-export function novemberPromoActive(now = Date.now()): boolean {
-  return now >= Date.parse(NOVEMBER_PROMO.startsAt) && now < Date.parse(NOVEMBER_PROMO.endsAt);
+export function pricingCampaignActive(now = Date.now(), campaign: Campaign = LEGACY_CAMPAIGN): boolean {
+  return campaignActive(campaign, now);
 }
 
-export function bigWholesaleMinOrder(now = Date.now()): number {
-  return novemberPromoActive(now) ? NOVEMBER_PROMO.bigWholesaleMin : BIG_WHOLESALE_MIN_ORDER;
+export function bigWholesaleMinOrder(now = Date.now(), campaign: Campaign = LEGACY_CAMPAIGN): number {
+  return pricingCampaignActive(now, campaign) ? campaign.bigWholesaleMin : BIG_WHOLESALE_MIN_ORDER;
 }
 
 /** The matching 1C promotional price; a missing / zero price keeps the regular tariff. */
-export function promotionalPrice(product: any, type: PriceType, now = Date.now()): number | null {
-  if (!novemberPromoActive(now)) return null;
+export function promotionalPrice(product: any, type: PriceType, now = Date.now(), campaign: Campaign = LEGACY_CAMPAIGN): number | null {
+  if (!pricingCampaignActive(now, campaign) || !campaign.usePromoPrices) return null;
   const field = type === "big_wholesale" ? "promoBigWholesalePrice"
     : type === "wholesale" ? "promoWholesalePrice" : "promoRetailPrice";
   const price = Number(product[field]);
@@ -71,8 +65,8 @@ export function priceTypeLabel(type: PriceType): string {
  * так же считает сервер при оформлении (lib/orderPricing.ts):
  *   крупный опт → опт → розница, опт → розница, скидка / гость → розница.
  */
-export function priceFor(product: any, type: PriceType, now = Date.now()): number {
-  const special = promotionalPrice(product, type, now);
+export function priceFor(product: any, type: PriceType, now = Date.now(), campaign: Campaign = LEGACY_CAMPAIGN): number {
+  const special = promotionalPrice(product, type, now, campaign);
   if (special !== null) return special;
   // API snapshots retain the ordinary prices so a persisted cart also expires correctly.
   product = product.regularPrices ?? product;
@@ -91,9 +85,9 @@ export function priceFor(product: any, type: PriceType, now = Date.now()): numbe
 }
 
 /** Сумма корзины по тарифу (без авто-апгрейда). */
-export function rawCartTotal(cart: any[], type: PriceType, now = Date.now()): number {
+export function rawCartTotal(cart: any[], type: PriceType, now = Date.now(), campaign: Campaign = LEGACY_CAMPAIGN): number {
   return cart.reduce(
-    (sum, item) => sum + priceFor(item, type, now) * item.quantity,
+    (sum, item) => sum + priceFor(item, type, now, campaign) * item.quantity,
     0
   );
 }
@@ -116,12 +110,12 @@ export function effectivePriceType(
 export function cartPriceTier(
   cart: any[],
   customer: { priceType?: string | null } | null,
-  now = Date.now()
+  now = Date.now(), campaign: Campaign = LEGACY_CAMPAIGN
 ): PriceType {
   const base = resolveCustomerPriceType(customer);
   if (base !== "wholesale") return base;
-  if (rawCartTotal(cart, "big_wholesale", now) >= bigWholesaleMinOrder(now)) return "big_wholesale";
-  if (rawCartTotal(cart, "wholesale", now) >= WHOLESALE_MIN_ORDER) return "wholesale";
+  if (rawCartTotal(cart, "big_wholesale", now, campaign) >= bigWholesaleMinOrder(now, campaign)) return "big_wholesale";
+  if (rawCartTotal(cart, "wholesale", now, campaign) >= wholesaleMinOrder(now, campaign)) return "wholesale";
   return "discount";
 }
 
@@ -132,22 +126,22 @@ export function cartPriceTier(
 export function nextPriceTier(
   cart: any[],
   customer: { priceType?: string | null } | null,
-  now = Date.now()
+  now = Date.now(), campaign: Campaign = LEGACY_CAMPAIGN
 ): { type: PriceType; need: number; save: number } | null {
   if (resolveCustomerPriceType(customer) !== "wholesale" || cart.length === 0) return null;
-  const tier = cartPriceTier(cart, customer, now);
+  const tier = cartPriceTier(cart, customer, now, campaign);
   if (tier === "discount") {
     return {
       type: "wholesale",
-      need: Math.max(0, WHOLESALE_MIN_ORDER - rawCartTotal(cart, "wholesale", now)),
-      save: Math.max(0, rawCartTotal(cart, "discount", now) - rawCartTotal(cart, "wholesale", now)),
+      need: Math.max(0, wholesaleMinOrder(now, campaign) - rawCartTotal(cart, "wholesale", now, campaign)),
+      save: Math.max(0, rawCartTotal(cart, "discount", now, campaign) - rawCartTotal(cart, "wholesale", now, campaign)),
     };
   }
   if (tier === "wholesale") {
     return {
       type: "big_wholesale",
-      need: Math.max(0, bigWholesaleMinOrder(now) - rawCartTotal(cart, "big_wholesale", now)),
-      save: Math.max(0, rawCartTotal(cart, "wholesale", now) - rawCartTotal(cart, "big_wholesale", now)),
+      need: Math.max(0, bigWholesaleMinOrder(now, campaign) - rawCartTotal(cart, "big_wholesale", now, campaign)),
+      save: Math.max(0, rawCartTotal(cart, "wholesale", now, campaign) - rawCartTotal(cart, "big_wholesale", now, campaign)),
     };
   }
   return null;
@@ -181,15 +175,14 @@ export type CartPricing = {
 
 /** Includes shock-price items in the threshold, but never in the extra discount's base. */
 export function calculateCart(
-  cart: any[], customer: { priceType?: string | null } | null, now = Date.now()
+  cart: any[], customer: { priceType?: string | null } | null, now = Date.now(), campaign: Campaign = LEGACY_CAMPAIGN
 ): CartPricing {
-  const tier = cartPriceTier(cart, customer, now);
-  const totals = cart.map((item) => priceFor(item, tier, now) * item.quantity);
+  const tier = cartPriceTier(cart, customer, now, campaign);
+  const totals = cart.map((item) => priceFor(item, tier, now, campaign) * item.quantity);
   const subtotal = totals.reduce((sum, n) => sum + n, 0);
   const wholesale = customer?.priceType === "wholesale" || customer?.priceType === "big_wholesale";
-  const percent = !wholesale || !novemberPromoActive(now) ? 0
-    : subtotal >= 300_000 ? 5 : subtotal >= 100_000 ? 3 : subtotal >= 40_000 ? 2 : 0;
-  const eligible = totals.map((n, i) => promotionalPrice(cart[i], tier, now) === null ? n : 0);
+  const percent = wholesale ? campaignPercent(campaign, subtotal, now) : 0;
+  const eligible = totals.map((n, i) => promotionalPrice(cart[i], tier, now, campaign) === null ? n : 0);
   // Work in kopecks. Allocate the rounding remainder once across lines so splitting a product
   // into variants cannot change the discount or make Σ(line discounts) differ from the order.
   const raw = eligible.map((n) => n * percent);
@@ -221,3 +214,7 @@ export function cleanPromoSnapshot(raw: Record<string, unknown>): Record<string,
   return out;
 }
 
+
+export function wholesaleMinOrder(now = Date.now(), campaign: Campaign = LEGACY_CAMPAIGN): number {
+  return campaignActive(campaign, now) ? campaign.wholesaleMin : WHOLESALE_MIN_ORDER;
+}

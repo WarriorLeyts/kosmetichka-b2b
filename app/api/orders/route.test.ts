@@ -1,3 +1,4 @@
+import { LEGACY_CAMPAIGN } from "@/lib/campaign";
 /**
  * Order scenarios end to end through POST /api/orders (DB, MAXMA, mail mocked):
  * which prices each customer type gets, the wholesale minimums, bonuses only for retail buyers,
@@ -368,3 +369,5 @@ describe("retail minimum after bonus reservation", () => {
     expect(queue.enqueueMaxmaTask).toHaveBeenCalledWith(501, "cancel", null, { run: false });
   });
 });
+
+vi.mock("@/lib/campaignSettings", () => ({ getCampaign: async () => LEGACY_CAMPAIGN }));
