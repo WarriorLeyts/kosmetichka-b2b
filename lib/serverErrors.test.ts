@@ -12,4 +12,19 @@ describe("server error line for the monitor", () => {
     const e = Object.assign(new Error("x"), { digest: "123" });
     expect(JSON.parse(serverErrorLine(e, { path: "/" }, {})).digest).toBe("123");
   });
+  it("reports a Prisma pool timeout without leaking its query or values", () => {
+    const e = Object.assign(new Error("\nInvalid prisma.customer.findUnique() invocation:\nphone: 79990001122\nTimed out fetching a new connection"), { code: "P2024" });
+    const line = serverErrorLine(e, { path: "/api/catalog/products?search=private" }, {});
+    expect(JSON.parse(line).message).toBe("P2024: Database connection pool exhausted (wait timeout)");
+    expect(line).not.toContain("79990001122");
+    expect(line).not.toContain("private");
+  });
+  it("keeps unknown Prisma failures useful without including database values", () => {
+    const e = Object.assign(new Error("\nSQL with secret values"), { code: "P2002" });
+    expect(JSON.parse(serverErrorLine(e, {}, {})).message).toBe("P2002: Database request failed");
+  });
+  it("does not emit an empty message for multiline or empty errors", () => {
+    expect(JSON.parse(serverErrorLine(new Error("\n\n  socket closed\nstack"), {}, {})).message).toBe("socket closed");
+    expect(JSON.parse(serverErrorLine(new Error(""), {}, {})).message).toBe("Unknown server error");
+  });
 });
