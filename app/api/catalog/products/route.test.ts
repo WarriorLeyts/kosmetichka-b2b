@@ -13,6 +13,17 @@ vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined })
 import { GET } from "./route";
 
 describe("catalog brand facets", () => {
+  it("coalesces identical simultaneous HTTP requests without reusing a completed result", async () => {
+    db.product.groupBy.mockClear();
+    db.product.groupBy.mockResolvedValue([]);
+    db.brand.findMany.mockResolvedValue([]);
+    const url = "http://x/api/catalog/products?facets=brand&search=concurrent";
+    const responses = await Promise.all(Array.from({ length: 7 }, () => GET(new Request(url))));
+    expect(db.product.groupBy).toHaveBeenCalledTimes(1);
+    expect(await Promise.all(responses.map((r) => r.json()))).toEqual(Array(7).fill({ brands: [] }));
+    await GET(new Request(url));
+    expect(db.product.groupBy).toHaveBeenCalledTimes(2);
+  });
   it("brands of the found products, the chosen brand ignored, most products first", async () => {
     db.product.groupBy.mockResolvedValue([
       { brandGuid: "p", _count: { _all: 18 } },

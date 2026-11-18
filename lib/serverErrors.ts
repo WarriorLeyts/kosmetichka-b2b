@@ -12,7 +12,17 @@ export const SERVER_ERRORS_FILE = path.join(DATA_ROOT, "server-errors.log");
 const MAX_BYTES = 5 * 1024 * 1024;
 
 export function serverErrorLine(err: unknown, req: { path?: string; method?: string }, ctx: { routePath?: string; routeType?: string }, at = new Date()) {
-  const message = (err instanceof Error ? err.message : String(err)).split("\n")[0].slice(0, 300);
+  // Prisma messages begin with a newline and may contain SQL/values afterwards.
+  // Log a safe description and its stable code instead of that query text.
+  const code = typeof err === "object" && err !== null && "code" in err && /^P\d{4}$/.test(String(err.code)) ? String(err.code) : undefined;
+  const databaseMessages: Record<string, string> = {
+    P1001: "Database server unreachable",
+    P1002: "Database connection timed out",
+    P1008: "Database operation timed out",
+    P2024: "Database connection pool exhausted (wait timeout)",
+  };
+  const message = code ? `${code}: ${databaseMessages[code] ?? "Database request failed"}`
+    : ((err instanceof Error ? err.message : String(err)).split("\n").find((line) => line.trim())?.trim() || "Unknown server error").slice(0, 300);
   const digest = typeof err === "object" && err !== null && "digest" in err ? String((err as { digest: unknown }).digest).slice(0, 40) : undefined;
   return JSON.stringify({
     at: at.toISOString(),

@@ -13,6 +13,7 @@ import { verifyToken } from "@/lib/auth";
 import { createHash } from "crypto";
 import { resolveCustomerPriceType, priceFor, pricingCampaignActive, type PriceType } from "@/lib/pricing";
 import { pricingCustomer } from "@/lib/siteMode";
+import { catalogFlightKey, shareCatalogRequest } from "@/lib/catalogRequestFlight";
 
 const SORTS = ["popularity", "price_asc", "price_desc", "name"] as const;
 type Sort = (typeof SORTS)[number];
@@ -128,11 +129,16 @@ function shownPrices(idx: PriceIndex, type: PriceType, campaign: Campaign): Map<
 }
 
 export async function GET(request: Request) {
+  const cookieStore = await cookies();
+  const key = catalogFlightKey(request, cookieStore.get("auth_token")?.value, cookieStore.get("admin_token")?.value);
+  return shareCatalogRequest(key, () => catalogProducts(request, cookieStore));
+}
+
+async function catalogProducts(request: Request, cookieStore: Awaited<ReturnType<typeof cookies>>) {
   const campaign = await getCampaign();
   const { searchParams } = new URL(request.url);
 
   // Проверяем авторизацию
-  const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
   const payload = token ? await verifyCustomerToken(token) : null;
   // staff (admin / Team app, admin_token) browse the same catalogue with real prices
