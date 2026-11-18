@@ -8,23 +8,13 @@ import { orderScopeWhere, staffScope } from "@/lib/staffScope";
 import { parsePage } from "../_shared";
 import { customerChatMarks, EMPTY_MARKS } from "@/lib/customerChatMarks";
 import { waitingSince } from "@/lib/orderConfirm";
+import { orderBusinessRange, parseOrderDates } from "@/lib/orderDates";
 
 const PAGE_SIZE = 50;
 
 const PIPELINE_STATUSES = ["pending", "approved", "assembly", "consultation", "payment", "exported", "cancelled"];
 
-/** Business-day range for "YYYY-MM-DD": previous day 19:00 … this day 18:59:59.999 (server local time) */
-function businessDayRange(dateStr: string) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  d.setDate(d.getDate() - 1);
-  const prevDayStr = d.toISOString().slice(0, 10);
-  return {
-    gte: new Date(`${prevDayStr}T19:00:00`),
-    lte: new Date(`${dateStr}T18:59:59.999`),
-  };
-}
-
-// GET /api/team/orders?date=&customer=&status=&customerType=&page=
+// GET /api/team/orders?date=&dateFrom=&dateTo=&customer=&status=&customerType=&page=
 export async function GET(request: NextRequest) {
   const auth = await requireStaff(ADMIN_MANAGER);
   if (!auth.ok) return auth.response;
@@ -46,20 +36,9 @@ export async function GET(request: NextRequest) {
     ? { OR: [{ priceType: { in: types } }, { priceType: null, customer: { priceType: { in: types } } }] }
     : {};
 
-  // Same business-day logic as the page (cutoff 18:30 server time)
-  const now = new Date();
-  const calendarToday = now.toISOString().slice(0, 10);
-  const isPastCutoff = now.getHours() > 18 || (now.getHours() === 18 && now.getMinutes() >= 30);
-  const businessToday = isPastCutoff
-    ? new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    : calendarToday;
-
-  // date absent → business today; date="" → all dates; date="YYYY-MM-DD" → that business day
-  const rawDate = sp.get("date");
-  const selectedDate = rawDate !== null ? rawDate.trim() : businessToday;
-  if (selectedDate && !/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
-    return NextResponse.json({ error: "Неверная дата (ожидается YYYY-MM-DD)" }, { status: 400 });
-  }
+  const dates = parseOrderDates(sp);
+  if ("error" in dates) return NextResponse.json({ error: dates.error }, { status: 400 });
+  const { businessToday, date: selectedDate, dateFrom, dateTo } = dates;
   const customerSearch = sp.get("customer") || "";
   const selectedStatus = sp.get("status") || "";
   const page = parsePage(sp.get("page"));
@@ -67,7 +46,7 @@ export async function GET(request: NextRequest) {
   // the summary tiles: the chosen day (or all dates) and the search, every status
   const scope: Prisma.OrderWhereInput = {
     AND: [mine, typeWhere],
-    ...(selectedDate ? { createdAt: businessDayRange(selectedDate) } : {}),
+    ...(dates.createdAt ? { createdAt: dates.createdAt } : {}),
     customer: customerSearch
       ? {
           OR: [
@@ -110,7 +89,7 @@ export async function GET(request: NextRequest) {
     // Status chips — always for the current business day
     prisma.order.groupBy({
       by: ["status"],
-      where: { AND: [mine, typeWhere], createdAt: businessDayRange(businessToday) },
+      where: { AND: [mine, typeWhere], createdAt: orderBusinessRange(businessToday) },
       _count: { id: true },
     }),
     prisma.order.groupBy({ by: ["status"], where: scope, _count: { id: true }, _sum: { total: true } }),
@@ -156,6 +135,8 @@ export async function GET(request: NextRequest) {
     totalPages: Math.ceil(totalCount / PAGE_SIZE),
     filters: {
       date: selectedDate,
+      dateFrom,
+      dateTo,
       businessToday,
       customer: customerSearch,
       status: selectedStatus,

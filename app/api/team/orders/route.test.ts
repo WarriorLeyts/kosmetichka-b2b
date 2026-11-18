@@ -54,3 +54,29 @@ describe("admin-only order customer type", () => {
     expect(db.order.findMany).not.toHaveBeenCalled();
   });
 });
+
+describe("order date intervals", () => {
+  it("filters orders, summary totals and confirmed counts by the same inclusive business-day period", async () => {
+    const r = await request("dateFrom=2026-11-01&dateTo=2026-11-18&status=assembly&customer=Амина&customerType=wholesale");
+    expect(r.status).toBe(200);
+    expect((await r.json()).filters).toMatchObject({ date: "", dateFrom: "2026-11-01", dateTo: "2026-11-18" });
+    const createdAt = { gte: new Date("2026-10-31T16:00:00Z"), lt: new Date("2026-11-18T16:00:00Z") };
+    const args = db.order.findMany.mock.calls[0][0] as { where: unknown };
+    expect(args.where).toMatchObject({ createdAt, status: "assembly", AND: [{ customer: { manager: "allowed" } }, expect.any(Object)] });
+    for (const [count] of db.order.count.mock.calls) expect((count as { where: unknown }).where).toMatchObject({ createdAt });
+    // Current-scope tiles (second group query) use the interval but ignore the selected status.
+    const summary = db.order.groupBy.mock.calls[1][0] as { where: { createdAt: unknown; status?: string } };
+    expect(summary.where.createdAt).toEqual(createdAt);
+    expect(summary.where.status).toBeUndefined();
+  });
+  it("allows managers to select a period while preserving their customer group restriction", async () => {
+    who.role = "manager";
+    expect((await request("dateFrom=2026-11-01&dateTo=2026-11-18")).status).toBe(200);
+    expect((db.order.findMany.mock.calls[0][0] as { where: unknown }).where).toMatchObject({ AND: [{ customer: { manager: "allowed" } }, {}] });
+  });
+  it.each(["dateFrom=2026-11-18", "dateFrom=2026-11-18&dateTo=2026-11-01", "dateFrom=2026-02-30&dateTo=2026-03-01", "date=2026-11-31"])("rejects invalid date selection: %s", async (query) => {
+    const response = await GET(new NextRequest(`https://x/api/team/orders?${query}`));
+    expect(response.status).toBe(400);
+    expect(db.order.findMany).not.toHaveBeenCalled();
+  });
+});
