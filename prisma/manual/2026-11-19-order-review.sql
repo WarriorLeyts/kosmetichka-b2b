@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS "OrderReview" (
+  "orderId" INTEGER PRIMARY KEY REFERENCES "Order"("id") ON DELETE CASCADE,
+  "rating" INTEGER NOT NULL CHECK ("rating" BETWEEN 1 AND 5),
+  "comment" VARCHAR(500),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS "OrderReview_createdAt_idx" ON "OrderReview" ("createdAt" DESC);

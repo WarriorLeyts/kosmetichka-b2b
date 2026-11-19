@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ id: 7 as number | null, passwordOK: true }));
 const db = vi.hoisted(() => {
   const remove = () => ({ deleteMany: vi.fn(async () => ({ count: 1 })) });
-  return { customer: { findUnique: vi.fn(), update: vi.fn(async () => ({})) }, wishlistItem: remove(), customerCart: remove(), customerFavorites: remove(), customerProof: remove(), pushToken: remove(), webPushSubscription: remove(), notification: remove(), passwordResetToken: remove(), $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)) };
+  return { customer: { findUnique: vi.fn(), update: vi.fn(async () => ({})) }, wishlistItem: remove(), customerCart: remove(), customerFavorites: remove(), customerProof: remove(), orderReview: remove(), pushToken: remove(), webPushSubscription: remove(), notification: remove(), passwordResetToken: remove(), $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)) };
 });
 const io = vi.hoisted(() => ({ unlink: vi.fn(async () => {}) }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
@@ -28,6 +28,7 @@ describe("customer account deletion", () => {
   it("erases saved lists and wholesale proofs, revokes access, retains order accounting, and expires the cookie", async () => {
     const r = await call({ password: "correct", customerId: 999 });
     expect(r.status).toBe(200);
+    expect(db.orderReview.deleteMany).toHaveBeenCalledWith({ where: { order: { customerId: 7 } } });
     for (const model of [db.customerCart, db.customerFavorites, db.customerProof, db.wishlistItem, db.pushToken, db.webPushSubscription, db.notification]) expect(model.deleteMany).toHaveBeenCalledWith({ where: { customerId: 7 } });
     expect(db.customer.update).toHaveBeenCalledWith({ where: { id: 7 }, data: expect.objectContaining({ phone: null, email: null, oneCId: null, shopType: null, shopLink: null, referralSource: null, orderedBefore: null, manager: null, pushPromo: false, isApproved: false, wholesaleAccess: null, isActive: false, password: "revoked-password", passwordChangedAt: expect.any(Date) }) });
     expect(db.passwordResetToken.deleteMany).toHaveBeenCalledWith({ where: { email: "customer@example.test" } });

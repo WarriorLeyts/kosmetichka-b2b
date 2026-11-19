@@ -155,6 +155,7 @@ export async function DELETE(request: Request) {
     prisma.wishlistItem.deleteMany({ where: { customerId: id } }),
     prisma.customerCart.deleteMany({ where: { customerId: id } }),
     prisma.customerFavorites.deleteMany({ where: { customerId: id } }),
+    prisma.orderReview.deleteMany({ where: { order: { customerId: id } } }),
     prisma.customerProof.deleteMany({ where: { customerId: id } }),
     prisma.pushToken.deleteMany({ where: { customerId: id } }),
     prisma.webPushSubscription.deleteMany({ where: { customerId: id } }),
