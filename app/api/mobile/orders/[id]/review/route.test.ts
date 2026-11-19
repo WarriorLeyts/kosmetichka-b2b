@@ -1,0 +1,20 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+const s=vi.hoisted(()=>({customerId:7 as number|null,owns:true,review:null as null|Record<string,unknown>,code:""}));
+const db=vi.hoisted(()=>({order:{findFirst:vi.fn()},orderReview:{create:vi.fn(),findUnique:vi.fn()}}));
+vi.mock("@/lib/prisma",()=>({prisma:db}));vi.mock("../../../_auth",()=>({currentCustomerId:async()=>s.customerId}));
+import {GET,POST} from "./route";
+const ctx=(id="123")=>({params:Promise.resolve({id})});
+const req=(body:unknown)=>new Request("https://site/api/mobile/orders/123/review",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+beforeEach(()=>{vi.clearAllMocks();s.customerId=7;s.owns=true;s.review=null;s.code="";db.order.findFirst.mockImplementation(async()=>s.owns?{id:123}:null);db.orderReview.findUnique.mockImplementation(async()=>s.review);db.orderReview.create.mockImplementation(async({data})=>{if(s.code)throw{code:s.code};return{...data,createdAt:new Date()}})});
+describe("order review ownership and validation",()=>{
+ it("does not read/write for guests",async()=>{s.customerId=null;expect((await POST(req({rating:5}),ctx())).status).toBe(401);expect(db.order.findFirst).not.toHaveBeenCalled();expect(db.orderReview.create).not.toHaveBeenCalled()});
+ it("rejects other customers' orders on reads and writes",async()=>{s.owns=false;expect((await GET(req({}),ctx())).status).toBe(404);expect((await POST(req({rating:5}),ctx())).status).toBe(404);expect(db.order.findFirst).toHaveBeenCalledWith({where:{id:123,customerId:7},select:{id:true}});expect(db.orderReview.create).not.toHaveBeenCalled();expect(db.orderReview.findUnique).not.toHaveBeenCalled()});
+ it("rejects invalid route IDs before DB access",async()=>{expect((await GET(req({}),ctx("NaN"))).status).toBe(404);expect(db.order.findFirst).not.toHaveBeenCalled()});
+ it.each([0,6,2.5,"5",null])("rejects invalid rating %s",async rating=>{expect((await POST(req({rating}),ctx())).status).toBe(400);expect(db.orderReview.create).not.toHaveBeenCalled()});
+ it("accepts a rating without text, and binds it to the URL's owned order",async()=>{const r=await POST(req({rating:1,orderId:999,customerId:55}),ctx());expect(r.status).toBe(201);expect(db.orderReview.create).toHaveBeenCalledWith({data:{orderId:123,rating:1,comment:null}})});
+ it("trims and bounds comment text",async()=>{expect((await POST(req({rating:4,comment:"  Удобно  "}),ctx())).status).toBe(201);expect(db.orderReview.create).toHaveBeenLastCalledWith({data:{orderId:123,rating:4,comment:"Удобно"}});expect((await POST(req({rating:4,comment:"x".repeat(501)}),ctx())).status).toBe(400)});
+ it("returns the first review after a duplicate / lost answer, without overwriting it",async()=>{s.code="P2002";s.review={orderId:123,rating:2,comment:"Original"};const r=await POST(req({rating:5,comment:"Changed"}),ctx());expect(r.status).toBe(200);expect((await r.json()).review).toEqual(s.review)});
+ it("returns null when no review exists, otherwise the saved review",async()=>{expect((await(await GET(req({}),ctx())).json()).review).toBeNull();s.review={rating:4};expect((await(await GET(req({}),ctx())).json()).review).toEqual(s.review)});
+ it("handles deletion of the order during a submission",async()=>{s.code="P2003";expect((await POST(req({rating:3}),ctx())).status).toBe(404)});
+ it("rejects non-JSON cross-site form submissions",async()=>{expect((await POST(new Request('https://site',{method:'POST',body:'{"rating":5}'}),ctx())).status).toBe(415);expect(db.orderReview.create).not.toHaveBeenCalled()});
+});

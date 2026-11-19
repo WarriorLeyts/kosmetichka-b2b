@@ -354,6 +354,7 @@ model Order {
   bonusesCollected Int @default(0)
 
   items OrderItem[]
+  review OrderReview?
 
   oneCExportedAt    DateTime?
   /// «Заказ покупателя» created in 1С over OData (lib/onecOrders.ts, ORDERS_TO_1C=odata): its ref and number
@@ -395,7 +396,17 @@ model Order {
   @@index([confirmRequestedAt]) // reminders: orders waiting for the customer's confirmation
 }
 
-/// Every try to send an order to 1С (lib/onecOrders.ts) — the log in the admin panel (/orders/<id>)
+/// Optional customer feedback about checkout, once per order.
+model OrderReview {
+  orderId Int @id
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  rating Int
+  comment String? @db.VarChar(500)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+}
+
 model OneCOrderAttempt {
   id         Int      @id @default(autoincrement())
   orderId    Int
