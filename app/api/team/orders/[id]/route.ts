@@ -16,6 +16,7 @@ import { maxmaActionLabel, maxmaStuckByOrder } from "@/lib/maxmaQueue";
 import { ADMIN_MANAGER, requireStaff } from "../../_auth";
 import { badId, notFound, parseId, productImageUrl } from "../../_shared";
 import { staffSeesOrder } from "@/lib/staffScope";
+import { cardGivesDiscount } from "@/lib/discountCardRule";
 
 // GET /api/team/orders/:id — everything app/admin/orders/[id]/page.tsx passes to AdminOrderClient
 // (customer chat is NOT included: use GET /api/admin/orders/:id/customer-messages)
@@ -48,6 +49,8 @@ export async function GET(
             inn: true,
             manager: true,
             priceType: true,
+            loyaltyCard: true,
+            maxmaDiscount: true,
             oneCId: true,
           },
         },
@@ -184,6 +187,7 @@ export async function GET(
         oneCId: order.customer.oneCId ?? null,
         // price type of this order (the customer may have switched since)
         priceType: order.priceType ?? order.customer.priceType,
+        canPurchaseCard: order.customer.priceType === "retail" && !cardGivesDiscount(order.customer),
         // the prices of this order («Опт»: by the order sum — discount / wholesale / big wholesale)
         priceTier: orderTier(order),
       },

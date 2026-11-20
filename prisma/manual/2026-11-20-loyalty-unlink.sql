@@ -1,0 +1,1 @@
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "loyaltyAutoLinkDisabled" BOOLEAN NOT NULL DEFAULT false;

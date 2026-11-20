@@ -6,6 +6,7 @@ import { parseCheckStatuses } from "@/lib/checkStatus";
 import { ANY_STAFF, requireStaff } from "../../../_auth";
 import { badId, notFound, parseId, productImageUrl } from "../../../_shared";
 import { staffSeesOrder } from "@/lib/staffScope";
+import { cardGivesDiscount } from "@/lib/discountCardRule";
 import { SHOP_LABEL, STOCK_LABEL, orderSplits, splitsWarehouses } from "@/lib/orderWarehouses";
 
 // GET /api/team/picker/orders/:id — what app/picker/[orderId]/page.tsx passes to PickerOrderClient
@@ -33,7 +34,7 @@ export async function GET(
       pickerId: true,
       createdAt: true,
       picker: { select: { id: true, name: true } },
-      customer: { select: { companyName: true, name: true, phone: true, priceType: true } },
+      customer: { select: { companyName: true, name: true, phone: true, priceType: true, loyaltyCard: true, maxmaDiscount: true } },
       items: {
         include: {
           check: true,
@@ -95,7 +96,7 @@ export async function GET(
       createdAt: order.createdAt.toISOString(),
       pickerId: order.pickerId ?? null,
       picker: order.picker ?? null,
-      customer: { companyName: order.customer?.companyName ?? null, name: order.customer?.name ?? null, phone: order.customer?.phone ?? null },
+      customer: { companyName: order.customer?.companyName ?? null, name: order.customer?.name ?? null, phone: order.customer?.phone ?? null, priceType: order.customer?.priceType, canPurchaseCard: order.customer?.priceType === "retail" && !cardGivesDiscount(order.customer) },
       // the customer's prices: what «Добавить товар» in the picking shows first
       priceType: order.customer?.priceType ?? null,
       // wholesale: the picker chooses the warehouse of each line — 1С gets two documents

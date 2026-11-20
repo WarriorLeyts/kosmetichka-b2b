@@ -8,6 +8,9 @@ import { minOrderFor } from "@/lib/pricing";
 import { isMaxmaOrder, loyaltyResponse, recalcOrderLoyalty } from "@/lib/maxmaOrders";
 import { changeChatMessage, logOrderChanges } from "@/lib/orderChanges";
 import { CUSTOMER_EDITABLE_STATUSES, customerEditBlockedReason } from "@/lib/orderStatus";
+import { repriceOrder } from "@/lib/orderTier";
+import { CARD_PRODUCT_NAME } from "@/lib/cardPurchase";
+import { lockedByOrderId } from "@/lib/orderLock";
 
 /**
  * Customer edits their order (app / site): change quantities, remove lines, add products.
@@ -15,7 +18,7 @@ import { CUSTOMER_EDITABLE_STATUSES, customerEditBlockedReason } from "@/lib/ord
  * existing lines stay as they are (only staff change prices). Every change is logged for staff
  * (OrderItemChange) and summarised in the order chat, so the manager and the picker see it.
  */
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+async function editItems(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const cookieStore = await cookies();
   const token = cookieStore.get("auth_token")?.value;
   if (!token) return NextResponse.json({ error: "Не авторизован" }, { status: 401 });
@@ -54,6 +57,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   for (const u of updates) {
     if (!byId.has(Number(u.id))) return NextResponse.json({ error: `Позиция ${u.id} не принадлежит этому заказу` }, { status: 400 });
     const q = Number(u.quantity);
+    if (byId.get(Number(u.id))?.productName === CARD_PRODUCT_NAME && !removeIds.includes(Number(u.id)) && q !== 1) return NextResponse.json({ error: "В заказе может быть только одна карта «Косметичка»." }, { status: 400 });
     if (!Number.isInteger(q) || q < 1 || q > 100000) return NextResponse.json({ error: "Количество должно быть не менее 1" }, { status: 400 });
   }
   for (const rid of removeIds) {
@@ -135,6 +139,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
   });
 
+  if (order.items.some(i => i.productName === CARD_PRODUCT_NAME)) {
+    await repriceOrder(orderId);
+    if (!isMaxmaOrder(order)) {
+      const repriced = await prisma.orderItem.findMany({ where: { orderId } });
+      await prisma.order.update({ where: { id: orderId }, data: { total: orderSums(repriced).total } });
+    }
+  }
   const after = await prisma.orderItem.findMany({ where: { orderId }, orderBy: { id: "asc" } });
   const rows = await logOrderChanges(orderId, "customer", null, order.items, after);
   // the customer saw the manager's changes and answered with his own: no separate confirmation needed
@@ -176,3 +187,5 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (!loyalty) return NextResponse.json({ order: updatedOrder });
   return NextResponse.json({ order: updatedOrder, ...loyaltyResponse(loyalty) });
 }
+
+export const PUT = lockedByOrderId(editItems);

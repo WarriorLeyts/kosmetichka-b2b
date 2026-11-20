@@ -24,7 +24,7 @@ describe("MAXMA phone linking", () => {
     db.customer.findMany.mockResolvedValue([customer({ phone })]);
     await syncCustomerCard(1);
     expect(maxma.findCard).toHaveBeenCalledWith({ phoneNumber: "+79991234567" });
-    expect(db.customer.updateMany).toHaveBeenCalledWith({ where: { id: 1, phone, phoneUnverified: false, loyaltyCard: null, maxmaDiscount: false, priceType: "retail", isActive: true, isApproved: true }, data: { loyaltyCard: "990123", maxmaDiscount: false } });
+    expect(db.customer.updateMany).toHaveBeenCalledWith({ where: { id: 1, phone, phoneUnverified: false, loyaltyAutoLinkDisabled: false, loyaltyCard: null, maxmaDiscount: false, priceType: "retail", isActive: true, isApproved: true }, data: { loyaltyCard: "990123", maxmaDiscount: false } });
     expect(group.refreshMaxmaDiscount).toHaveBeenCalledWith(1);
   });
   it("checks the group after saving the card, independently of its prefix", async () => {
@@ -51,7 +51,7 @@ describe("MAXMA phone linking", () => {
     await syncPhoneCards();
     expect(maxma.findCard).not.toHaveBeenCalled();
   });
-  it.each([{ phoneUnverified: true }, { isApproved: false }, { isActive: false }, { priceType: "wholesale" }, { phone: "123" }])("skips ineligible accounts %j", async (extra) => {
+  it.each([{ phoneUnverified: true }, { loyaltyAutoLinkDisabled: true }, { isApproved: false }, { isActive: false }, { priceType: "wholesale" }, { phone: "123" }])("skips ineligible accounts %j", async (extra) => {
     db.customer.findMany.mockResolvedValue([customer(extra)]);
     await syncCustomerCard(1);
     expect(maxma.findCard).not.toHaveBeenCalled();
@@ -104,7 +104,7 @@ describe("MAXMA changes the card number on conversion to discount", () => {
     await syncPhoneCards();
     expect(group.cardInDiscountGroup).toHaveBeenCalledWith("new-discount");
     expect(db.customer.updateMany).toHaveBeenCalledWith({
-      where: { id: 1, phone: "89991234567", phoneUnverified: false, loyaltyCard: "old-bonus", maxmaDiscount: false, priceType: "retail", isActive: true, isApproved: true },
+      where: { id: 1, phone: "89991234567", phoneUnverified: false, loyaltyAutoLinkDisabled: false, loyaltyCard: "old-bonus", maxmaDiscount: false, priceType: "retail", isActive: true, isApproved: true },
       data: { loyaltyCard: "new-discount", maxmaDiscount: true },
     });
   });

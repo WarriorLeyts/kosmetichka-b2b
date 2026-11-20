@@ -65,3 +65,14 @@ describe("repriceOrder", () => {
 });
 
 vi.mock("@/lib/campaignSettings", () => ({ getCampaign: async () => LEGACY_CAMPAIGN }));
+
+describe("a purchased card is removed", () => {
+ it("restores retail prices and removes cashier issuance instructions", async () => {
+  db.order.findUnique.mockResolvedValue(order(2,{priceType:"retail",priceTier:"discount",customer:{priceType:"retail",loyaltyCard:null,maxmaDiscount:false},comment:"Позвонить\nОформить скидочную карту «Косметичка» — 990 ₽. ФИО: Тест Тестов."}));
+  expect(await repriceOrder(9)).toMatchObject({from:"discount",to:"retail"});expect(db.orderItem.update).toHaveBeenCalledWith({where:{id:1},data:{price:1120,total:2240}});expect(db.order.update).toHaveBeenCalledWith({where:{id:9},data:{priceTier:"retail",comment:"Позвонить"}});
+ });
+ it("keeps the customer's existing discount-card tariff but removes issuance instructions",async()=>{
+  db.order.findUnique.mockResolvedValue(order(2,{priceType:"retail",priceTier:"discount",customer:{priceType:"retail",loyaltyCard:"123",maxmaDiscount:true},comment:"Оформить скидочную карту «Косметичка» — 990 ₽."}));
+  expect(await repriceOrder(9)).toBeNull();expect(db.orderItem.update).not.toHaveBeenCalled();expect(db.order.update).toHaveBeenCalledWith({where:{id:9},data:{comment:null}});
+ });
+});

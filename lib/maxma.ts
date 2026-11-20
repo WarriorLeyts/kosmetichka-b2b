@@ -91,7 +91,7 @@ export async function findCard(by: { phoneNumber?: string; card?: string }): Pro
     const level: string | null = data?.level?.name ?? null;
     return {
       number,
-      name: String(c.name || c.fullName || "").trim(),
+      name: String(c.fullName || [c.surname, c.name, c.patronymicName].filter(Boolean).join(" ")).trim(),
       level,
       cashback: cashbackFor(level),
       bonuses: Number(c.bonuses) || 0,
@@ -121,8 +121,55 @@ export function maskPhone(phone: string | null): string | null {
 
 /** What the app gets: everything except the phone stored in MAXMA. */
 export function publicCard(c: LoyaltyCard) {
-  const { phone: _phone, ...rest } = c; // eslint-disable-line @typescript-eslint/no-unused-vars
-  return rest;
+  const { number, name, level, cashback, bonuses, pendingBonuses } = c;
+  return { number, name, level, cashback, bonuses, pendingBonuses };
+}
+
+/** Staff-only profile: never pass this through publicCard or a customer response. */
+export type StaffLoyaltyCard = Omit<LoyaltyCard, "bonuses" | "pendingBonuses"> & {
+  bonuses: number | null; pendingBonuses: number | null;
+  email: string | null; birthdate: string | null; gender: number | null; externalId: string | null;
+};
+const finiteBonus = (value: unknown): number | null => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
+const maxmaText = (value: unknown): string | null => typeof value === "string" && value.trim() ? value.trim().slice(0, 500) : null;
+export async function findStaffCard(by: { phoneNumber?: string; card?: string }): Promise<StaffLoyaltyCard | null> {
+  try {
+    const data = await call<{ client?: Record<string, unknown>; level?: { name?: string } }>("get-balance", by);
+    const c = data?.client;
+    if (!c) return null;
+    const number = String(c.cardString || c.card || "").trim();
+    if (!number) return null;
+    const level = maxmaText(data.level?.name);
+    return { number, name: maxmaText(c.fullName) || [c.surname, c.name, c.patronymicName].map(maxmaText).filter(Boolean).join(" "),
+      phone: maxmaText(c.phoneNumber), email: maxmaText(c.email), birthdate: maxmaText(c.birthdate),
+      gender: c.gender === 1 || c.gender === 2 ? c.gender : null, externalId: maxmaText(c.externalId),
+      bonuses: finiteBonus(c.bonuses), pendingBonuses: finiteBonus(c.pendingBonuses), level, cashback: cashbackFor(level) };
+  } catch (e) {
+    if (e instanceof MaxmaError && e.notFound) return null;
+    throw e;
+  }
+}
+
+export type BonusHistoryItem = { at: string | null; amount: number | null; operation: string; title: string; detail: string | null; reference: string | null };
+const BONUS_TITLES: Record<string, string> = {
+  OPERATION_APPLIED: "Оплата покупки", OPERATION_COLLECTED: "Начисление за покупку", OPERATION_EXPIRED: "Сгорание бонусов",
+  OPERATION_REFUNDED: "Возврат списанных бонусов", OPERATION_CANCELLED: "Отмена начисления", OPERATION_RECEIVED: "Начисление по акции",
+  OPERATION_RECALLED: "Отзыв бонусов", OPERATION_APPLY_REVERTED: "Отмена списания", OPERATION_COLLECT_REVERTED: "Отмена начисления",
+  OPERATION_COLLECTED_FRIEND: "Начисление за покупку друга",
+};
+export async function getBonusHistory(card: string, offset = 0): Promise<{ items: BonusHistoryItem[]; total: number; hasMore: boolean }> {
+  const data = await call<{ history: Record<string, unknown>[]; pagination?: { total?: number } }>("get-bonus-history", { client: { card }, pagination: { limit: 30, offset } });
+  if (!Array.isArray(data?.history)) throw new MaxmaError("unavailable", 502);
+  const items = data.history.map(e => {
+    const operation = maxmaText(e.operation) || "";
+    const extra = e[operation] && typeof e[operation] === "object" ? e[operation] as Record<string, unknown> : {};
+    const at = maxmaText(e.at);
+    return { at: at && Number.isFinite(Date.parse(at)) ? at : null, amount: finiteBonus(e.amount), operation,
+      title: maxmaText(e.operationName) || BONUS_TITLES[operation] || "Операция MAXMA", detail: maxmaText(extra.actionName),
+      reference: maxmaText(extra.purchaseId) || maxmaText(extra.returnId) };
+  });
+  const total = Math.max(offset + items.length, finiteBonus(data.pagination?.total) ?? offset + items.length);
+  return { items, total, hasMore: offset + items.length < total && items.length > 0 };
 }
 
 // ── Promo codes (v2 calculate-purchase / set-order) ─────────────────────────

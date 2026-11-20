@@ -12,6 +12,7 @@ import { notifyLater } from "@/lib/notify";
 import { markProductRequestAdded, productRequestAdded } from "@/lib/productRequest";
 import { lockedByOrderId } from "@/lib/orderLock";
 import { staffSeesOrder } from "@/lib/staffScope";
+import { CARD_PRODUCT_NAME, isCardProduct } from "@/lib/cardPurchase";
 
 function getSecret() {
   return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
@@ -75,6 +76,7 @@ async function editItems(request: NextRequest, { params }: Props) {
   }[] = body.newItems ?? [];
 
   const orderItemIds = new Set(order.items.map((i) => i.id));
+  if (updates.some(u => order.items.find(i => i.id === u.id)?.productName === CARD_PRODUCT_NAME && !removeIds.includes(u.id) && Number(u.quantity) !== 1)) return NextResponse.json({ error: "В заказе может быть только одна карта «Косметичка»." }, { status: 400 });
   for (const u of updates) {
     if (!orderItemIds.has(u.id)) {
       return NextResponse.json({ error: `Позиция ${u.id} не принадлежит заказу` }, { status: 400 });
@@ -106,12 +108,13 @@ async function editItems(request: NextRequest, { params }: Props) {
     const campaign = await getCampaign();
     const products = await prisma.product.findMany({
       where: { id: { in: newItems.map((ni) => Number(ni.productId)) } },
-      select: { id: true, name: true, barcode: true, prices: { select: { priceType: true, price: true } }, variants: { select: { name: true } } },
+      select: { id: true, guid: true, name: true, barcode: true, prices: { select: { priceType: true, price: true } }, variants: { select: { name: true } } },
     });
     const byId = new Map(products.map((p) => [p.id, p]));
     for (const ni of newItems) {
       const p = byId.get(Number(ni.productId));
       if (!p) return NextResponse.json({ error: `Товар ${ni.productId} не найден` }, { status: 400 });
+      if (isCardProduct(p) || p.name === CARD_PRODUCT_NAME) return NextResponse.json({ error: "Для покупки карты используйте кнопку «Добавить карту Косметичка» и укажите данные владельца." }, { status: 400 });
       const pm = Object.fromEntries(p.prices.map((x) => [x.priceType, Number(x.price)]));
       const price = Math.round(
         priceFor({ retailPrice: pm.retail, discountPrice: pm.discount, wholesalePrice: pm.wholesale, bigWholesalePrice: pm.big_wholesale, promoRetailPrice: pm.promo_retail, promoWholesalePrice: pm.promo_wholesale, promoBigWholesalePrice: pm.promo_big_wholesale }, type, Date.now(), campaign)
