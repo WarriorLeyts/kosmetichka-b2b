@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     if (!card) return bad("Карта не найдена", 404);
     if (await claimedByAnother(card.number, id)) return occupied();
     try {
-      await prisma.customer.update({ where: { id }, data: { loyaltyCard: card.number, maxmaDiscount: false } });
+      await prisma.customer.update({ where: { id }, data: { loyaltyCard: card.number, maxmaDiscount: false, loyaltyAutoLinkDisabled: false } });
     } catch (e) {
       if ((e as { code?: string }).code === "P2002") return occupied();
       throw e;

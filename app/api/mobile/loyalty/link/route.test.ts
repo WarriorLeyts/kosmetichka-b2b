@@ -42,6 +42,6 @@ describe("one card per site account", () => {
     expect((await request({ query: "900123" })).status).toBe(200);
     expect((await request({ code: "1234" })).status).toBe(200);
     expect(db.customer.findFirst).toHaveBeenLastCalledWith({ where: { loyaltyCard: "900123", NOT: { id: state.id } }, select: { id: true } });
-    expect(db.customer.update).toHaveBeenCalledWith({ where: { id: state.id }, data: { loyaltyCard: "900123", maxmaDiscount: false } });
+    expect(db.customer.update).toHaveBeenCalledWith({ where: { id: state.id }, data: { loyaltyCard: "900123", maxmaDiscount: false, loyaltyAutoLinkDisabled: false } });
   });
 });

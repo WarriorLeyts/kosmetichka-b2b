@@ -224,6 +224,7 @@ async function createOrder(request: Request) {
     try {
       order = await prisma.$transaction(
         async (tx) => {
+          if (registration && customer.loyaltyAutoLinkDisabled) await tx.customer.update({ where: { id: customer.id }, data: { loyaltyAutoLinkDisabled: false } });
           const created = await tx.order.create({
             data: orderData,
             include: { items: { orderBy: { id: "asc" }, select: { id: true } } },
@@ -289,7 +290,10 @@ async function createOrder(request: Request) {
     }
   } else {
     try {
-      order = await prisma.order.create({ data: orderData });
+      order = registration && customer.loyaltyAutoLinkDisabled ? await prisma.$transaction(async tx => {
+        await tx.customer.update({ where: { id: customer.id }, data: { loyaltyAutoLinkDisabled: false } });
+        return tx.order.create({ data: orderData });
+      }) : await prisma.order.create({ data: orderData });
     } catch (error) {
       console.error(error);
       return NextResponse.json({ error: "Не удалось создать заказ. Попробуйте ещё раз через минуту." }, { status: 500 });
