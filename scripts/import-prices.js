@@ -1,3 +1,4 @@
+import { originalPerfumeCategories, shopReserve } from "./wholesale-stock-policy.js";
 import { becameOrderable, availableForSubscriber } from "./restock-availability.js";
 import { PrismaClient } from "@prisma/client";
 import { XMLParser } from "fast-xml-parser";
@@ -249,6 +250,8 @@ async function main() {
   const existingSplit = anySplit ? await loadWarehouseRows(offers.map((o) => o.Ид)) : new Map();
   if (anySplit) await ensureWarehouses(packageData, splits);
 
+  const reserveCategories = originalPerfumeCategories(await prisma.category.findMany({ select: { guid: true, name: true, parentGuid: true } }));
+
   // Обрабатываем предложения
   const cameIntoStock = [];
   const full = String(packageData?.СодержитТолькоИзменения ?? "").toLowerCase() === "false";
@@ -262,7 +265,7 @@ async function main() {
 
     const product = await prisma.product.findUnique({
       where: { guid: productGuid },
-      select: { id: true, stock: true, wholesaleStock: true, prices: { select: { priceType: true, price: true } } },
+      select: { id: true, stock: true, wholesaleStock: true, categoryGuid: true, categoryGuid1C: true, prices: { select: { priceType: true, price: true } } },
     });
 
     if (!product) continue;
@@ -297,8 +300,8 @@ async function main() {
 
     const split = splits[offerIndex];
     const newStock = offerTotalStock(offer, split);
-    // wholesalers: the shop keeps 12, the warehouse gives everything (lib/utils.ts customerStock)
-    const newWholesale = wholesaleAvailable(newStock, split);
+    // The shop reserve is 0 for original perfume, otherwise 12; warehouses give everything.
+    const newWholesale = wholesaleAvailable(newStock, split, undefined, shopReserve(product, reserveCategories));
     if (product.stock !== newStock || product.wholesaleStock !== newWholesale) {
       await prisma.product.update({ where: { guid: productGuid }, data: { stock: newStock, wholesaleStock: newWholesale } });
       changedStock++;
