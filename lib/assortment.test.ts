@@ -63,3 +63,10 @@ describe("photo assortment", () => {
 });
 
 vi.mock("@/lib/campaignSettings", () => ({ getCampaign: async () => LEGACY_CAMPAIGN }));
+
+it("explains a legacy cart line without a kind, while retaining validation for an unavailable kind", async () => {
+  const product = { id: 1, guid: "g1", name: "Ассорти", stock: 500, wholesaleStock: 500, minOrderQty: 1, assortmentEnabled: true, prices: [{ priceType: "retail", price: 100 }], variants: [{ id: 7, name: "Роза", available: true, image: { path: "rose.jpg" } }] };
+  db.product.findMany.mockResolvedValue([product]);
+  await expect(priceOrder({ priceType: "retail" }, [{ id: 1, quantity: 1 }, { id: 1, quantity: 10, variantId: 7 }])).rejects.toMatchObject({ code: "assortment_selection_required", productId: 1, message: expect.stringContaining("без выбранного вида") });
+  await expect(priceOrder({ priceType: "retail" }, [{ id: 1, quantity: 1, variantId: 99 }])).rejects.toMatchObject({ code: "assortment_variant_unavailable", productId: 1 });
+});

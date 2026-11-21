@@ -1,3 +1,4 @@
+import { assortmentSelectionDetails } from "@/lib/assortmentSelection";
 import { isCardProduct } from "@/lib/cardPurchase";
 import { cookies } from "next/headers";
 import { bonusSpendOff, pricingCustomer } from "@/lib/siteMode";
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
     campaignName = priced.campaign.name;
     lines = loyaltyLines(priced.lines, pricing).filter((l) => !isCardProduct({ name: l.productName, guid: l.sku }));
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Не удалось рассчитать корзину" }, { status: 400 });
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Не удалось рассчитать корзину", ...assortmentSelectionDetails(e) }, { status: 400 });
   }
   const subtotal = pricing.subtotal;
   const automatic = {

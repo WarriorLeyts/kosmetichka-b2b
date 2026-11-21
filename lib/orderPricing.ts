@@ -1,3 +1,4 @@
+import { AssortmentSelectionError } from "./assortmentSelection";
 import type { Campaign } from "./campaign";
 import { getCampaign } from "./campaignSettings";
 import { variantImageUrl } from "./assortment";
@@ -139,7 +140,7 @@ export async function priceOrder(
       item.variantId != null ? v.id === Number(item.variantId) : v.name === item.variantName
     ) : null;
     if (product.assortmentEnabled && (!variant || !variant.available))
-      throw new Error(`«${product.name}»: выбранный вид недоступен. Выберите варианты заново.`);
+      throw new AssortmentSelectionError(product.id, product.name, item.variantId == null && !item.variantName);
 
     // MOQ check
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

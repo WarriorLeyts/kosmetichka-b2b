@@ -1,3 +1,4 @@
+import { assortmentSelectionDetails } from "@/lib/assortmentSelection";
 import { cardOrderComment, cardRegistration, isCardProduct } from "@/lib/cardPurchase";
 import { maxmaPhone } from "@/lib/maxma";
 import { cookies } from "next/headers";
@@ -135,7 +136,7 @@ async function createOrder(request: Request) {
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Не удалось создать заказ";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message, ...assortmentSelectionDetails(error) }, { status: 400 });
   }
 
   // no minimum order: «Опт» gets the price by the order sum (discount → wholesale → big wholesale)
