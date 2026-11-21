@@ -93,3 +93,11 @@ describe("restored retail bonus spending", () => {
 });
 
 vi.mock("@/lib/campaignSettings", () => ({ getCampaign: async () => LEGACY_CAMPAIGN }));
+
+it("returns the exact assortment product to fix, without calculating bonuses or accepting an unspecified kind", async () => {
+  db.product.findMany.mockResolvedValue([{ ...product(1, { retail: 1000, wholesale: 900 }), name: "Парфюм Люкс", assortmentEnabled: true, variants: [{ id: 7, name: "Роза", available: true, image: { path: "rose.jpg" } }] }]);
+  const res = await POST(request({ items: [{ id: 1, quantity: 1 }] }));
+  expect(res.status).toBe(400);
+  expect(await res.json()).toMatchObject({ code: "assortment_selection_required", productId: 1, error: expect.stringContaining("без выбранного вида") });
+  expect(loyalty.calcLoyalty).not.toHaveBeenCalled();
+});
