@@ -1,3 +1,4 @@
+import { refreshWholesaleStock } from "./wholesale-stock-policy.js";
 import { PrismaClient } from "@prisma/client";
 import { XMLParser } from "fast-xml-parser";
 import fs from "fs";
@@ -216,6 +217,7 @@ async function main() {
     await hideMissing(prisma, products.filter((p) => !isDeletedIn1C(p)).map((p) => String(p.Ид)), "каталог");
   }
 
+  console.log("Обновление доступного опту остатка:", JSON.stringify(await refreshWholesaleStock(prisma)));
   console.log("Импорт категорий, брендов и товаров завершен");
 }
 

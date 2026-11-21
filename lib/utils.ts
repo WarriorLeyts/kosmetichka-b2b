@@ -76,7 +76,8 @@ export function getStockLabel(stock: number | null | undefined) {
 /**
  * Wholesale customers (owner's rule, 2026-11-09): the shop «1. Мега Косметичка» keeps at least this many
  * of each product on its shelves; the warehouse «0. Склад» gives everything. What a wholesaler may order
- * is Product.wholesaleStock = (shop − 12, not below 0) + warehouse, counted by the 1С import
+ * is Product.wholesaleStock = (shop − reserve, not below 0) + warehouse, counted by the 1С import
+ * (reserve 0 for «Парфюм оригинал», otherwise 12)
  * (scripts/onec-helpers.js wholesaleAvailable). Staff and retail see the real stock.
  */
 export const WHOLESALE_MIN_STOCK = 12;

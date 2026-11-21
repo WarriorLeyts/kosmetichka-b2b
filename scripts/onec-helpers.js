@@ -100,10 +100,11 @@ export const WHOLESALE_SHOP_KEEP = 12;
 
 /**
  * What a wholesaler may order (owner, 2026-11-09): the shop's stock minus the 12 it keeps, plus everything
- * on the other warehouses («0. Склад»). Without the split the whole stock counts as the shop's.
+ * on the other warehouses («0. Склад»). Original perfume passes shopKeep=0.
+ * Without the split the whole stock counts as the shop's.
  */
-export function wholesaleAvailable(total, split, shopGuid = SHOP_WAREHOUSE_GUID) {
-  const free = (q) => Math.max(0, Math.floor(q) - WHOLESALE_SHOP_KEEP);
+export function wholesaleAvailable(total, split, shopGuid = SHOP_WAREHOUSE_GUID, shopKeep = WHOLESALE_SHOP_KEEP) {
+  const free = (q) => Math.max(0, Math.floor(q) - shopKeep);
   if (!split) return free(Number(total) || 0);
   let shop = 0;
   let other = 0;

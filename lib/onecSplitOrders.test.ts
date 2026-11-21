@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const db = vi.hoisted(() => ({
   order: { updateMany: vi.fn(async () => ({ count: 1 })), update: vi.fn(async () => ({})), findMany: vi.fn(async () => []) },
   productWarehouseStock: { findMany: vi.fn() },
+  product: { findMany: vi.fn(async () => []) },
+  category: { findMany: vi.fn(async () => []) },
 }));
 const one = vi.hoisted(() => ({ created: [] as Record<string, unknown>[] }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
