@@ -31,6 +31,8 @@ export async function GET(
       city: true,
       address: true,
       shopType: true,
+      proofUploadExpected: true,
+      proofUploadCompletedAt: true,
       shopLink: true,
       proofs: { orderBy: { id: "asc" }, select: { id: true, kind: true, size: true, createdAt: true } },
       oneCId: true,
@@ -68,7 +70,7 @@ export async function GET(
       ordersCount: _count.orders,
       shopTypeLabel: rest.shopType ? SHOP_TYPE_LABELS[rest.shopType as ShopType] ?? rest.shopType : null,
       // wholesale proof: 1-hour links (images shown in the card, videos opened by URL)
-      proofs: await Promise.all(proofs.map(async (p) => ({ id: p.id, kind: p.kind, size: p.size, createdAt: p.createdAt.toISOString(), url: await proofViewUrl(p.id) }))),
+      proofs: await Promise.all(proofs.map(async (p) => ({ id: p.id, kind: p.kind, size: p.size, createdAt: p.createdAt.toISOString(), url: await proofViewUrl(p.id), thumbnailUrl: p.kind === "img" ? `${await proofViewUrl(p.id)}&w=320` : null }))),
       createdAt: rest.createdAt.toISOString(),
       updatedAt: rest.updatedAt.toISOString(),
     },

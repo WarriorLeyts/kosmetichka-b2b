@@ -128,3 +128,25 @@ describe("existing 1C customers in manager groups", () => {
     expect(db.customer.create).not.toHaveBeenCalled();
   });
 });
+
+describe("registration proof delivery", () => {
+  const wholesale = (extra = {}) => request({ priceType: "wholesale", address: "Test address", shopType: "online", proofCount: 2, ...extra });
+  it("records the selected files and defers the application notification until completion", async () => {
+    const response = await POST(wholesale());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ autoLogin: false, proofCustomerId: 1, proofToken: expect.any(String) });
+    expect(db.customer.create).toHaveBeenCalledWith({ data: expect.objectContaining({ proofUploadExpected: 2, proofUploadCompletedAt: null, isApproved: false }) });
+    expect(mocks.notifyStaffLater).not.toHaveBeenCalled();
+  });
+  it("returns an upload pass even after automatic approval through a 1C manager group", async () => {
+    db.oneCCustomer.findFirst.mockResolvedValue({ oneCId: "existing-1c", manager: "Бимарзаева Раяна", priceType: "wholesale" });
+    expect(await (await POST(wholesale())).json()).toMatchObject({ autoLogin: true, proofCustomerId: 1, proofToken: expect.any(String) });
+    expect(mocks.setCookie).toHaveBeenCalled();
+    expect(mocks.notifyStaffLater).not.toHaveBeenCalled();
+  });
+  it.each([0, -1, 11, 1.5, "invalid"])("rejects invalid proof count %s without creating an account or spending the SMS", async proofCount => {
+    expect((await POST(wholesale({ proofCount }))).status).toBe(400);
+    expect(db.customer.create).not.toHaveBeenCalled();
+    expect(db.smsCode.update).not.toHaveBeenCalled();
+  });
+});

@@ -296,6 +296,8 @@ model Customer {
   pushTokens    PushToken[]
   /** wholesale: proof of reselling (photos / videos of the shop or online orders) */
   proofs        CustomerProof[]
+  proofUploadExpected Int @default(0)
+  proofUploadCompletedAt DateTime?
   cart          CustomerCart?
   favorites     CustomerFavorites?
   webPushSubs   WebPushSubscription[]
@@ -804,6 +806,7 @@ model StaffPushToken {
 
 /** Photos / videos a wholesale applicant sends to prove he resells (shop, online orders). Staff see them in the customer card. */
 model CustomerProof {
+  uploadId String?
   id         Int      @id @default(autoincrement())
   customerId Int
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -816,6 +819,7 @@ model CustomerProof {
   createdAt  DateTime @default(now())
 
   @@index([customerId])
+  @@unique([customerId, uploadId])
 }
 
 /// The customer's cart, shared by all his devices (site, phone apps). `items` — the lines as the apps
