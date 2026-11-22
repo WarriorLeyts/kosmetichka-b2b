@@ -1,0 +1,16 @@
+# Managed by Kosmetichka WireGuard health v1
+[Unit]
+Description=Guarded recovery and local diagnostics for Kosmetichka VPN
+After=network-online.target wg-quick@wg0.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /root/ops/wireguard-health.py --recover-peer
+TimeoutStartSec=45
+UMask=0077
+Environment=PYTHONDONTWRITEBYTECODE=1
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/root/ops/wireguard-health
+StandardOutput=null
