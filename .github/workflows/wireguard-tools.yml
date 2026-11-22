@@ -1,0 +1,21 @@
+name: Windows WireGuard recovery checks
+on:
+  pull_request:
+    paths: ['ops/windows/wireguard/**', 'ops/wireguard-health.py', 'ops/tests/**', '.github/workflows/wireguard-tools.yml']
+  push:
+    branches: [main]
+    paths: ['ops/windows/wireguard/**', 'ops/wireguard-health.py', 'ops/tests/**', '.github/workflows/wireguard-tools.yml']
+jobs:
+  windows-powershell:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test recovery policy and parse scripts using Windows PowerShell 5.1
+        shell: powershell
+        run: .\ops\windows\wireguard\Test-RecoveryPolicy.ps1
+  server-diagnostics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test local VPN health classification and bounded diagnostics
+        run: python3 -m unittest discover -s ops/tests -p 'test_*.py' -v
