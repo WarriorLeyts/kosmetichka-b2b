@@ -1,5 +1,6 @@
+import { processProofImage } from "@/lib/proofImage";
 import { NextResponse } from "next/server";
-import { open, stat } from "fs/promises";
+import { open, readFile, stat } from "fs/promises";
 import path from "path";
 import { prisma } from "@/lib/prisma";
 import { PROOF_DIR, verifyProofView } from "@/lib/proofs";
@@ -27,6 +28,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     "X-Content-Type-Options": "nosniff",
     "Content-Disposition": "inline",
   };
+  const width = Number(new URL(request.url).searchParams.get("w"));
+  if (proof.kind === "img" && [160, 320, 640].includes(width)) {
+    try {
+      const thumb = await processProofImage(await readFile(full), width, true);
+      return new NextResponse(new Uint8Array(thumb), { headers: { ...headers, "Content-Type": "image/webp", "Content-Length": String(thumb.length) } });
+    } catch { return NextResponse.json({ error: "Не удалось показать фото. Откройте оригинал или попросите клиента загрузить его повторно." }, { status: 415 }); }
+  }
   const range = request.headers.get("range")?.match(/^bytes=(\d*)-(\d*)$/);
   let start = 0;
   let end = size - 1;

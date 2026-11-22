@@ -3,7 +3,7 @@ import { syncCustomerCard } from "@/lib/autoLinkCards";
 import { after, NextResponse } from "next/server";
 import path from "path";
 import { unlink } from "fs/promises";
-import { PROOF_DIR, createProofToken, shopFields } from "@/lib/proofs";
+import { PROOF_DIR, PROOF_MAX_FILES, createProofToken, shopFields } from "@/lib/proofs";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
@@ -68,6 +68,9 @@ export async function POST(request: Request) {
   // wholesale: where the customer resells (shop / online + link) — the manager checks it with the photos
   const shop = needsShopAddress(priceType) ? shopFields(body) : null;
   if (shop && "error" in shop) return NextResponse.json(shop, { status: 400 });
+
+  const proofCount = shop && body.proofCount !== undefined ? Number(body.proofCount) : 0;
+  if (shop && body.proofCount !== undefined && (!Number.isInteger(proofCount) || proofCount < 1 || proofCount > PROOF_MAX_FILES)) return NextResponse.json({ error: "Добавьте хотя бы одно фото или видео", field: "proofs" }, { status: 400 });
 
   // ─── Проверка капчи ───────────────────────────────────────────
   if (!captchaToken) {
@@ -177,6 +180,8 @@ export async function POST(request: Request) {
     for (const p of old) await unlink(path.join(PROOF_DIR, p.file)).catch(() => {});
   }
   const customerData = {
+      proofUploadExpected: proofCount,
+      proofUploadCompletedAt: null,
       name,
       companyName: companyName?.trim() || null,
       address,
@@ -219,7 +224,7 @@ export async function POST(request: Request) {
   if (again) console.log(`[register] customer ${again.id}: «Неактуальная» sign-up sent again`);
 
   // staff decide on wholesale sign-ups (retail is approved at once): approve the account and / or «Крупный опт»
-  if (!shouldAutoApprove || wantsBig) {
+  if ((!shouldAutoApprove || wantsBig) && proofCount === 0) {
     notifyStaffLater({ kind: "customer-request", customerId: customer.id, request: wantsBig ? "big_wholesale" : "wholesale", signup: true });
   }
 
@@ -245,7 +250,7 @@ export async function POST(request: Request) {
     success: true,
     autoLogin: shouldAutoApprove,
     // waiting for the manager: 3 days to upload the photos / videos of the shop (POST /api/proofs)
-    ...(shouldAutoApprove ? {} : { proofToken: await createProofToken(customer.id) }),
+    ...(shop ? { proofToken: await createProofToken(customer.id), proofCustomerId: customer.id } : {}),
     oneCLinked: Boolean(oneCCustomer),
 
     message: shouldAutoApprove

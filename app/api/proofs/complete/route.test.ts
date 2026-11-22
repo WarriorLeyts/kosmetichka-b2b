@@ -1,0 +1,12 @@
+import {beforeEach,describe,expect,it,vi} from "vitest";
+const io=vi.hoisted(()=>({notifyStaffLater:vi.fn()}));const db=vi.hoisted(()=>({customer:{findUnique:vi.fn(),update:vi.fn()},customerProof:{count:vi.fn()},$queryRaw:vi.fn(),$transaction:vi.fn()}));
+vi.mock("@/lib/prisma",()=>({prisma:db}));vi.mock("../_owner",()=>({proofOwner:async()=>7}));vi.mock("@/lib/staffNotify",()=>io);
+import {POST} from "./route";
+const request=(body={})=>new Request("https://site/api/proofs/complete",{method:"POST",body:JSON.stringify(body)});
+beforeEach(()=>{vi.resetAllMocks();db.$transaction.mockImplementation(fn=>fn(db));db.customer.findUnique.mockResolvedValue({isActive:true,isApproved:false,proofUploadExpected:2,proofUploadCompletedAt:null,roleRequest:null});db.customerProof.count.mockResolvedValue(2)});
+describe("registration proof completion",()=>{
+ it("never completes without a received file, even when failed files are explicitly discarded",async()=>{db.customerProof.count.mockResolvedValue(0);expect((await POST(request({discardFailed:true}))).status).toBe(400);expect(db.customer.update).not.toHaveBeenCalled();expect(io.notifyStaffLater).not.toHaveBeenCalled()});
+ it("requires all selected files unless the client explicitly finishes with received files",async()=>{db.customerProof.count.mockResolvedValue(1);expect((await POST(request())).status).toBe(400);expect((await POST(request({discardFailed:true}))).status).toBe(200);expect(db.customer.update).toHaveBeenCalledWith({where:{id:7},data:{proofUploadExpected:1,proofUploadCompletedAt:expect.any(Date)}})});
+ it("notifies only after the files arrive",async()=>{expect((await POST(request())).status).toBe(200);expect(io.notifyStaffLater).toHaveBeenCalledWith(expect.objectContaining({customerId:7,signup:true}));db.customer.findUnique.mockResolvedValue({isActive:true,isApproved:false,proofUploadExpected:2,proofUploadCompletedAt:new Date()});io.notifyStaffLater.mockClear();expect((await POST(request())).status).toBe(200);expect(io.notifyStaffLater).not.toHaveBeenCalled()});
+ it("preserves automatic approval and allows an approved client to send missing proof later",async()=>{db.customer.findUnique.mockResolvedValue({isActive:true,isApproved:true,proofUploadExpected:0,proofUploadCompletedAt:null});expect((await POST(request())).status).toBe(200);expect(db.customer.update).toHaveBeenCalledWith({where:{id:7},data:expect.not.objectContaining({isApproved:expect.anything()})});expect(io.notifyStaffLater).not.toHaveBeenCalled()});
+});
