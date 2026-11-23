@@ -6,8 +6,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-def run(args, data=None):
-    return subprocess.run(args, input=data, text=True, capture_output=True, check=True, timeout=10).stdout.strip()
+def run(args, data=None, timeout=10):
+    return subprocess.run(args, input=data, text=True, capture_output=True, check=True, timeout=timeout).stdout.strip()
 
 
 if __name__ == '__main__':
@@ -33,9 +33,9 @@ if __name__ == '__main__':
         for index, name in enumerate(names):
             other = 1 - index
             prefix = ['ip', 'netns', 'exec', name]
-            run(prefix + ['wg', 'set', interface, 'private-key', '/dev/stdin', 'listen-port', str(51891 + index),
+            run(prefix + ['wg', 'set', interface, 'private-key', '/dev/stdin', 'listen-port', str(51820),
                           'peer', public[other], 'allowed-ips', '10.200.0.%d/32' % (other + 1),
-                          'endpoint', '192.0.2.%d:%d' % (other + 1, 51891 + other)], data=private[index] + '\n')
+                          'endpoint', '192.0.2.%d:%d' % (other + 1, 51820)], data=private[index] + '\n')
             run(prefix + ['ip', 'link', 'set', interface, 'up'])
         # An unrelated peer must survive recovery unchanged.
         prefix = ['ip', 'netns', 'exec', names[0]]
@@ -46,15 +46,19 @@ if __name__ == '__main__':
             code = ('import importlib.util; from pathlib import Path; '
                     'spec=importlib.util.spec_from_file_location("health",%r); '
                     'm=importlib.util.module_from_spec(spec);spec.loader.exec_module(m); '
-                    'm.recover_peer("wgtest","10.200.0.2/32",Path(%r))' % (str(module), directory))
-            run(prefix + ['python3', '-c', code])
+                    'm.recover_peer("wgtest","10.200.0.2/32",Path(%r)); '
+                    'import threading,time; '
+                    't=threading.Thread(target=lambda:(time.sleep(0.5),__import__("subprocess").run(["ping","-n","-c","3","-i","0.2","-W","1","10.200.0.2"],capture_output=True,timeout=6))); '
+                    't.start();m.capture(Path(%r),int(time.time()));t.join(); '
+                    'assert "UDP" in next(Path(%r).glob("udp-*.log")).read_text()' % (str(module), directory, directory, directory))
+            run(prefix + ['python3', '-c', code], timeout=25)
             assert not (Path(directory) / 'peer-recovery.conf').exists()
         run(prefix + ['ping', '-n', '-c', '1', '-W', '3', '10.200.0.2'])
         peers = run(prefix + ['wg', 'show', interface, 'peers']).splitlines()
         assert set(peers) == {public[1], public[2]}
         current_public = run(prefix + ['wg', 'show', interface, 'public-key'])
         assert current_public == public[0]
-        print('PASS: isolated real WireGuard peer recovery; traffic restored, unrelated peer and interface identity preserved')
+        print('PASS: real UDP summaries survive capture timeout; traffic, unrelated peer and interface identity preserved')
     finally:
         for name in reversed(created):
             subprocess.run(['ip', 'netns', 'delete', name], capture_output=True, timeout=10)

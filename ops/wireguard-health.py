@@ -118,7 +118,7 @@ def append_event(root, value):
 def capture(root, now):
     # Packet summaries only; no decrypted traffic, payload, private keys or config dumps.
     try:
-        result = subprocess.run(['tcpdump', '-nn', '-tt', '-i', 'any', '-c', '24', 'udp port 51820'],
+        result = subprocess.run(['tcpdump', '-l', '-nn', '-tt', '-i', 'any', '-c', '24', 'udp port 51820'],
                                 capture_output=True, text=True, timeout=12)
         text = result.stdout
     except subprocess.TimeoutExpired as error:
