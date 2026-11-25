@@ -199,7 +199,7 @@ async function createOrder(request: Request) {
   const promoDiscount = pricing.discount + (promo?.discount ?? 0);
   const finalTotal = Math.round((linesTotal - promoDiscount - bonusesApplied) * 100) / 100;
   const minimum = minOrderFor(customer, items);
-  if (finalTotal < minimum) return NextResponse.json({ error: `Минимальная сумма розничного заказа — ${minimum.toLocaleString("ru-RU")} ₽. Добавьте товары ещё на ${Math.ceil(minimum - finalTotal).toLocaleString("ru-RU")} ₽.`, code: "minimum_order", minimum, total: finalTotal }, { status: 400 });
+  if (finalTotal < minimum) return NextResponse.json({ error: `Минимальная сумма заказа — ${minimum.toLocaleString("ru-RU")} ₽. Добавьте товары ещё на ${Math.ceil(minimum - finalTotal).toLocaleString("ru-RU")} ₽.`, code: "minimum_order", minimum, total: finalTotal }, { status: 400 });
   const orderData = {
     customerId: Number(payload.id),
     status: "pending",
