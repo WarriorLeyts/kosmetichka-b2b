@@ -13,8 +13,6 @@ import {
   calculateCart,
   priceFor,
   priceTypeLabel,
-  resolveCustomerPriceType,
-  amountUntilMinOrder,
   minOrderFor,
 } from "@/lib/pricing";
 
@@ -39,13 +37,10 @@ export function CartDrawer() {
 
   const customer = useAuthStore((state) => state.customer);
 
-  const base = resolveCustomerPriceType(customer);
   const automaticPricing = calculateCart(cart, customer);
   const activePriceType = automaticPricing.tier;
   const total = automaticPricing.total;
-  // minimum order: none any more (minOrderFor = 0); «Опт» pays by the order sum (lib/pricing.ts)
-  const minOrder = minOrderFor(customer);
-  const remainingToMin = amountUntilMinOrder(cart, customer);
+  const minOrder = minOrderFor(customer, cart);
 
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
@@ -66,6 +61,7 @@ export function CartDrawer() {
   const cartSignature = cart.map((i) => `${i.cartKey || i.id}:${i.quantity}`).join(",");
   const bonusesApplied = spendBonuses && bonuses?.canSpend ? bonuses.applied : 0;
   const promoTotal = Math.max(0, total - (promo?.discount ?? 0) - bonusesApplied);
+  const remainingToMin = Math.max(0, minOrder - promoTotal);
 
   async function postCalc(code: string | null, applyBonuses: number) {
     const res = await fetch("/api/checkout/calc", {
@@ -190,6 +186,7 @@ export function CartDrawer() {
   }, [isCartOpen]);
 
   async function checkout() {
+    if (loading || remainingToMin > 0) return;
     setLoading(true);
     setError("");
 
@@ -391,11 +388,11 @@ export function CartDrawer() {
                       <div className="cart-progress-bar">
                         <div
                           className="cart-progress-fill"
-                          style={{ width: `${Math.min(100, (total / minOrder) * 100)}%` }}
+                          style={{ width: `${Math.min(100, (promoTotal / minOrder) * 100)}%` }}
                         />
                       </div>
                       <div className="cart-progress-hint">
-                        Заказ по ценам <strong>«{priceTypeLabel(base)}»</strong> — от {minOrder.toLocaleString("ru-RU")} ₽
+                        Минимальная сумма заказа — {minOrder.toLocaleString("ru-RU")} ₽
                       </div>
                     </div>
                   )}
@@ -516,7 +513,7 @@ export function CartDrawer() {
                       disabled={loading || cart.length === 0 || remainingToMin > 0}
                       className="checkout-button disabled:opacity-50"
                     >
-                      {loading ? "Оформляем..." : "Оформить заказ"}
+                      {loading ? "Оформляем..." : remainingToMin > 0 ? `Добавьте ещё на ${Math.ceil(remainingToMin).toLocaleString("ru-RU")} ₽` : "Оформить заказ"}
                     </button>
                   ) : (
                     <Link
