@@ -12,7 +12,7 @@ import { orderBusinessRange, parseOrderDates } from "@/lib/orderDates";
 
 const PAGE_SIZE = 50;
 
-const PIPELINE_STATUSES = ["pending", "approved", "assembly", "consultation", "payment", "exported", "cancelled"];
+const PIPELINE_STATUSES = ["pending", "approved", "assembly", "consultation", "payment", "no_contact", "exported", "cancelled"];
 
 // GET /api/team/orders?date=&dateFrom=&dateTo=&customer=&status=&customerType=&page=
 export async function GET(request: NextRequest) {

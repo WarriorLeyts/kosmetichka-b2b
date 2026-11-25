@@ -10,6 +10,7 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   assembly: "Сборка",
   consultation: "На проверке",
   payment: "Заказ оформлен",
+  no_contact: "Нет связи",
   exported: "Выгружен в 1С",
   cancelled: "Отменён",
 };
@@ -21,6 +22,7 @@ export const ORDER_STATUS_LABELS_CUSTOMER: Record<string, string> = {
   assembly: "Сборка",
   consultation: "На проверке",
   payment: "Заказ оформлен",
+  no_contact: "Ожидаем связи с вами",
   exported: "Выполнен",
   cancelled: "Отменён",
 };
@@ -37,6 +39,7 @@ export const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   consultation: ["assembly", "payment", "cancelled"],
   payment: ["assembly", "consultation", "exported", "cancelled"],
   exported: [],
+  no_contact: [], // pause / resume only through the scoped contact endpoint; never select an arbitrary target stage
   cancelled: [],
 };
 
@@ -77,6 +80,7 @@ export const CUSTOMER_EDITABLE_STATUSES: string[] = [];
 
 /** What the customer sees instead of «Изменить». */
 export function customerEditBlockedReason(status: string): string | null {
+  if (status === "no_contact") return "Напишите менеджеру в чате заказа, чтобы продолжить его обработку.";
   if (CUSTOMER_EDITABLE_STATUSES.includes(status)) return null;
   if (status === "pending" || status === "approved" || status === "assembly")
     return "Хотите добавить товар — нажмите «Добавить товар» в чате заказа, менеджер добавит его. Изменить количество или убрать товар — напишите менеджеру.";

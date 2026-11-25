@@ -16,7 +16,7 @@ export const AWAITING_CONFIRMATION =
   "Ждём подтверждения клиента: «Заказ оформлен» станет доступен после того, как клиент проверит и подтвердит заказ.";
 
 /** statuses where nothing waits for the customer's «Подтвердить заказ» any more */
-const CONFIRM_OVER = ["cancelled", "payment", "exported"];
+const CONFIRM_OVER = ["cancelled", "payment", "exported", "no_contact"];
 
 /**
  * Since when the order waits for the customer's confirmation, or null. A cancelled / placed order never
@@ -108,6 +108,7 @@ type ConfirmableOrder = { id: number; status: string; confirmRequestedAt: Date |
  * The order chat gets a line that staff and the customer see. Returns null on success, else the error.
  */
 export async function confirmOrderFor(order: ConfirmableOrder, staff?: { id: number; name: string | null }): Promise<string | null> {
+  if (order.status === "no_contact") return "Заказ ожидает связи с клиентом. Сначала верните его в работу.";
   const waiting = !!order.confirmRequestedAt;
   const legacy = order.status === "consultation" && !order.customerConfirmed;
   if (["payment", "exported", "cancelled"].includes(order.status) || (!waiting && !legacy)) {

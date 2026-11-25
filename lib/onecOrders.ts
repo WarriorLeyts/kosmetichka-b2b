@@ -20,17 +20,20 @@ export function ordersViaOData(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 /** «exported» + oneCExportedAt, customer notification, MAXMA confirm — what the 1С ack did. */
-export async function markExported(ids: number[]): Promise<void> {
+export async function markExported(ids: number[]): Promise<number> {
+  let marked = 0;
   for (const id of ids) await withOrderLock(id, async () => {
     // The exporter may finish while a staff member records the customer's refusal.
     // A cancelled order must never be resurrected or confirmed in MAXMA afterwards.
-    const where = { id: { in: [id] }, oneCExportedAt: null, status: { not: "cancelled" } };
+    const where = { id: { in: [id] }, oneCExportedAt: null, status: { notIn: ["cancelled", "no_contact"] } };
     const toConfirm = await prisma.order.findMany({ where: { ...where, ...MAXMA_ORDER_WHERE }, select: { id: true } });
     const moved = await prisma.order.findMany({ where, select: { id: true } });
-    await prisma.order.updateMany({ where, data: { status: "exported", oneCExportedAt: new Date() } });
+    const result = await prisma.order.updateMany({ where, data: { status: "exported", oneCExportedAt: new Date() } });
+    marked += result.count;
     if (moved.length) void notifyOrderStatus(moved.map((o) => o.id), "exported");
     if (toConfirm.length) await onOrderStatus(toConfirm.map((o) => o.id), "exported", { background: true });
   });
+  return marked;
 }
 
 type Outcome = "created" | "linked" | "problem" | "error" | "skipped";

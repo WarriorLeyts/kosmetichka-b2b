@@ -4,6 +4,7 @@ import { logOrderChanges, summarizeRows } from "@/lib/orderChanges";
 import { confirmRequest, paymentBlocked, requestConfirmation } from "@/lib/orderConfirm";
 import { isMaxmaOrder, loyaltyWarning, promoWarning, recalcOrderLoyalty } from "@/lib/maxmaOrders";
 import { notifyLater, notifyOrderStatus } from "@/lib/notify";
+import { withOrderLock } from "@/lib/orderLock";
 
 // Битрикс24 вызывает этот endpoint когда сделка переходит в стадию "Оплачен"
 // Настройка: CRM → Автоматизация → стадия "Оплачен" → Робот "Вебхук"
@@ -91,6 +92,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "order_id не определён" }, { status: 400 });
   }
 
+  const siteOrderId = orderId;
+  return withOrderLock(siteOrderId, () => syncOrder(siteOrderId, dealId, webhookUrl));
+}
+
+async function syncOrder(orderId: number, dealId: number | null, webhookUrl: string | undefined) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: { items: true },
@@ -99,6 +105,9 @@ export async function POST(request: NextRequest) {
   if (!order) {
     return NextResponse.json({ error: `Заказ №${orderId} не найден` }, { status: 404 });
   }
+
+  // An old Bitrix webhook must not resume or edit an order paused by its manager.
+  if (order.status === "no_contact") return NextResponse.json({ ok: true, orderId, skipped: "no_contact" });
 
   // ── Синхронизация товаров из Битрикса ──────────────────────────────────────
   if (webhookUrl && dealId) {
