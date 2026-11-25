@@ -14,6 +14,15 @@ import { GET } from "./route";
 beforeEach(() => { vi.clearAllMocks(); who.role = "admin"; who.authenticated = true; });
 const request = (qs = "") => GET(new NextRequest(`https://x/api/team/orders?date=&${qs}`));
 
+it("offers a separate no-contact section while preserving the manager's scope", async () => {
+  who.role = "manager";
+  const response = await request("status=no_contact");
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body.counts.byStatus).toContainEqual({ status: "no_contact", label: "Нет связи", count: 0, sum: 0 });
+  expect((db.order.findMany.mock.calls[0][0] as { where: unknown }).where).toMatchObject({ status: "no_contact", AND: [{ customer: { manager: "allowed" } }, {}] });
+});
+
 describe("admin-only order customer type", () => {
   it.each([
     ["retail", ["retail", "discount"]],

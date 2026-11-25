@@ -5,9 +5,17 @@ vi.mock("@/lib/prisma", () => ({ prisma: db }));
 const n = vi.hoisted(() => ({ notify: vi.fn(async () => ({ customers: 1, devices: 1 })) }));
 vi.mock("@/lib/notify", () => n);
 
-import { isAwaiting, needsConfirm, sendConfirmReminders, waitingSince } from "./orderConfirm";
+import { confirmOrderFor, isAwaiting, needsConfirm, sendConfirmReminders, waitingSince } from "./orderConfirm";
 
 beforeEach(() => vi.clearAllMocks());
+
+it("pausing hides confirmation without clearing its saved data; restoring re-enables it", async () => {
+  const held = { id: 7, status: "no_contact", confirmRequestedAt: new Date(), customerConfirmed: false };
+  expect(waitingSince(held)).toBeNull(); expect(needsConfirm(held)).toBe(false);
+  expect(await confirmOrderFor(held)).toContain("Сначала верните его в работу");
+  expect(db.order.update).not.toHaveBeenCalled();
+  expect(needsConfirm({ ...held, status: "consultation" })).toBe(true);
+});
 
 describe("confirmation reminders", () => {
   it("first reminder after 2 h, second after 24 h; each claimed once", async () => {

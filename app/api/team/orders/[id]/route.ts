@@ -17,6 +17,7 @@ import { ADMIN_MANAGER, requireStaff } from "../../_auth";
 import { badId, notFound, parseId, productImageUrl } from "../../_shared";
 import { staffSeesOrder } from "@/lib/staffScope";
 import { cardGivesDiscount } from "@/lib/discountCardRule";
+import { canHoldForContact, contactResumeStatus } from "@/lib/orderContact";
 
 // GET /api/team/orders/:id — everything app/admin/orders/[id]/page.tsx passes to AdminOrderClient
 // (customer chat is NOT included: use GET /api/admin/orders/:id/customer-messages)
@@ -139,6 +140,8 @@ export async function GET(
       id: order.id,
       status: order.status,
       statusLabel: ORDER_STATUS_LABELS[order.status] ?? order.status,
+      canHoldForContact: canHoldForContact(order),
+      contactResumeStatus: order.status === "no_contact" ? contactResumeStatus(order.statusLogs) : null,
       total: order.total,
       promoCode: order.promoCode ?? null,
       discount: order.discount,

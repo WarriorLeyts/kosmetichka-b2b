@@ -7,13 +7,14 @@ vi.mock("./notify", () => ({ notifyOrderStatus: io.notifyOrderStatus }));
 import { markExported } from "./onecOrders";
 beforeEach(() => {
   vi.clearAllMocks(); state.status = "cancelled";
-  io.findMany.mockImplementation(async ({ where }) => where.status.not === state.status ? [] : [{ id: 252 }]);
-  io.updateMany.mockImplementation(async ({ where, data }) => { if (state.status === where.status.not) return { count: 0 }; state.status = data.status; return { count: 1 }; });
+  io.findMany.mockImplementation(async ({ where }) => where.status.notIn.includes(state.status) ? [] : [{ id: 252 }]);
+  io.updateMany.mockImplementation(async ({ where, data }) => { if (where.status.notIn.includes(state.status)) return { count: 0 }; state.status = data.status; return { count: 1 }; });
 });
 describe("an exporter finishing after the customer's refusal", () => {
-  it("never restores a cancelled order or confirms its loyalty purchase", async () => {
+  it.each(["cancelled", "no_contact"])("never restores a %s order or confirms its loyalty purchase", async status => {
+    state.status = status;
     await markExported([252]);
-    expect(state.status).toBe("cancelled");
+    expect(state.status).toBe(status);
     expect(io.onOrderStatus).not.toHaveBeenCalled(); expect(io.notifyOrderStatus).not.toHaveBeenCalled();
   });
   it("still confirms an active exported order", async () => {
