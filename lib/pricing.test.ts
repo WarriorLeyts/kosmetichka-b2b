@@ -195,10 +195,10 @@ describe("cartPriceTier", () => {
 
 // ── minimum order ─────────────────────────────────────────────────────────────
 
-describe("retail minimum", () => {
-  it("keeps wholesale unrestricted and retail at 1000", () => {
-    for (const type of ["retail", "discount"]) expect(minOrderFor({ priceType: type })).toBe(1000);
-    for (const customer of [null, { priceType: "wholesale" }, { priceType: "big_wholesale" }]) expect(minOrderFor(customer)).toBe(0);
+describe("checkout minimum", () => {
+  it("requires 1000 for wholesale and retail without changing price-tier thresholds", () => {
+    for (const type of ["retail", "discount", "wholesale", "big_wholesale"]) expect(minOrderFor({ priceType: type })).toBe(1000);
+    expect(minOrderFor(null)).toBe(0);
     expect(amountUntilMinOrder([makeItem({ quantity: 1 })], { priceType: "retail" })).toBe(900);
     expect(minOrderFor({ priceType: "retail" }, [{ quantity: 1, cardRegistration: { fullName: "Тест" } }])).toBe(0);
     expect(WHOLESALE_MIN_ORDER).toBe(5000);

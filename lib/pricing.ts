@@ -147,10 +147,13 @@ export function nextPriceTier(
   return null;
 }
 
-/** Retail orders start at 1 000 ₽; buying just one loyalty card is allowed at 990 ₽. */
+/** Checkout minimums are independent of the thresholds for wholesale price tiers. */
+export const WHOLESALE_CHECKOUT_MIN_ORDER = 1000;
 export const RETAIL_MIN_ORDER = 1000;
 export function minOrderFor(customer: { priceType?: string | null } | null, items: { quantity?: number | string; cardRegistration?: unknown }[] = []): number {
+  if (["wholesale", "big_wholesale"].includes(customer?.priceType ?? "")) return WHOLESALE_CHECKOUT_MIN_ORDER;
   if (!["retail", "discount"].includes(customer?.priceType ?? "")) return 0;
+  // Retail customers can buy just one loyalty card at 990 ₽.
   if (items.length === 1 && items[0].cardRegistration && Number(items[0].quantity) === 1) return 0;
   return RETAIL_MIN_ORDER;
 }

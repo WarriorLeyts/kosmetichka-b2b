@@ -141,7 +141,7 @@ describe("prices by customer type", () => {
   });
 });
 
-describe("«Опт»: the price by the order sum (no minimum)", () => {
+describe("«Опт»: the price by the order sum", () => {
   type Created = { data: { priceTier?: string; total: number; items: { create: { price: number }[] } } };
   it.each([
     [6, "discount", 1005], //   6 × 727 = 4 362 < 5 000 → discount price
@@ -158,9 +158,9 @@ describe("«Опт»: the price by the order sum (no minimum)", () => {
     expect(c.data.total).toBe(price * qty);
   });
 
-  it("big wholesale set by the manager: big prices at any sum", async () => {
+  it("big wholesale set by the manager keeps big prices below the tier threshold", async () => {
     db.customer.findUnique.mockResolvedValue(customer("big_wholesale"));
-    expect((await order({ items: [{ id: 1, quantity: 1 }] })).status).toBe(200);
+    expect((await order({ items: [{ id: 1, quantity: 2 }] })).status).toBe(200);
     expect(created?.data.items.create[0].price).toBe(671);
   });
 
@@ -341,17 +341,19 @@ describe("paid loyalty card", () => {
   });
 });
 
-describe("retail minimum with card-only exception", () => {
- it.each(["retail", "discount"])("%s rejects 999 and accepts exactly 1000", async (priceType) => {
+describe("checkout minimum", () => {
+ it.each(["retail", "discount", "wholesale", "big_wholesale"])("%s rejects 999 and accepts exactly 1000", async (priceType) => {
   db.customer.findUnique.mockResolvedValue(customer(priceType));
-  db.product.findMany.mockResolvedValue([product(1, { retail: 999, discount: 999 })]);
+  db.product.findMany.mockResolvedValue([product(1, { retail: 999, discount: 999, wholesale: 999, big_wholesale: 999 })]);
   let response = await order({ items: [{ id: 1, quantity: 1 }] });
-  expect(response.status).toBe(400); expect(await response.json()).toHaveProperty("code", "minimum_order"); expect(created).toBeNull();
-  db.product.findMany.mockResolvedValue([product(1, { retail: 1000, discount: 1000 })]);
+  expect(response.status).toBe(400); expect(await response.json()).toMatchObject({ code: "minimum_order", minimum: 1000, total: 999 }); expect(created).toBeNull();
+  expect(maxma.setLoyaltyOrderQuery).not.toHaveBeenCalled();
+  db.product.findMany.mockResolvedValue([product(1, { retail: 1000, discount: 1000, wholesale: 1000, big_wholesale: 1000 })]);
   response = await order({ items: [{ id: 1, quantity: 1 }] }); expect(response.status).toBe(200);
  });
- it("a valid promo cannot bypass the final 1000 minimum", async () => {
-  db.customer.findUnique.mockResolvedValue(customer("retail"));
+ it.each(["retail", "wholesale", "big_wholesale"])("a valid promo cannot bypass the final 1000 minimum for %s", async (priceType) => {
+  db.customer.findUnique.mockResolvedValue(customer(priceType));
+  db.product.findMany.mockResolvedValue([product(1, { retail: 1120, discount: 1120, wholesale: 1120, big_wholesale: 1120 })]);
   maxma.calcLoyalty.mockResolvedValue({ promo: { applied: true, discount: 200, lines: [200] }, bonuses: null, bonusLines: [0] });
   const response = await order({ items: [{ id: 1, quantity: 1 }], promocode: "CODE" });
   expect(response.status).toBe(400); expect(await response.json()).toHaveProperty("code", "minimum_order"); expect(created).toBeNull();
