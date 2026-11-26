@@ -2,7 +2,7 @@
 // an existing counterparty is moved to the group's folder; a new customer gets a counterparty there,
 // with a contract «С покупателем», the same as the old 1С integration made for site customers.
 import { odataCreate, odataGet, odataPatch } from "./onec-odata.js";
-import { createContract, findCounterparty, isGuid, orderTemplate, phoneCounterpartyRefs } from "./onec-orders.js";
+import { createContract, findCounterparty, isGuid, orderTemplate, phoneCounterpartyRefs, clearCounterpartyPhoneCache } from "./onec-orders.js";
 
 const CP = "Catalog_Контрагенты";
 const CONTRACT = "Catalog_ДоговорыКонтрагентов";
@@ -75,6 +75,19 @@ async function hasBuyerContract(ref, orgRef, env) {
  * → { ref, created, moved, contractCreated }
  */
 export async function assignCounterparty(customer, group, env = process.env) {
+  const locks = (globalThis.__onecCustomerAssignmentLocks ??= new Map());
+  const key = `${env.ODATA_BASE_URL || ""}:${env.ODATA_USER || ""}:${phone8(customer.phone) || customer.oneCId || "no-phone"}`;
+  const previous = locks.get(key) || Promise.resolve();
+  let release;
+  const current = new Promise(resolve => { release = resolve; });
+  const tail = previous.then(() => current);
+  locks.set(key, tail);
+  await previous;
+  try { return await assignUnlocked(customer, group, env); }
+  finally { release(); if (locks.get(key) === tail) locks.delete(key); }
+}
+
+async function assignUnlocked(customer, group, env) {
   if (customer.oneCId && !isGuid(customer.oneCId)) throw new Error("Код контрагента 1С должен быть корректным GUID");
   const folders = await groupFolders(env);
   const parentRef = folders.get(String(group).trim());
@@ -105,6 +118,7 @@ export async function assignCounterparty(customer, group, env = process.env) {
     const phoneKind = (sample.КонтактнаяИнформация || []).find((r) => r.Тип === "Телефон")?.Вид_Key ?? null;
     const body = counterpartyBody({ name: customer.name?.trim() || customer.companyName, phone, parentRef, template: sample, phoneKindRef: phoneKind });
     ref = (await odataCreate(CP, body, env)).Ref_Key;
+    clearCounterpartyPhoneCache();
     created = true;
   }
   let contractCreated = false;

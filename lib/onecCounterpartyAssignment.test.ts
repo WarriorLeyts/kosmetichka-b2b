@@ -23,6 +23,14 @@ beforeEach(() => {
   io.odataCreate.mockResolvedValue({ Ref_Key: OWNER });
 });
 describe("wholesale counterparty name and manager folder", () => {
+  it("serializes duplicate assignment requests for the same phone", async () => {
+    let created = false;
+    io.findCounterparty.mockImplementation(async () => created ? OWNER : null);
+    io.odataCreate.mockImplementation(async () => { await new Promise(resolve => setTimeout(resolve, 10)); created = true; return { Ref_Key: OWNER }; });
+    const result = await Promise.all([assignCounterparty(customer, "Раяна", process.env), assignCounterparty(customer, "Раяна", process.env)]);
+    expect(io.odataCreate).toHaveBeenCalledTimes(1);
+    expect(result.map(r => r.created)).toEqual([true, false]);
+  });
   it("never creates a duplicate when aliases match several counterparties", async () => {
     io.phoneCounterpartyRefs.mockResolvedValue([OWNER, ORG]);
     await expect(assignCounterparty(customer, "Раяна", process.env)).rejects.toThrow("несколько контрагентов");
