@@ -34,7 +34,7 @@ export async function GET(
   const msgs = await prisma.orderMessage.findMany({
     where: { orderId, source: "customer" },
     orderBy: { createdAt: "asc" },
-    select: { id: true, text: true, userId: true, isFromPicker: true, createdAt: true },
+    select: { id: true, text: true, userId: true, isFromPicker: true, automatic: true, createdAt: true },
   });
 
   // the customer has seen the chat (and the order) — on every device: the manager messages up to the
@@ -51,6 +51,7 @@ export async function GET(
     messages: msgs.map((m) => ({
       id: m.id,
       text: m.text,
+      automatic: m.automatic,
       // staff (userId) or the shop itself — Bitrix comments, the after-hours note (isFromPicker)
       isFromManager: m.userId !== null || m.isFromPicker,
       createdAt: m.createdAt.toISOString(),

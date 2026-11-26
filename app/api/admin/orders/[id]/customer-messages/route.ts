@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { sendMail } from "@/lib/mail";
 import { notifyManagerMessage } from "@/lib/notify";
 import { staffSeesOrder } from "@/lib/staffScope";
+import { startOrderService } from "@/lib/orderServiceStart";
 
 export async function GET(
   _: Request,
@@ -22,6 +23,7 @@ export async function GET(
       id: true,
       text: true,
       isFromPicker: true,
+      automatic: true,
       createdAt: true,
       user: { select: { name: true } },
     },
@@ -32,7 +34,7 @@ export async function GET(
       id: m.id,
       text: m.text,
       isFromPicker: m.isFromPicker,
-      userName: m.isFromPicker ? (m.user?.name ?? null) : null,
+      userName: m.automatic ? "Косметичка · автоматически" : m.isFromPicker ? (m.user?.name ?? null) : null,
       createdAt: m.createdAt.toISOString(),
     })),
   });
@@ -74,6 +76,8 @@ export async function POST(
   ]);
 
   void notifyManagerMessage(orderId, text.trim());
+  // A successfully sent human reply is also a real acknowledgement, even without pressing «Взять».
+  await startOrderService(orderId, { id: Number(user.id), name: senderUser?.name?.trim() || "магазина", login: String(user.email ?? "staff") }, false).catch(() => console.warn("[order-service] Could not mark a human reply"));
 
   // UX-2: Email notification to customer when manager replies
   const order = await prisma.order.findUnique({

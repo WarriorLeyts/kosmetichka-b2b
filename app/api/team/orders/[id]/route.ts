@@ -1,4 +1,5 @@
 import { orderTier } from "@/lib/orderTier";
+import { orderService } from "@/lib/orderService";
 import { bonusCancellation } from "@/lib/orderRefusal";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -138,6 +139,7 @@ export async function GET(
   return NextResponse.json({
     order: {
       id: order.id,
+      service: orderService(order),
       status: order.status,
       statusLabel: ORDER_STATUS_LABELS[order.status] ?? order.status,
       canHoldForContact: canHoldForContact(order),

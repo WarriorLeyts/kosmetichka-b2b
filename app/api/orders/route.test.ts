@@ -76,6 +76,14 @@ beforeEach(() => {
 
 afterEach(() => vi.restoreAllMocks());
 
+it("saves the automatic receipt inside the same order creation", async () => {
+  db.customer.findUnique.mockResolvedValue(customer("retail"));
+  const result = await order({ items: [{ id: 1, quantity: 2 }] });
+  expect(result.status).toBe(200);
+  const data = db.order.create.mock.calls[0][0].data;
+  expect(data.messages.create).toMatchObject({ source: "customer", isFromPicker: true, automatic: true, text: expect.stringContaining("заказ получен") });
+});
+
 describe("Светлая пятница + ОПТ", () => {
   beforeEach(() => {
     vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-13T12:00:00+03:00"));

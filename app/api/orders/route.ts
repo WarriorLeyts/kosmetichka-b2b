@@ -6,7 +6,7 @@ import { bonusSpendOff, pricingCustomer } from "@/lib/siteMode";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyStaffLater } from "@/lib/staffNotify";
-import { afterHoursNote } from "@/lib/afterHours";
+import { orderReceiptText } from "@/lib/orderService";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { sendMail } from "@/lib/mail";
 import { orderCreationLimiter } from "@/lib/rateLimit";
@@ -201,6 +201,7 @@ async function createOrder(request: Request) {
   const minimum = minOrderFor(customer, items);
   if (finalTotal < minimum) return NextResponse.json({ error: `Минимальная сумма заказа — ${minimum.toLocaleString("ru-RU")} ₽. Добавьте товары ещё на ${Math.ceil(minimum - finalTotal).toLocaleString("ru-RU")} ₽.`, code: "minimum_order", minimum, total: finalTotal }, { status: 400 });
   const orderData = {
+    messages: { create: { source: "customer", isFromPicker: true, automatic: true, text: orderReceiptText() } },
     customerId: Number(payload.id),
     status: "pending",
     priceType: customer.priceType,
@@ -306,7 +307,6 @@ async function createOrder(request: Request) {
   // staff browsers (admin website): «Новый заказ №N»
   notifyStaffLater({ kind: "new-order", orderId: order.id });
   // placed after 18:40 or before 9:00 (Moscow): a warm note in the chat that the manager answers in working hours
-  await afterHoursNote(order.id);
 
   // Уведомление покупателю о принятом заказе
   if (customer.email) {
