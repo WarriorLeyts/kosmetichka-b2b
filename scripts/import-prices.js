@@ -1,5 +1,6 @@
 import { originalPerfumeCategories, shopReserve } from "./wholesale-stock-policy.js";
 import { becameOrderable, availableForSubscriber } from "./restock-availability.js";
+import { recordRestock } from "./record-restock.js";
 import { PrismaClient } from "@prisma/client";
 import { XMLParser } from "fast-xml-parser";
 import nodemailer from "nodemailer";
@@ -24,20 +25,19 @@ function toArray(value) {
 
 /**
  * «Уведомления» in the app + push to the customer's phones (Expo push → FCM), same as lib/notify.ts
- * on the site. Adds the wishlist item ids it notified to `notifiedIds`. Never throws.
+ * on the site. The in-app notification is already committed. Never throws.
  */
-async function notifyRestockInApp(items, notifiedIds) {
+async function notifyRestockInApp(items) {
   try {
     const rows = items.map((it) => ({
       customerId: it.customer.id,
       kind: "restock",
       title: "Товар снова в наличии",
-      body: it.product.name.slice(0, 300),
+      body: `${it.product.name.slice(0, 220)}. Проверьте количество и цену. Это не бронь: товар не резервируется.`,
       link: `/product/${it.product.id}`,
     }));
     if (!rows.length) return;
-    await prisma.notification.createMany({ data: rows });
-    for (const it of items) if (!notifiedIds.includes(it.id)) notifiedIds.push(it.id);
+    // The in-app row and membership timestamp were committed atomically before delivery.
 
     const tokens = await prisma.pushToken.findMany({
       where: { customerId: { in: [...new Set(rows.map((r) => r.customerId))] } },
@@ -77,11 +77,16 @@ async function sendWishlistNotifications(productIds) {
     where: { productId: { in: productIds }, notified: false },
     include: {
       customer: { select: { id: true, email: true, name: true, priceType: true, isActive: true } },
-      product:  { select: { id: true, name: true, stock: true, wholesaleStock: true } },
+      product:  { select: { id: true, name: true, stock: true, wholesaleStock: true, hidden: true } },
     },
   });
 
-  const items = candidates.filter((item) => availableForSubscriber(item.customer, item.product));
+  const items = [];
+  for (const item of candidates) {
+    if (item.product.hidden || !availableForSubscriber(item.customer, item.product)) continue;
+    try { if (await recordRestock(prisma, item)) items.push(item); }
+    catch (e) { console.error("Restock persistence failed:", item.id, e.message); }
+  }
   if (!items.length) return;
 
   const transporter = nodemailer.createTransport({
@@ -97,7 +102,6 @@ async function sendWishlistNotifications(productIds) {
   const from = process.env.EMAIL_FROM || process.env.EMAIL_USER || "noreply@kosmetichka-opt.ru";
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://kosmetichka-opt.ru";
 
-  const notifiedIds = [];
 
   for (const item of items) {
     if (!item.customer.email) continue;
@@ -115,6 +119,7 @@ async function sendWishlistNotifications(productIds) {
             <h2 style="color:#6d28d9">🔔 Товар появился в наличии!</h2>
             <p>Здравствуйте, ${customerName}!</p>
             <p>Вы подписались на уведомление о появлении товара, который снова доступен:</p>
+            <p>Это не бронь: товар не резервируется. Проверьте доступное количество и цену при оформлении заказа.</p>
             <div style="border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:16px 0">
               <b style="font-size:15px">${item.product.name}</b>
             </div>
@@ -128,7 +133,6 @@ async function sendWishlistNotifications(productIds) {
           </div>
         `,
       });
-      notifiedIds.push(item.id);
       console.log(`Уведомление отправлено: ${item.customer.email} — ${item.product.name}`);
     } catch (err) {
       console.error(`Ошибка отправки на ${item.customer.email}:`, err.message);
@@ -136,15 +140,9 @@ async function sendWishlistNotifications(productIds) {
   }
 
   // In-app notification + push («Товар появился») — for everyone waiting, with or without e-mail
-  await notifyRestockInApp(items, notifiedIds);
+  await notifyRestockInApp(items);
 
-  if (notifiedIds.length) {
-    await prisma.wishlistItem.updateMany({
-      where: { id: { in: notifiedIds } },
-      data: { notified: true },
-    });
-    console.log(`Помечено уведомлённых: ${notifiedIds.length}`);
-  }
+  console.log(`Поступления сохранены: ${items.length}`);
 }
 
 /** productGuid → (warehouseGuid → qty) for the products of this package */
@@ -344,8 +342,9 @@ async function main() {
   // Отправляем уведомления
   if (cameIntoStock.length > 0) {
     console.log(`Товаров появилось в наличии: ${cameIntoStock.length}, отправляем уведомления...`);
-    await sendWishlistNotifications(cameIntoStock);
   }
+  // Retry memberships whose previous persistence failed, even if stock stayed positive.
+  await sendWishlistNotifications([...watchedIds]);
 }
 
 main()
