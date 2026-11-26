@@ -1,3 +1,4 @@
+import { verifySmartCaptcha } from "@/lib/smartCaptcha";
 import { verifyRegistrationEmail, consumeRegistrationEmail } from "@/lib/registrationEmail";
 import { syncCustomerCard } from "@/lib/autoLinkCards";
 import { after, NextResponse } from "next/server";
@@ -18,30 +19,6 @@ import { notifyStaffLater } from "@/lib/staffNotify";
 import { IMPORT_GROUPS } from "@/scripts/onec-groups.js";
 import { uniqueOneCCustomer } from "@/lib/oneCCustomerMatch";
 
-async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
-  const serverKey = process.env.SMARTCAPTCHA_SERVER_KEY;
-  if (!serverKey) {
-    console.error("SMARTCAPTCHA_SERVER_KEY не задан");
-    return false;
-  }
-
-  try {
-    const url = new URL("https://smartcaptcha.yandexcloud.net/validate");
-    url.searchParams.set("secret", serverKey);
-    url.searchParams.set("token", token);
-
-    const res = await fetch(url.toString(), { method: "GET" });
-    const data = await res.json();
-
-    if (data.status !== "ok") {
-      console.error("SmartCaptcha отклонила токен:", JSON.stringify(data), "ip:", ip);
-    }
-    return data.status === "ok";
-  } catch (err) {
-    console.error("Ошибка проверки SmartCaptcha:", err);
-    return false;
-  }
-}
 
 const AUTO_APPROVE_TYPES = new Set(["retail"]);
 

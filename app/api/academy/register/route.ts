@@ -1,3 +1,4 @@
+import { verifySmartCaptcha } from "@/lib/smartCaptcha";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
@@ -12,24 +13,6 @@ import { checkRegistration } from "@/lib/academy-register";
 const MAX_PER_IP = 5;
 const WINDOW_MS = 60 * 60 * 1000;
 
-async function verifySmartCaptcha(token: string): Promise<boolean> {
-  const serverKey = process.env.SMARTCAPTCHA_SERVER_KEY;
-  if (!serverKey) {
-    console.error("[academy/register] SMARTCAPTCHA_SERVER_KEY не задан");
-    return false;
-  }
-  try {
-    const url = new URL("https://smartcaptcha.yandexcloud.net/validate");
-    url.searchParams.set("secret", serverKey);
-    url.searchParams.set("token", token);
-    const res = await fetch(url.toString(), { method: "GET" });
-    const data = await res.json();
-    return data.status === "ok";
-  } catch (err) {
-    console.error("[academy/register] ошибка проверки SmartCaptcha:", err);
-    return false;
-  }
-}
 
 /**
  * Самостоятельная регистрация сотрудника для тестов.
