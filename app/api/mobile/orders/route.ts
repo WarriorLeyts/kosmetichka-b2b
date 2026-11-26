@@ -4,6 +4,7 @@ import { currentCustomerId } from "../_auth";
 import { RateLimiter } from "@/lib/rateLimit";
 import { onLive } from "@/lib/realtime";
 import { needsConfirm } from "@/lib/orderConfirm";
+import { orderService } from "@/lib/orderService";
 
 // one browser must not be able to load the server: the same list asked again within 2 s gets the
 // last answer from memory (no database), and more than 120 lists a minute get «too often»
@@ -69,6 +70,8 @@ export async function GET(request: Request) {
         bonusesCollected: true,
         comment: true,
         createdAt: true,
+        serviceStartedAt: true,
+        serviceManagerName: true,
         customerConfirmed: true,
         confirmRequestedAt: true,
         changesSnapshot: true,
@@ -126,6 +129,7 @@ export async function GET(request: Request) {
     },
     orders: orders.map((o) => ({
       id: o.id,
+      service: orderService(o),
       status: o.status,
       total: o.total,
       promoCode: o.promoCode ?? null,

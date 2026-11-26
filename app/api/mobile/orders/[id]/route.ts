@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../../_auth";
 import { orderChanges } from "@/lib/orderChanges";
 import { SHOP_ADDRESS, SHOP_MAP_URL } from "@/lib/delivery";
+import { orderService } from "@/lib/orderService";
 import { CUSTOMER_EDITABLE_STATUSES, customerEditBlockedReason } from "@/lib/orderStatus";
 import { needsConfirm, waitingSince } from "@/lib/orderConfirm";
 
@@ -34,6 +35,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   return NextResponse.json({
     id: order.id,
+    service: orderService(order),
     customerConfirmed: order.customerConfirmed,
     /** the customer may still change the order (quantities, remove, add) */
     editable: CUSTOMER_EDITABLE_STATUSES.includes(order.status),

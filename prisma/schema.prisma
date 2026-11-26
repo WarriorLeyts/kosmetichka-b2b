@@ -333,6 +333,10 @@ model User {
 }
 
 model Order {
+  /// First actual staff acknowledgement; separate from assembly and the 1C customer manager.
+  serviceStartedAt DateTime?
+  serviceManagerId Int?
+  serviceManagerName String?
   id         Int      @id @default(autoincrement())
   customerId Int
   customer   Customer @relation(fields: [customerId], references: [id])
@@ -516,6 +520,8 @@ model OrderItemPhoto {
 }
 
 model OrderMessage {
+  /// Shop-generated receipt/processing note, displayed separately from a human reply.
+  automatic Boolean @default(false)
   id      Int   @id @default(autoincrement())
   orderId Int
   order   Order @relation(fields: [orderId], references: [id])

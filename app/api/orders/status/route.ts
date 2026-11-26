@@ -22,6 +22,7 @@ export async function GET() {
         select: {
           id: true,
           status: true,
+          serviceStartedAt: true,
           confirmRequestedAt: true,
           customerConfirmed: true,
           customerChatSeenAt: true,
@@ -47,6 +48,7 @@ export async function GET() {
     const statuses = orders.map((o) => ({
       id: o.id,
       status: o.status,
+      serviceStarted: !!o.serviceStartedAt,
       needsConfirm: needsConfirm(o),
     }));
 
