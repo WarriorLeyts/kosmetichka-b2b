@@ -90,7 +90,7 @@ export default function RegisterForm() {
 
   return (
     <>
-      <Script src="https://smartcaptcha.yandexcloud.net/captcha.js" strategy="afterInteractive" onLoad={initCaptcha} />
+      <Script src="https://smartcaptcha.cloud.yandex.ru/captcha.js" strategy="afterInteractive" onLoad={initCaptcha} />
       <div className="flex min-h-[85vh] items-center justify-center py-6">
         <form
           onSubmit={handleSubmit}
