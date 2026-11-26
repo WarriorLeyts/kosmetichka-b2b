@@ -10,6 +10,7 @@ import { applyPickChecks } from "@/lib/applyPickChecks";
 import { AWAITING_CONFIRMATION, confirmRequest, paymentBlocked } from "@/lib/orderConfirm";
 import { lockedByOrderId } from "@/lib/orderLock";
 import { staffSeesOrder } from "@/lib/staffScope";
+import { orderChanged } from "@/lib/realtime";
 
 async function changeStatus(
   request: Request,
@@ -53,12 +54,15 @@ async function changeStatus(
 
   // Reset customer confirmation if order moves back to a state requiring re-review
   const resetConfirm = toStatus === "assembly" || toStatus === "consultation" || toStatus === "pending" || toStatus === "approved";
+  const startingAssembly = toStatus === "assembly" && ["pending", "approved"].includes(order.status);
+  const actor = startingAssembly ? await prisma.user.findUnique({ where: { id: Number(user.id) }, select: { name: true } }) : null;
 
   const [updatedOrder] = await prisma.$transaction([
     prisma.order.update({
       where: { id: Number(id) },
       data: {
         status: toStatus,
+        ...(startingAssembly && !order.serviceStartedAt ? { serviceStartedAt: new Date(), serviceManagerId: Number(user.id), serviceManagerName: actor?.name?.trim() || "магазина" } : {}),
         ...(resetConfirm ? { customerConfirmed: false } : {}),
         // «На проверке»: the customer is asked to check and confirm the collected order
         ...(toStatus === "consultation" ? confirmRequest() : {}),
@@ -74,7 +78,12 @@ async function changeStatus(
         userId: user.id as number,
       },
     }),
+    ...(startingAssembly ? [prisma.orderMessage.create({ data: {
+      orderId: Number(id), source: "customer", isFromPicker: true, automatic: true,
+      text: "Начали собирать ваш заказ 💜 Проверяем товары и наличие. После сборки отправим состав и итоговую сумму на подтверждение. Если понадобится замена, согласуем её с вами.",
+    } })] : []),
   ]);
+  orderChanged(Number(id), order.customerId);
 
   // MAXMA: confirm / cancel via the queue (one attempt now; retried by the worker; never fails the request)
   await onOrderStatus(Number(id), toStatus);
