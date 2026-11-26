@@ -38,6 +38,11 @@ describe("1С counterparty selected by linked card", () => {
 });
 
 describe("normalised profile phone fallback", () => {
+  it("finds the exact current phone in the full name when the search field contains an invalid and an old number", async () => {
+    io.odataAll.mockResolvedValue([{ Ref_Key: OWNER, НомерТелефонаДляПоиска: "892884745756, 89223589937", НаименованиеПолное: "Зукаева Хурма 89223589937 (89224745756) Аргун 13 модуль 16 маг" }]);
+    expect(await findPhoneCounterparty("89224745756", process.env)).toBe(OWNER);
+    expect(await findPhoneCounterparty("89288474575", process.env)).toBeNull();
+  });
   it.each(["89286481222", "+7 (928) 648-12-22", "79286481222", "928-648-12-22"])("matches %s against a formatted number in 1С", async (phone) => {
     io.odataGet.mockResolvedValue([]);
     io.odataAll.mockResolvedValue([{ Ref_Key: OWNER, DeletionMark: false, IsFolder: false, НомерТелефонаДляПоиска: "+7 (928) 648-12-22" }]);

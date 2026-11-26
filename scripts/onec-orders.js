@@ -1,4 +1,5 @@
 import { aggregateAssortmentLines } from "./assortment-lines.js";
+import { phonesFromCounterparty } from "./onec-phones.js";
 // Site order → «Заказ покупателя» in 1С over OData (instead of 1С fetching orders by the standard exchange).
 // Same document the 1С integration made: number «СА-000209», unposted, the service fields copied from the
 // latest site order in 1С (СА-…). No database client here: lib/onecOrders.ts claims, retries and acks.
@@ -166,20 +167,21 @@ let phoneMemo = null;
 let phoneLoading = null;
 export function clearCounterpartyPhoneCache() { phoneMemo = null; phoneLoading = null; }
 /** Full normalised comparison handles +7, 8, ten digits, spaces, parentheses and dashes in 1С too. */
-export async function findPhoneCounterparty(phone, env = process.env) {
+export async function phoneCounterpartyRefs(phone, env = process.env) {
   const number = counterpartyPhone(phone);
-  if (!number) return null;
+  if (!number) return [];
   const key = `${env.ODATA_BASE_URL || ""}:${env.ODATA_USER || ""}`;
   let memo = phoneMemo;
   if (!memo || memo.key !== key || Date.now() - memo.at >= 60_000) {
     if (!phoneLoading || phoneLoading.key !== key) {
-      const promise = odataAll("Catalog_Контрагенты", { $filter: "DeletionMark eq false and IsFolder eq false", $select: "Ref_Key,DeletionMark,IsFolder,НомерТелефонаДляПоиска" }, 5000, env).then((rows) => {
+      const promise = odataAll("Catalog_Контрагенты", { $filter: "DeletionMark eq false and IsFolder eq false", $select: "Ref_Key,DeletionMark,IsFolder,Description,НаименованиеПолное,НомерТелефонаДляПоиска,КонтактнаяИнформация" }, 5000, env).then((rows) => {
         const byPhone = new Map();
         for (const row of rows) {
           if (row.DeletionMark || row.IsFolder || !isGuid(row.Ref_Key)) continue;
-          const n = counterpartyPhone(row.НомерТелефонаДляПоиска);
-          if (!n) continue;
-          const refs = byPhone.get(n) || new Set(); refs.add(row.Ref_Key); byPhone.set(n, refs);
+          for (const n of phonesFromCounterparty(row)) {
+            const key = counterpartyPhone(n);
+            const refs = byPhone.get(key) || new Set(); refs.add(row.Ref_Key); byPhone.set(key, refs);
+          }
         }
         const result = { key, at: Date.now(), byPhone }; phoneMemo = result; return result;
       });
@@ -189,14 +191,19 @@ export async function findPhoneCounterparty(phone, env = process.env) {
     memo = await phoneLoading.promise;
   }
   const refs = memo.byPhone.get(number);
-  return refs?.size === 1 ? [...refs][0] : null;
+  return refs ? [...refs] : [];
+}
+
+export async function findPhoneCounterparty(phone, env = process.env) {
+  const refs = await phoneCounterpartyRefs(phone, env);
+  return refs.length === 1 ? refs[0] : null;
 }
 
 /** Counterparty: explicit 1С id, linked card's owner, then a unique phone match. */
 export async function findCounterparty(oneCId, phone, env = process.env, loyaltyCard = "") {
   if (isGuid(oneCId)) {
-    const r = await odataGet("Catalog_Контрагенты", { $select: "Ref_Key,DeletionMark", $filter: `Ref_Key eq guid'${oneCId}'` }, env);
-    if (r[0] && !r[0].DeletionMark) return r[0].Ref_Key;
+    const r = await odataGet("Catalog_Контрагенты", { $select: "Ref_Key,DeletionMark,IsFolder", $filter: `Ref_Key eq guid'${oneCId}'` }, env);
+    if (r[0] && !r[0].DeletionMark && !r[0].IsFolder) return r[0].Ref_Key;
   }
   const cardOwner = await findCardCounterparty(loyaltyCard, env);
   if (cardOwner) return cardOwner;
@@ -326,7 +333,7 @@ export async function prepareOrder(order, env = process.env, { createMissingCont
     siteBuyer = Boolean(counterpartyRef);
   }
   if (!counterpartyRef) problems.push(wholesale
-    ? `Оптовый покупатель «${c.companyName || c.name || c.phone}» не найден в 1С. Назначьте ему менеджера 1С и личного контрагента.`
+    ? `Оптовый покупатель «${c.companyName || c.name || c.phone}» не найден в 1С. ${c.manager ? `Менеджер «${c.manager}» назначен, но привязка к контрагенту отсутствует или недействительна. Проверьте код 1С и телефоны клиента.` : "Назначьте ему менеджера 1С и личного контрагента."}`
     : `Покупатель «${c.companyName || c.name || c.phone}» не найден по карте и телефону, и в 1С нет контрагента «${env.ONEC_SITE_BUYER || SITE_BUYER_NAME}»`);
   let contractRef = counterpartyRef ? await findContract(counterpartyRef, template.Организация_Key, moscowLocal(order.createdAt), env) : null;
   // no contract with our organisation (e.g. only with another one) — make «Основной договор», as the integration did

@@ -557,12 +557,14 @@ model OneCCustomer {
   oneCId String  @unique
   name   String
   phone  String?
+  phones String[] @default([])
 
   manager   String?
   priceType String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  @@index([phones], type: Gin)
 }
 
 model SmsCode {
