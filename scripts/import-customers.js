@@ -69,7 +69,7 @@ async function main() {
     const name = getValue(item, ["Наименование", "Name", "name"]);
 
     const rawPhone = getValue(item, ["Телефон", "Phone", "phone"]);
-    const phones = counterpartyPhones(...(item.phones || []), rawPhone, name);
+    const phones = counterpartyPhones(item.phones, rawPhone, name);
     const phone = phones[0] || null;
 
     const manager =
@@ -184,6 +184,7 @@ async function main() {
       where: { id: customer.id, oneCId: null, phone: customer.phone, phoneUnverified: false, manager: customer.manager },
       data: { oneCId: oc.oneCId, manager: oc.manager, isApproved: true, ...(upgrade ? { priceType: "wholesale" } : {}) },
     });
+    if (result.count) await prisma.order.updateMany({ where: { customerId: customer.id, status: { in: ["payment", "approved"] }, oneCExportedAt: null }, data: { oneCNextTryAt: null } });
     linked += result.count;
     if (upgrade) priceUpdated += result.count;
   }
