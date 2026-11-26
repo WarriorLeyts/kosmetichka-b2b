@@ -292,6 +292,7 @@ model Customer {
 
   orders        Order[]
   wishlistItems WishlistItem[]
+  productWishes ProductWish[]
   notifications Notification[]
   pushTokens    PushToken[]
   /** wholesale: proof of reselling (photos / videos of the shop or online orders) */
@@ -593,11 +594,33 @@ model WishlistItem {
   productId  Int
   product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   notified   Boolean  @default(false)
+  quantity   Int?
+  notifiedAt DateTime?
   createdAt  DateTime @default(now())
 
   @@unique([customerId, productId])
   @@index([customerId])
   @@index([productId])
+  @@index([customerId, notifiedAt])
+}
+
+/// Customer demand, including products not yet in the catalog. Never an order or a reservation.
+model ProductWish {
+  id Int @id @default(autoincrement())
+  customerId Int
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  name String
+  nameKey String
+  quantity Int
+  comment String?
+  photoName String?
+  /// Admin links a missing product to the catalog; its quantity then lives in WishlistItem.
+  linkedProductId Int?
+  closed Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([customerId, nameKey])
+  @@index([closed, updatedAt])
 }
 
 model PasswordResetToken {

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyCustomerToken } from "@/lib/customerAuth";
+import { demandId, demandQuantity, demandSameOrigin } from "@/lib/customerDemand";
 import { customerStock } from "@/lib/utils";
 
 async function getCustomerId(): Promise<number | null> {
@@ -19,7 +20,7 @@ export async function GET() {
     return NextResponse.json({ productIds: [], products: [] });
   }
 
-  const [items, me] = await Promise.all([
+  const [items, me, missingCount] = await Promise.all([
     prisma.wishlistItem.findMany({
       where: { customerId },
       orderBy: { createdAt: "desc" },
@@ -40,15 +41,19 @@ export async function GET() {
       },
     }),
     prisma.customer.findUnique({ where: { id: customerId }, select: { priceType: true } }),
+    prisma.productWish.count({ where: { customerId, closed: false, linkedProductId: null } }),
   ]);
 
   return NextResponse.json({
+    missingCount,
     productIds: items.map((i) => i.productId),
     products: items.map((i) => ({
       ...i.product,
       stock: customerStock(i.product.stock, me?.priceType, i.product.wholesaleStock),
       notified: i.notified,
       wishlistItemId: i.id,
+      quantity: i.quantity,
+      notifiedAt: i.notifiedAt,
     })),
   });
 }
@@ -56,12 +61,13 @@ export async function GET() {
 /** POST /api/wishlist — body: { productId: number }
  *  Toggles membership. Returns { added: boolean } */
 export async function POST(request: Request) {
+  if (!demandSameOrigin(request)) return NextResponse.json({ error: "Недопустимый источник" }, { status: 403 });
   const customerId = await getCustomerId();
   if (!customerId) {
     return NextResponse.json({ error: "Нужно войти в аккаунт" }, { status: 401 });
   }
 
-  const { productId } = await request.json();
+  const productId = demandId((await request.json().catch(() => null))?.productId);
   if (!productId) {
     return NextResponse.json({ error: "productId обязателен" }, { status: 400 });
   }
@@ -76,6 +82,8 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ added: false });
   } else {
+    const product = await prisma.product.findFirst({ where: { id: productId, hidden: false }, select: { id: true } });
+    if (!product) return NextResponse.json({ error: "Товар не найден" }, { status: 404 });
     await prisma.wishlistItem.create({
       data: { customerId, productId: Number(productId), notified: false },
     });
@@ -85,6 +93,7 @@ export async function POST(request: Request) {
 
 /** DELETE /api/wishlist?productId=N — removes item */
 export async function DELETE(request: Request) {
+  if (!demandSameOrigin(request)) return NextResponse.json({ error: "Недопустимый источник" }, { status: 403 });
   const customerId = await getCustomerId();
   if (!customerId) {
     return NextResponse.json({ error: "Нужно войти в аккаунт" }, { status: 401 });
@@ -106,20 +115,28 @@ export async function DELETE(request: Request) {
 /** PATCH /api/wishlist — body: { productId: number, notified: boolean }
  *  Marks item as notified (shown "back in stock" badge) */
 export async function PATCH(request: Request) {
+  return PUT(request);
+}
+
+/** Idempotent quantity save. The legacy POST toggle remains compatible with installed apps. */
+export async function PUT(request: Request) {
+  if (!demandSameOrigin(request)) return NextResponse.json({ error: "Недопустимый источник" }, { status: 403 });
   const customerId = await getCustomerId();
   if (!customerId) {
     return NextResponse.json({ error: "Нужно войти в аккаунт" }, { status: 401 });
   }
 
-  const { productId, notified } = await request.json();
-  if (!productId) {
-    return NextResponse.json({ error: "productId обязателен" }, { status: 400 });
-  }
-
-  await prisma.wishlistItem.updateMany({
-    where: { customerId, productId: Number(productId) },
-    data: { notified: Boolean(notified) },
-  });
-
-  return NextResponse.json({ ok: true });
+  const body = (await request.json().catch(() => null)) ?? {};
+  const productId = demandId(body.productId), quantity = demandQuantity(body.quantity);
+  if (!productId || !quantity) return NextResponse.json({ error: "Укажите товар и целое количество от 1 до 10 000" }, { status: 400 });
+  const [product, customer] = await Promise.all([
+    prisma.product.findFirst({ where: { id: productId, hidden: false }, select: { id: true, stock: true, wholesaleStock: true } }),
+    prisma.customer.findUnique({ where: { id: customerId }, select: { priceType: true } }),
+  ]);
+  if (!product) return NextResponse.json({ error: "Товар не найден" }, { status: 404 });
+  const existing = await prisma.wishlistItem.findUnique({ where: { customerId_productId: { customerId, productId } } });
+  const out = Number(customerStock(product.stock, customer?.priceType, product.wholesaleStock)) <= 0;
+  if (!existing && !out) return NextResponse.json({ error: "Товар уже в наличии. Откройте карточку товара." }, { status: 409 });
+  await prisma.wishlistItem.upsert({ where: { customerId_productId: { customerId, productId } }, create: { customerId, productId, quantity }, update: { quantity, ...(out ? { notified: false, notifiedAt: null } : {}) } });
+  return NextResponse.json({ added: true, quantity });
 }

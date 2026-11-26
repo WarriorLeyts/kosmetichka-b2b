@@ -1,0 +1,13 @@
+import { beforeEach, expect, it, vi } from "vitest";
+const s = vi.hoisted(() => ({ id: 7 as number | null, role: null as string | null }));
+const readFile = vi.hoisted(() => vi.fn(async () => Buffer.from("image")));
+vi.mock("../../../mobile/_auth", () => ({ currentCustomerId: async () => s.id }));
+vi.mock("../../../team/_auth", () => ({ getStaffSession: async () => s.role ? ({ role: s.role }) : null }));
+vi.mock("fs/promises", () => ({ readFile }));
+import { GET } from "./route";
+const name = "7_12345678-1234-1234-1234-123456789012.webp";
+const get = () => GET(new Request("https://site"), { params: Promise.resolve({ name }) });
+beforeEach(() => { vi.clearAllMocks(); s.id = 7; s.role = null; });
+it("serves the customer's own photo privately", async () => { const r = await get(); expect(r.status).toBe(200); expect(r.headers.get("cache-control")).toContain("private"); });
+it.each(["manager", "picker", null])("does not disclose photos to other customers or %s", async role => { s.id = 8; s.role = role; expect((await get()).status).toBe(404); expect(readFile).not.toHaveBeenCalled(); });
+it("allows only the administrator to inspect a customer's request photo", async () => { s.id = null; s.role = "admin"; expect((await get()).status).toBe(200); });
