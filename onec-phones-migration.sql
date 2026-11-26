@@ -1,0 +1,2 @@
+ALTER TABLE "OneCCustomer" ADD COLUMN IF NOT EXISTS "phones" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+CREATE INDEX IF NOT EXISTS "OneCCustomer_phones_idx" ON "OneCCustomer" USING GIN ("phones");

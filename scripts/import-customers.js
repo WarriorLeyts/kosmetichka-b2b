@@ -4,6 +4,7 @@ import fs from "fs";
 import nodePath from "path";
 import { fetchCustomers, odataConfigured } from "./onec-odata.js";
 import { IMPORT_GROUPS } from "./onec-groups.js";
+import { counterpartyPhones, counterpartyPhoneIndex } from "./onec-phones.js";
 // 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
 const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
 
@@ -14,35 +15,6 @@ const parser = new XMLParser({
   attributeNamePrefix: "",
   trimValues: true,
 });
-
-function normalizePhone(value) {
-  if (!value) return null;
-
-  // Remove all non-digits, then take first 11 digits
-  const digits = String(value).replace(/\D/g, "").slice(0, 11);
-
-  if (digits.length === 11 && digits.startsWith("7")) {
-    return "8" + digits.slice(1);
-  }
-
-  if (digits.length === 11 && digits.startsWith("8")) {
-    return digits;
-  }
-
-  if (digits.length === 10 && digits.startsWith("9")) {
-    return "8" + digits;
-  }
-
-  return null;
-}
-
-function extractPhoneFromName(name) {
-  if (!name) return null;
-
-  const match = String(name).match(/(?:\+7|7|8|9)[\d\s()-]{9,}/);
-
-  return normalizePhone(match?.[0]);
-}
 
 function toArray(value) {
   if (!value) return [];
@@ -97,7 +69,8 @@ async function main() {
     const name = getValue(item, ["Наименование", "Name", "name"]);
 
     const rawPhone = getValue(item, ["Телефон", "Phone", "phone"]);
-    const phone = normalizePhone(rawPhone) || extractPhoneFromName(name);
+    const phones = counterpartyPhones(...(item.phones || []), rawPhone, name);
+    const phone = phones[0] || null;
 
     const manager =
       getValue(item, ["Родитель", "Менеджер", "Manager", "manager"]) || null;
@@ -131,6 +104,7 @@ async function main() {
       update: {
         name,
         phone,
+        phones,
         manager,
         priceType,
       },
@@ -138,6 +112,7 @@ async function main() {
         oneCId,
         name,
         phone,
+        phones,
         manager,
         priceType,
       },
@@ -192,57 +167,27 @@ async function main() {
   // с записями из 1С по совпадению номера телефона.
   console.log("\nСинхронизация Customer ↔ OneCCustomer по телефону...");
 
-  const oneCCustomers = await prisma.oneCCustomer.findMany({
-    where: { phone: { not: null } },
-  });
-
+  const oneCCustomers = await prisma.oneCCustomer.findMany();
+  const index = counterpartyPhoneIndex(oneCCustomers);
+  const siteCustomers = await prisma.customer.findMany({ where: { oneCId: null, phoneUnverified: false, phone: { not: null } } });
   let linked = 0;
   let priceUpdated = 0;
-
-  for (const oc of oneCCustomers) {
-    if (!oc.phone) continue;
-
-    // Ищем клиента сайта с таким же телефоном
-    const customer = await prisma.customer.findFirst({
-      where: { phone: oc.phone },
+  let ambiguous = 0;
+  for (const customer of siteCustomers) {
+    const matches = index.get(customer.phone);
+    if (!matches || matches.size !== 1) { if (matches?.size > 1) ambiguous++; continue; }
+    const oc = [...matches.values()][0];
+    // A manager already chosen by staff is never silently replaced by a phone match in another group.
+    if (customer.manager && customer.manager !== oc.manager) continue;
+    const upgrade = oc.priceType === "wholesale" && !["wholesale", "big_wholesale"].includes(customer.priceType);
+    const result = await prisma.customer.updateMany({
+      where: { id: customer.id, oneCId: null, phone: customer.phone, phoneUnverified: false, manager: customer.manager },
+      data: { oneCId: oc.oneCId, manager: oc.manager, isApproved: true, ...(upgrade ? { priceType: "wholesale" } : {}) },
     });
-
-    if (!customer) continue;
-
-    const updateData = {};
-
-    // Привязываем oneCId если ещё не привязан
-    if (!customer.oneCId) {
-      updateData.oneCId = oc.oneCId;
-    }
-
-    // Тип цен из 1С — только «Опт» и только при первой привязке к 1С. «Крупный опт» из 1С не берём:
-    // крупный опт — то, что клиент выбрал при регистрации или поставил менеджер. Клиент с «Крупным оптом»
-    // его сохраняет. Дальше тип меняют на сайте, импорт его не перезаписывает (lib/oneCPriceType.ts).
-    if (!customer.oneCId && oc.priceType === "wholesale" && customer.priceType !== "wholesale" && customer.priceType !== "big_wholesale") {
-      updateData.priceType = oc.priceType;
-      priceUpdated++;
-    }
-
-    // Обновляем менеджера из 1С
-    if (oc.manager && oc.manager !== customer.manager) {
-      updateData.manager = oc.manager;
-    }
-
-    // Если клиент был в режиме ожидания (isApproved=false) — автоматически одобряем
-    // т.к. он теперь есть в 1С
-    if (!customer.isApproved) {
-      updateData.isApproved = true;
-    }
-
-    if (Object.keys(updateData).length > 0) {
-      await prisma.customer.update({
-        where: { id: customer.id },
-        data: updateData,
-      });
-      linked++;
-    }
+    linked += result.count;
+    if (upgrade) priceUpdated += result.count;
   }
+  console.log("Неоднозначные телефоны (без автоматической привязки):", ambiguous);
 
   // менеджер привязанного клиента — группа его контрагента в 1С (номер телефона мог смениться,
   // и сверка по телефону выше его не находит)

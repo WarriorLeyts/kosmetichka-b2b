@@ -7,6 +7,9 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, requireAdminRole } from "@/lib/auth";
 import { isWholesaleRole, maxAccess } from "@/lib/roles";
+import { CUSTOMER_GROUPS, odataReady } from "@/lib/onecCustomers";
+import { assignCounterparty } from "@/scripts/onec-counterparty.js";
+import { kickOrderTo1C } from "@/lib/onecOrders";
 
 const PRICE_TYPES = ["retail", "discount", "wholesale", "big_wholesale"];
 const TEXT_FIELDS = ["name", "companyName", "phone", "email", "inn", "city", "address"] as const;
@@ -27,7 +30,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body || typeof body !== "object") return NextResponse.json({ error: "Пустой запрос" }, { status: 400 });
 
-  const current = await prisma.customer.findUnique({ where: { id }, select: { priceType: true, wholesaleAccess: true, phone: true } });
+  const current = await prisma.customer.findUnique({ where: { id } });
   if (!current) return NextResponse.json({ error: "Клиент не найден" }, { status: 404 });
 
   const data: Prisma.CustomerUpdateInput = {};
@@ -64,6 +67,30 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     data.passwordChangedAt = new Date(); // the customer's old sessions end
   }
 
+  const group = body.manager !== undefined ? String(body.manager ?? "").trim() || null : current.manager;
+  const ref = body.oneCId !== undefined ? String(body.oneCId ?? "").trim() || null : current.oneCId;
+  if (isWholesaleRole(priceType) && group && current.oneCId && !ref) {
+    return NextResponse.json({ error: "Нельзя убрать код 1С, оставив назначенного менеджера. Для отвязки очистите оба поля." }, { status: 409 });
+  }
+  const needsLink = isWholesaleRole(priceType) && group && (!ref || group !== current.manager || ref !== current.oneCId || priceType !== current.priceType);
+  if (needsLink) {
+    if (!CUSTOMER_GROUPS.includes(group)) return NextResponse.json({ error: "Выберите менеджера из групп 1С" }, { status: 400 });
+    if (!odataReady()) return NextResponse.json({ error: "Нет связи с 1С. Назначение менеджера не сохранено." }, { status: 503 });
+    // Validate the unique phone before creating/moving anything in 1C.
+    const phone = body.phone !== undefined ? String(body.phone ?? "").trim() || null : current.phone;
+    if (phone && phone !== current.phone && await prisma.customer.findUnique({ where: { phone } })) return NextResponse.json({ error: "Этот телефон уже указан у другого клиента" }, { status: 409 });
+    try {
+      const linked = await assignCounterparty({ ...current, oneCId: ref, phone, priceType,
+        name: body.name !== undefined ? String(body.name).trim() : current.name,
+        companyName: body.companyName !== undefined ? String(body.companyName).trim() : current.companyName,
+      }, group);
+      data.oneCId = linked.ref;
+      data.manager = group;
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : "Не удалось связать клиента с 1С. Изменения не сохранены." }, { status: 400 });
+    }
+  }
+
   try {
     await prisma.customer.update({ where: { id }, data });
   } catch (e) {
@@ -71,6 +98,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: "Этот телефон уже указан у другого клиента" }, { status: 409 });
     }
     throw e;
+  }
+  if (needsLink) {
+    const waiting = await prisma.order.findMany({ where: { customerId: id, status: { in: ["payment", "approved"] }, oneCExportedAt: null }, select: { id: true } });
+    for (const order of waiting) kickOrderTo1C(order.id);
   }
   return NextResponse.json({ success: true });
 }

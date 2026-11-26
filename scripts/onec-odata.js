@@ -1,3 +1,4 @@
+import { phonesFromCounterparty } from "./onec-phones.js";
 // 1С:УНФ over OData (the standard REST interface, same publication as kosmetichka-team uses).
 // ODATA_BASE_URL / ODATA_USER / ODATA_PASSWORD in .env; on the server 1С is reached over WireGuard (10.0.0.3).
 
@@ -123,7 +124,7 @@ export async function fetchCustomers(groups, env = process.env) {
     people.push(
       ...(await odataAll(
         "Catalog_Контрагенты",
-        { $select: "Ref_Key,Description,Parent_Key,НомерТелефонаДляПоиска,DeletionMark", $filter: `IsFolder eq false and Parent_Key eq guid'${f.Ref_Key}'` },
+        { $select: "Ref_Key,Description,НаименованиеПолное,Parent_Key,НомерТелефонаДляПоиска,КонтактнаяИнформация,DeletionMark", $filter: `IsFolder eq false and Parent_Key eq guid'${f.Ref_Key}'` },
         5000,
         env
       ))
@@ -145,6 +146,7 @@ export async function fetchCustomers(groups, env = process.env) {
       Id: p.Ref_Key,
       Наименование: String(p.Description || "").trim(),
       Телефон: String(p.НомерТелефонаДляПоиска || "").trim(),
+      phones: phonesFromCounterparty(p),
       Родитель: groupName.get(p.Parent_Key) || "",
       PriceType: contractPriceType(byOwner.get(p.Ref_Key) || [], kinds),
     }));

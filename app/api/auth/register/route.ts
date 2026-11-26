@@ -16,6 +16,7 @@ import { ADDRESS_REQUIRED, cleanAddress, needsShopAddress } from "@/lib/shopAddr
 import { registrationPriceType } from "@/lib/oneCPriceType";
 import { notifyStaffLater } from "@/lib/staffNotify";
 import { IMPORT_GROUPS } from "@/scripts/onec-groups.js";
+import { uniqueOneCCustomer } from "@/lib/oneCCustomerMatch";
 
 async function verifySmartCaptcha(token: string, ip: string): Promise<boolean> {
   const serverKey = process.env.SMARTCAPTCHA_SERVER_KEY;
@@ -149,14 +150,7 @@ export async function POST(request: Request) {
   }
   if (smsRecord) await prisma.smsCode.update({ where: { id: smsRecord.id }, data: { used: true } });
 
-  const oneCCustomer = foreignPhone ? null : await prisma.oneCCustomer.findFirst({
-    where: {
-      OR: [
-        { phone: cleanPhone },
-        { name: { contains: cleanPhone } },
-      ],
-    },
-  });
+  const oneCCustomer = foreignPhone ? null : await uniqueOneCCustomer(cleanPhone);
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
