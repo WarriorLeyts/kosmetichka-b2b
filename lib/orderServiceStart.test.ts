@@ -3,8 +3,10 @@ const state = vi.hoisted(() => ({ order: { id: 42, customerId: 9, status: "pendi
 const tx = vi.hoisted(() => ({ order: { findUnique: vi.fn(), updateMany: vi.fn() }, orderMessage: { create: vi.fn() }, adminAuditLog: { create: vi.fn() } }));
 const db = vi.hoisted(() => ({ $transaction: vi.fn() }));
 const notify = vi.hoisted(() => vi.fn());
+const live = vi.hoisted(() => vi.fn());
 vi.mock("./prisma", () => ({ prisma: db }));
 vi.mock("./notify", () => ({ notifyLater: notify }));
+vi.mock("./realtime", () => ({ orderChanged: live }));
 import { startOrderService } from "./orderServiceStart";
 const actor = { id: 5, name: "Тестовый менеджер", login: "test-staff" };
 beforeEach(() => {
@@ -41,9 +43,15 @@ it.each(["assembly", "consultation", "payment", "no_contact", "cancelled", "expo
 it("a human reply records acknowledgement without adding another automatic message or push", async () => {
   expect((await startOrderService(42, actor, false)).kind).toBe("started");
   expect(tx.orderMessage.create).not.toHaveBeenCalled(); expect(notify).not.toHaveBeenCalled();
+  expect(live).toHaveBeenCalledWith(42, 9);
+});
+it("refreshes customer screens after the transaction has committed", async () => {
+  db.$transaction.mockImplementationOnce(async callback => { const result = await callback(tx); expect(live).not.toHaveBeenCalled(); return result; });
+  await startOrderService(42, actor);
+  expect(live).toHaveBeenCalledTimes(1); expect(live).toHaveBeenCalledWith(42, 9);
 });
 it("missing orders and failed transactions produce no notification", async () => {
   state.missing = true; expect((await startOrderService(42, actor)).kind).toBe("missing");
   state.missing = false; tx.adminAuditLog.create.mockRejectedValueOnce(new Error("database unavailable"));
-  await expect(startOrderService(42, actor)).rejects.toThrow("database unavailable"); expect(notify).not.toHaveBeenCalled();
+  await expect(startOrderService(42, actor)).rejects.toThrow("database unavailable"); expect(notify).not.toHaveBeenCalled(); expect(live).not.toHaveBeenCalled();
 });

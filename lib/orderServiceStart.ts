@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { notifyLater } from "./notify";
+import { orderChanged } from "./realtime";
 
 export type ServiceActor = { id: number; name: string; login: string };
 /** Atomic acknowledgement: concurrent/double clicks cannot create another message or steal ownership. */
@@ -16,6 +17,10 @@ export async function startOrderService(id: number, actor: ServiceActor, announc
     await tx.adminAuditLog.create({ data: { userId: actor.id, userName: actor.login, action: "order.service-start", entity: "order", entityId: String(id), summary: "Менеджер взял заказ в работу" } });
     return { kind: "started" as const, customerId: order.customerId, text };
   });
-  if (result.kind === "started" && announce) notifyLater(result.customerId, { kind: "order", title: `Заказ №${id} в работе`, body: result.text, link: `/order/${id}` });
+  if (result.kind === "started") {
+    // Prisma write hooks can run inside the transaction. Send a fresh hint after commit as well.
+    orderChanged(id, result.customerId);
+    if (announce) notifyLater(result.customerId, { kind: "order", title: `Заказ №${id} в работе`, body: result.text, link: `/order/${id}` });
+  }
   return result;
 }

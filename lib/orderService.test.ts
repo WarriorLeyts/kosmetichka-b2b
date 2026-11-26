@@ -17,6 +17,8 @@ describe("order service information", () => {
   it("shows an actual manager only after acknowledgement", () => {
     expect(orderService({ ...pending, serviceStartedAt: at("12:05"), serviceManagerName: "Тестовый менеджер" }, at("12:10"), 0)).toMatchObject({ phase: "checking", canTake: false, managerName: "Тестовый менеджер" });
     expect(orderService({ ...pending, status: "approved" }, at("12:10"), 0).phase).toBe("checking");
+    expect(orderService({ ...pending, serviceStartedAt: at("12:05") }, at("12:10"), 0).timingText).toContain("результат проверки в чате");
+    expect(orderService(pending, at("12:10"), 60).timingText).toContain("МСК");
   });
   it.each([
     ["08:10", "2026-11-26T10:00:00+03:00"],

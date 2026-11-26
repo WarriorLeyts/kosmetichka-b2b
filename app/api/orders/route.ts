@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyStaffLater } from "@/lib/staffNotify";
 import { orderReceiptText } from "@/lib/orderService";
+import { orderChanged } from "@/lib/realtime";
 import { verifyCustomerToken } from "@/lib/customerAuth";
 import { sendMail } from "@/lib/mail";
 import { orderCreationLimiter } from "@/lib/rateLimit";
@@ -305,6 +306,7 @@ async function createOrder(request: Request) {
   }
 
   // staff browsers (admin website): «Новый заказ №N»
+  orderChanged(order.id, Number(payload.id));
   notifyStaffLater({ kind: "new-order", orderId: order.id });
   // placed after 18:40 or before 9:00 (Moscow): a warm note in the chat that the manager answers in working hours
 

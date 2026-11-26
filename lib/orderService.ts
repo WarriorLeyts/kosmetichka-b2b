@@ -50,11 +50,11 @@ export function orderService(order: ServiceOrder, now = new Date(), minutes = re
   const checking = !!order.serviceStartedAt || order.status === "approved";
   const expected = minutes ? responseExpectedAt(created, minutes) : null;
   const overdue = !!expected && expected <= now;
-  let timingText = isAfterHours(now) && !checking ? "Обработка заказов: 09:00–19:00 МСК" : "Обрабатываем заказы по очереди";
+  let timingText = checking ? "Следующий шаг: результат проверки в чате" : isAfterHours(now) ? "Обработка заказов: 09:00–19:00 МСК" : "Обрабатываем заказы по очереди";
   if (expected) {
     const sameDay = moscowDay(now).getTime() === moscowDay(expected).getTime();
     const label = new Intl.DateTimeFormat("ru-RU", { timeZone: "Europe/Moscow", ...(sameDay ? {} : { day: "numeric", month: "long" }), hour: "2-digit", minute: "2-digit" }).format(expected);
-    timingText = overdue ? checking ? "Проверка заняла больше времени. Менеджер уточнит срок в чате." : "Ответ задерживается. Заказ остаётся в очереди — менеджер напишет вам." : `Ориентир по проверке: ${sameDay ? "до " : ""}${label}`;
+    timingText = overdue ? checking ? "Проверка заняла больше времени. Менеджер уточнит срок в чате." : "Ответ задерживается. Заказ остаётся в очереди — менеджер напишет вам." : `Ориентир по проверке: ${sameDay ? "до " : ""}${label} МСК`;
   }
   return { ...base, phase: checking ? "checking" : "queued", title: checking ? "Ваш заказ уже в работе" : "Мы получили ваш заказ",
     description: checking ? `${name ? `Менеджер ${name} проверяет` : "Проверяем"} наличие и сумму. Если понадобится замена, сначала согласуем её с вами.` : isAfterHours(now) ? "Заказ в очереди. Менеджер вернётся к нему в рабочее время и напишет вам здесь. Повторно оформлять заказ не нужно." : "Заказ в очереди на проверку. Менеджер проверит наличие и напишет вам в чате. Повторно оформлять заказ не нужно.",
