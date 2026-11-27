@@ -1,7 +1,6 @@
 import { getCampaign } from "@/lib/campaignSettings";
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { jwtVerify } from "jose";
+import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { orderSums } from "@/lib/orderPricing";
 import { priceFor } from "@/lib/pricing";
@@ -14,22 +13,10 @@ import { lockedByOrderId } from "@/lib/orderLock";
 import { staffSeesOrder } from "@/lib/staffScope";
 import { CARD_PRODUCT_NAME, isCardProduct } from "@/lib/cardPurchase";
 
-function getSecret() {
-  return new TextEncoder().encode(process.env.JWT_SECRET || "dev-fallback");
-}
-
+/** Uses the shared live-account check: revoked or deleted staff sessions cannot edit orders. */
 async function getUser() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("admin_token")?.value;
-  if (!token) return null;
-  try {
-    const { payload } = await jwtVerify(token, getSecret());
-    const role = payload.role as string;
-    if (!["admin", "manager"].includes(role)) return null;
-    return { id: payload.id as number, role };
-  } catch {
-    return null;
-  }
+  const user = await requireAdmin();
+  return user ? { id: Number(user.id), role: String(user.role) } : null;
 }
 
 type Props = { params: Promise<{ id: string }> };
