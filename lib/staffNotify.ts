@@ -37,6 +37,7 @@ export function chatPreview(text: string): string {
         const name = [m.name, m.variantName].filter(Boolean).join(" — ");
         return `🛒 Клиент просит добавить: ${name || "товар"}${m.quantity ? ` × ${m.quantity}` : ""}`;
       }
+      if (m?._t === "product-question") return `Вопрос о товаре: ${m.name || "товар"}`;
       if (m?._t === "img") return "📷 Фото";
       if (m?._t === "audio") return "🎤 Голосовое сообщение";
       if (m?._t === "video") return "🎬 Видео";

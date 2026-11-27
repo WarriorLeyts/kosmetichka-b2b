@@ -43,7 +43,9 @@ describe("one card per site account", () => {
   });
   it("can confirm the same account's card without claiming a second account", async () => {
     expect((await request({ query: "900123" })).status).toBe(200);
-    expect((await request({ code: "1234" })).status).toBe(200);
+    const confirmed = await request({ code: "1234" });
+    expect(confirmed.status).toBe(200);
+    expect(await confirmed.json()).toMatchObject({ hasCard: false, cardLinked: true, cardType: "bonus" });
     expect(db.customer.findFirst).toHaveBeenLastCalledWith({ where: { loyaltyCard: "900123", NOT: { id: state.id } }, select: { id: true } });
     expect(db.customer.update).toHaveBeenCalledWith({ where: { id: state.id }, data: { loyaltyCard: "900123", maxmaDiscount: false, maxmaRetail: true, loyaltyAutoLinkDisabled: false, loyaltyUnlinkedCards: { set: ["other-card"] } } });
   });

@@ -4,8 +4,10 @@ import { verifyCustomerToken } from "@/lib/customerAuth";
 import { prisma } from "@/lib/prisma";
 import { messageLimiter } from "@/lib/rateLimit";
 import { notifyStaffLater } from "@/lib/staffNotify";
-import { buildProductRequest, customerChatTextAllowed, isForgedProductRequest, PRODUCT_REQUEST_STATUSES } from "@/lib/productRequest";
+import { buildProductRequest, buildProductQuestion, customerChatTextAllowed, isForgedProductRequest, PRODUCT_REQUEST_STATUSES } from "@/lib/productRequest";
 import { orderTier } from "@/lib/orderTier";
+import { lockedByOrderId } from "@/lib/orderLock";
+import { requestIdOf } from "@/lib/idempotency";
 
 async function getCustomer() {
   const cookieStore = await cookies();
@@ -59,7 +61,7 @@ export async function GET(
   });
 }
 
-export async function POST(
+async function postMessage(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -74,11 +76,24 @@ export async function POST(
     return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as { text?: unknown; productRequest?: { productId: unknown; quantity: unknown; variantName?: unknown } };
+  const input = await request.json().catch(() => null);
+  const body = (input && typeof input === "object" && !Array.isArray(input) ? input : {}) as { text?: unknown; requestId?: unknown; productRequest?: { productId: unknown; quantity: unknown; variantName?: unknown }; productQuestion?: { productId: unknown; question: unknown; variantName?: unknown } };
+  const requestId = requestIdOf(body);
+  if (body.requestId !== undefined && !requestId) return NextResponse.json({ error: "Некорректный идентификатор отправки" }, { status: 400 });
+  if (requestId && (body.productRequest || body.productQuestion)) {
+    const previous = await prisma.orderMessage.findFirst({ where: { orderId, source: "customer", userId: null, isFromPicker: false, automatic: false, text: { contains: `"clientRequestId":${JSON.stringify(requestId)}` } }, select: { id: true, text: true, createdAt: true } });
+    if (previous) return NextResponse.json({ message: { id: previous.id, text: previous.text, isFromManager: false, createdAt: previous.createdAt.toISOString() } });
+  }
 
   // «Добавить товар»: a product card for the manager, built on the server from the product id
   let text = body.text;
-  if (body.productRequest) {
+  if (body.productRequest && body.productQuestion) return NextResponse.json({ error: "Выберите одно действие с товаром" }, { status: 400 });
+  if (body.productQuestion) {
+    const who = await prisma.customer.findUnique({ where: { id: customer.id }, select: { priceType: true } });
+    const card = await buildProductQuestion({ priceType: orderTier({ priceTier: order.priceTier, priceType: order.priceType, customer: who }) }, body.productQuestion);
+    if ("error" in card) return NextResponse.json({ error: card.error }, { status: 400 });
+    text = JSON.stringify({ ...card, ...(requestId ? { clientRequestId: requestId } : {}) });
+  } else if (body.productRequest) {
     if (!PRODUCT_REQUEST_STATUSES.includes(order.status)) {
       return NextResponse.json({ error: "Заказ уже оформлен — добавить товар нельзя. Оформите новый заказ." }, { status: 400 });
     }
@@ -86,7 +101,7 @@ export async function POST(
     const who = await prisma.customer.findUnique({ where: { id: customer.id }, select: { priceType: true } });
     const card = await buildProductRequest({ priceType: orderTier({ priceTier: order.priceTier, priceType: order.priceType, customer: who }) }, body.productRequest);
     if ("error" in card) return NextResponse.json({ error: card.error }, { status: 400 });
-    text = JSON.stringify(card);
+    text = JSON.stringify({ ...card, ...(requestId ? { clientRequestId: requestId } : {}) });
   } else if (isForgedProductRequest(text) || (typeof text === "string" && !customerChatTextAllowed(text))) {
     // only the server writes these cards
     return NextResponse.json({ error: "Неверное сообщение" }, { status: 400 });
@@ -94,7 +109,7 @@ export async function POST(
   if (!text || typeof text !== "string" || text.trim().length === 0) {
     return NextResponse.json({ error: "Пустое сообщение" }, { status: 400 });
   }
-  if (text.length > (body.productRequest ? 4000 : 2000)) {
+  if (text.length > (body.productRequest || body.productQuestion ? 4000 : 2000)) {
     return NextResponse.json({ error: "Сообщение слишком длинное" }, { status: 400 });
   }
 
@@ -129,3 +144,5 @@ export async function POST(
     },
   });
 }
+
+export const POST = lockedByOrderId(postMessage);

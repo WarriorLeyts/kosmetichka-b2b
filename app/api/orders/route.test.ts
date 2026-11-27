@@ -128,11 +128,11 @@ describe("Светлая пятница + ОПТ", () => {
 describe("prices by customer type", () => {
   it.each([
     ["retail", 1120],
-    ["discount", 1120],
+    ["discount", 1005],
     ["wholesale", 727],
     ["big_wholesale", 671],
   ])("%s pays %i per item", async (type, price) => {
-    db.customer.findUnique.mockResolvedValue(customer(type));
+    db.customer.findUnique.mockResolvedValue(customer(type, type === "discount" ? { loyaltyCard: "123456", maxmaDiscount: true } : {}));
     const qty = type === "big_wholesale" ? 80 : type === "wholesale" ? 7 : 1; // above the minimums
     const r = await order({ items: [{ id: 1, quantity: qty }] });
     expect(r.status).toBe(200);

@@ -30,8 +30,8 @@ export async function buildProductRequest(
 ): Promise<ProductRequestCard | { error: string }> {
   const productId = Number(input.productId);
   const quantity = Number(input.quantity);
-  if (!Number.isInteger(productId) || productId <= 0) return { error: "Товар не найден" };
-  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 10000) return { error: "Укажите количество" };
+  if (typeof input.productId === "boolean" || !Number.isSafeInteger(productId) || productId <= 0) return { error: "Товар не найден" };
+  if (typeof input.quantity === "boolean" || !Number.isInteger(quantity) || quantity < 1 || quantity > 10000) return { error: "Укажите количество" };
 
   const product = await prisma.product.findUnique({
     where: { id: productId },
@@ -125,4 +125,34 @@ export function customerChatTextAllowed(text: string): boolean {
   if (card._t === undefined) return true;
   if (card._t !== "img" && card._t !== "video" && card._t !== "audio" && card._t !== "file") return false;
   return typeof card.url === "string" && /^\/api\/uploads\/chat\/[\w.-]+$/.test(card.url);
+}
+
+export type ProductQuestionCard = Omit<ProductRequestCard, "_t" | "quantity"> & { _t: "product-question"; question: string; addedQuantity?: number };
+export type ChatProductCard = ProductRequestCard | ProductQuestionCard;
+
+export async function buildProductQuestion(customer: { priceType?: string | null }, input: { productId: unknown; question: unknown; variantName?: unknown }): Promise<ProductQuestionCard | { error: string }> {
+  if (typeof input.question !== "string" || !input.question.trim() || input.question.trim().length > 1000) return { error: "Напишите вопрос о товаре — до 1000 символов" };
+  const card = await buildProductRequest(customer, { ...input, quantity: 1 });
+  if ("error" in card) return card;
+  return { _t: "product-question", id: card.id, name: card.name, variantName: card.variantName, imagePath: card.imagePath, price: card.price, question: input.question.trim() };
+}
+
+/** Only a genuine customer card from this order may be used for an addition or a quoted reply. */
+export async function chatProductCard(orderId: number, messageId: number) {
+  if (!Number.isSafeInteger(messageId) || messageId <= 0) return null;
+  const m = await prisma.orderMessage.findFirst({ where: { id: messageId, orderId, source: "customer", userId: null, isFromPicker: false, automatic: false }, select: { id: true, text: true } });
+  if (!m) return null;
+  try {
+    const card = JSON.parse(m.text) as ChatProductCard;
+    if (!["product-request", "product-question"].includes(card?._t) || !Number.isSafeInteger(card.id) || card.id <= 0 || typeof card.name !== "string") return null;
+    if (card._t === "product-question" && typeof card.question !== "string") return null;
+    return { id: m.id, originalText: m.text, card };
+  } catch { return null; }
+}
+
+export async function buildProductAnswer(orderId: number, messageId: number, answer: string) {
+  const found = await chatProductCard(orderId, messageId);
+  if (!found || found.card._t !== "product-question") return null;
+  const c = found.card;
+  return { _t: "product-answer", replyToMessageId: found.id, product: { id: c.id, name: c.name, variantName: c.variantName, imagePath: c.imagePath }, question: c.question, answer };
 }

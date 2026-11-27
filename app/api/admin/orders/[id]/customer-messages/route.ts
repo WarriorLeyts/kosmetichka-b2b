@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { sendMail } from "@/lib/mail";
 import { notifyManagerMessage } from "@/lib/notify";
 import { staffSeesOrder } from "@/lib/staffScope";
+import { buildProductAnswer } from "@/lib/productRequest";
 import { startOrderService } from "@/lib/orderServiceStart";
 
 export async function GET(
@@ -51,7 +52,7 @@ export async function POST(
   const orderId = Number(id);
   if (!(await staffSeesOrder(user, orderId))) return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
 
-  const { text } = await request.json();
+  const { text, replyToProductMessageId } = await request.json();
   if (!text || typeof text !== "string" || text.trim().length === 0) {
     return NextResponse.json({ error: "Пустое сообщение" }, { status: 400 });
   }
@@ -59,11 +60,19 @@ export async function POST(
     return NextResponse.json({ error: "Сообщение слишком длинное" }, { status: 400 });
   }
 
+  let storedText = text.trim();
+  if (replyToProductMessageId !== undefined) {
+    if (typeof replyToProductMessageId === "boolean" || !Number.isSafeInteger(Number(replyToProductMessageId)) || Number(replyToProductMessageId) <= 0) return NextResponse.json({ error: "Карточка с вопросом не найдена в этом заказе" }, { status: 400 });
+    const answer = await buildProductAnswer(orderId, Number(replyToProductMessageId), storedText);
+    if (!answer) return NextResponse.json({ error: "Карточка с вопросом не найдена в этом заказе" }, { status: 400 });
+    storedText = JSON.stringify(answer);
+  }
+
   const [msg, senderUser] = await Promise.all([
     prisma.orderMessage.create({
       data: {
         orderId,
-        text: text.trim(),
+        text: storedText,
         source: "customer",
         isFromPicker: true,
         userId: user.id as number,
