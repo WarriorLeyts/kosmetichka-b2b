@@ -59,8 +59,8 @@ export async function POST(request: Request) {
       throw e;
     }
     // the discount price: the card's owner in 1С «Максма Скидка» (checked now, refreshed every 6 h)
-    await refreshMaxmaDiscount(id).catch(() => false);
-    return NextResponse.json({ card: publicCard(card) });
+    const hasCard = await refreshMaxmaDiscount(id).catch(() => false);
+    return NextResponse.json({ card: publicCard(card), hasCard, cardLinked: true, cardType: hasCard ? "discount" : null });
   }
 
   // ── step 1: find the card and send the code ──

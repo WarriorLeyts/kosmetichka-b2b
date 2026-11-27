@@ -20,7 +20,7 @@ export async function purchaseAssemblyCard(orderId: number, rawRegistration: unk
   if (!order) throw new CardPurchaseError("Заказ не найден", 404);
   if (order.status !== "assembly" || order.oneCExportedAt || order.oneCSendingAt || order.oneCRef || order.oneCStockRef) throw new CardPurchaseError("Карту можно добавить только во время сборки, до передачи заказа в 1С.", 409);
   const customer = order.customer;
-  if (customer.priceType !== "retail" || !["retail", "discount"].includes(order.priceType ?? customer.priceType) || cardGivesDiscount(customer)) throw new CardPurchaseError("Покупка карты доступна розничному клиенту без скидочной карты.", 409);
+  if (!["retail", "discount"].includes(customer.priceType ?? "") || !["retail", "discount"].includes(order.priceType ?? customer.priceType) || cardGivesDiscount(customer)) throw new CardPurchaseError("Покупка карты доступна розничному клиенту без скидочной карты.", 409);
   const phone = maxmaPhone(customer.phone ?? "");
   if (!phone) throw new CardPurchaseError("Для оформления карты укажите российский телефон в аккаунте клиента.");
   const cardProduct = await findCardCatalogProduct();
