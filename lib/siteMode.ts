@@ -24,7 +24,7 @@ export function fromSite(request: Request): boolean {
 export function pricingCustomer<T extends { priceType?: string | null; loyaltyCard?: string | null; maxmaDiscount?: boolean | null }>(customer: T, request: Request): T {
   const card = cardGivesDiscount(customer);
   const here = APPS_TOO || fromSite(request);
-  return SITE_RETAIL_DISCOUNT && here && customer.priceType === "retail" && card ? { ...customer, priceType: "discount" } : customer;
+  return SITE_RETAIL_DISCOUNT && here && ["retail", "discount"].includes(customer.priceType ?? "") ? { ...customer, priceType: card ? "discount" : "retail" } : customer;
 }
 
 /** One switch controls bonus accrual and spending on the website and in the apps. */
