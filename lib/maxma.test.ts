@@ -18,13 +18,19 @@ const lines = [
 
 describe("canSpendBonuses (retail rule)", () => {
   it("only retail buyers (bonus or discount card) with a linked card", () => {
-    expect(canSpendBonuses({ loyaltyCard: "2000123", priceType: "retail" })).toBe(true);
-    expect(canSpendBonuses({ loyaltyCard: "2000123", priceType: "discount" })).toBe(true);
-    expect(canSpendBonuses({ loyaltyCard: "2000123", priceType: "wholesale" })).toBe(false);
-    expect(canSpendBonuses({ loyaltyCard: "2000123", priceType: "big_wholesale" })).toBe(false);
+    expect(canSpendBonuses({ loyaltyCard: "2000123", maxmaRetail: true, priceType: "retail" })).toBe(true);
+    expect(canSpendBonuses({ loyaltyCard: "2000123", maxmaRetail: true, priceType: "discount" })).toBe(true);
+    expect(canSpendBonuses({ loyaltyCard: "2000123", maxmaRetail: true, priceType: "wholesale" })).toBe(false);
+    expect(canSpendBonuses({ loyaltyCard: "2000123", maxmaRetail: true, priceType: "big_wholesale" })).toBe(false);
     expect(canSpendBonuses({ loyaltyCard: null, priceType: "retail" })).toBe(false);
     expect(canSpendBonuses({ loyaltyCard: "  ", priceType: "retail" })).toBe(false);
     expect(canSpendBonuses(null)).toBe(false);
+  });
+
+  it("rejects cards outside the two groups regardless of their number", () => {
+    expect(canSpendBonuses({ loyaltyCard: "900123", priceType: "retail" })).toBe(false);
+    expect(canSpendBonuses({ loyaltyCard: "123456", priceType: "retail", maxmaDiscount: true })).toBe(true);
+    expect(canSpendBonuses({ loyaltyCard: "900123", priceType: "retail", maxmaRetail: true })).toBe(true);
   });
 
   it("bonusAmount: whole non-negative numbers only", () => {
@@ -82,7 +88,7 @@ describe("calcLoyalty (MAXMA mocked)", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  const retail = { phone: "89001234567", loyaltyCard: "2000123", priceType: "retail" };
+  const retail = { phone: "89001234567", loyaltyCard: "2000123", maxmaRetail: true, priceType: "retail" };
 
   it("spends what MAXMA applies and splits it per line", async () => {
     fetchMock.mockImplementationOnce(() =>
