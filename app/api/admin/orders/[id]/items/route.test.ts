@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => ({ value: "t" }) }) }));
-vi.mock("jose", () => ({ jwtVerify: async () => ({ payload: { id: 1, role: "manager" } }) }));
+vi.mock("@/lib/auth", () => ({ requireAdmin: vi.fn(async () => ({ id: 1, role: "manager" })) }));
 vi.mock("@/lib/staffScope", () => ({ staffSeesOrder: async () => true }));
 vi.mock("@/lib/maxmaOrders", () => ({ isMaxmaOrder: () => false }));
 vi.mock("@/lib/orderTier", () => ({ orderTier: () => "retail", repriceOrder: vi.fn(async () => null) }));
