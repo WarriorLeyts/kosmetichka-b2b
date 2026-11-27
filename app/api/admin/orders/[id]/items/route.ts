@@ -9,7 +9,7 @@ import { orderTier, repriceOrder } from "@/lib/orderTier";
 import { isMaxmaOrder, loyaltyResponse, recalcOrderLoyalty } from "@/lib/maxmaOrders";
 import { changeChatMessage, logOrderChanges, orderChanges, summarizeRows } from "@/lib/orderChanges";
 import { notifyLater } from "@/lib/notify";
-import { markProductRequestAdded, productRequestAdded } from "@/lib/productRequest";
+import { chatProductCard } from "@/lib/productRequest";
 import { lockedByOrderId } from "@/lib/orderLock";
 import { staffSeesOrder } from "@/lib/staffScope";
 import { CARD_PRODUCT_NAME, isCardProduct } from "@/lib/cardPurchase";
@@ -57,15 +57,15 @@ async function editItems(request: NextRequest, { params }: Props) {
   }
 
   const body = await request.json();
-  const updates: {
+  let updates: {
     id: number;
     quantity: number;
     price: number;
     variantName?: string | null;
     variantImageUrl?: string | null;
   }[] = body.items ?? [];
-  const removeIds: number[] = body.removeIds ?? [];
-  const newItems: {
+  let removeIds: number[] = body.removeIds ?? [];
+  let newItems: {
     productId: number;
     productName: string;
     barcode?: string | null;
@@ -74,6 +74,23 @@ async function editItems(request: NextRequest, { params }: Props) {
     variantName?: string | null;
     variantImageUrl?: string | null;
   }[] = body.newItems ?? [];
+
+  // A message-linked addition is built from the stored card, never the submitted name, price or product id.
+  const linkedId = body.chatProduct?.messageId ?? body.requestMessageId;
+  if ((body.chatProduct !== undefined && (body.chatProduct === null || typeof body.chatProduct !== "object" || Array.isArray(body.chatProduct) || body.chatProduct.messageId == null)) || (linkedId != null && (typeof linkedId === "boolean" || !Number.isSafeInteger(Number(linkedId)) || Number(linkedId) <= 0))) return NextResponse.json({ error: "Карточка товара не найдена в этом заказе" }, { status: 400 });
+  const linked = linkedId != null ? await chatProductCard(orderId, Number(linkedId)) : null;
+  if (linkedId != null && !linked) return NextResponse.json({ error: "Карточка товара не найдена в этом заказе" }, { status: 400 });
+  if (linked?.card.added) return NextResponse.json({ error: "Этот товар из чата уже добавлен в заказ", code: "already_added" }, { status: 409 });
+  let addedQuantity = 0;
+  if (linked) {
+    const card = linked.card;
+    addedQuantity = Number(body.chatProduct ? body.chatProduct.quantity : card._t === "product-request" ? card.quantity : NaN);
+    if (typeof body.chatProduct?.quantity === "boolean" || !Number.isInteger(addedQuantity) || addedQuantity < 1 || addedQuantity > 10000) return NextResponse.json({ error: "Укажите целое количество от 1 до 10 000" }, { status: 400 });
+    const line = order.items.find(i => i.productId === card.id && (i.variantName || null) === (card.variantName || null));
+    removeIds = [];
+    updates = line ? [{ id: line.id, quantity: line.quantity + addedQuantity, price: line.price }] : [];
+    newItems = line ? [] : [{ productId: card.id, productName: card.name, quantity: addedQuantity, price: 0, variantName: card.variantName, variantImageUrl: card.variantName ? card.imagePath : null }];
+  }
 
   const orderItemIds = new Set(order.items.map((i) => i.id));
   if (updates.some(u => order.items.find(i => i.id === u.id)?.productName === CARD_PRODUCT_NAME && !removeIds.includes(u.id) && Number(u.quantity) !== 1)) return NextResponse.json({ error: "В заказе может быть только одна карта «Косметичка»." }, { status: 400 });
@@ -92,12 +109,6 @@ async function editItems(request: NextRequest, { params }: Props) {
   if (order.items.length - removing.size + newItems.length <= 0) {
     return NextResponse.json({ error: "В заказе должна остаться хотя бы одна позиция. Чтобы отказаться от заказа, отмените его." }, { status: 400 });
   }
-  // the customer's «Добавить товар» card is added once (two managers / a double tap)
-  const requestMessageId = Number(body.requestMessageId);
-  if (Number.isInteger(requestMessageId) && requestMessageId > 0 && (await productRequestAdded(orderId, requestMessageId))) {
-    return NextResponse.json({ error: "Этот товар из чата уже добавлен в заказ", code: "already_added" }, { status: 409 });
-  }
-
   // Nobody changes prices in an order: existing lines keep their price, added products get the
   // customer's catalogue price (by their price type) — whatever price the screen sent is ignored.
   const origPrice = new Map(order.items.map((i) => [i.id, i.price]));
@@ -221,8 +232,14 @@ async function editItems(request: NextRequest, { params }: Props) {
     });
   });
 
-  const ops = [...removeOps, ...checkOps, ...updateOps, ...createOps];
-  if (ops.length > 0) await prisma.$transaction(ops);
+  // The marker commits with the line writes; failed transactions and retries cannot duplicate a card.
+  const markOps = linked ? [prisma.orderMessage.update({ where: { id: linked.id, text: linked.originalText }, data: { text: JSON.stringify({ ...linked.card, added: true, addedQuantity }) } })] : [];
+  const ops = [...removeOps, ...checkOps, ...updateOps, ...createOps, ...markOps];
+  try { if (ops.length > 0) await prisma.$transaction(ops); }
+  catch (e) {
+    if (linked && (e as { code?: string }).code === "P2025") return NextResponse.json({ error: "Карточка уже изменилась. Обновите чат и проверьте заказ.", code: "already_added" }, { status: 409 });
+    throw e;
+  }
 
   // «Опт»: the sum moved across 5 000 / 50 000 ₽ → every line at the new price
   const tierChange = await repriceOrder(orderId).catch((e) => {
@@ -231,12 +248,6 @@ async function editItems(request: NextRequest, { params }: Props) {
   });
 
   const remaining = await prisma.orderItem.findMany({ where: { orderId } });
-
-  // added from the customer's «Добавить товар» card in the chat → the card shows «Добавлено» from now on
-  // (so the same request is not added twice, and a product already in the order can be added again)
-  if (Number.isInteger(requestMessageId) && requestMessageId > 0) {
-    await markProductRequestAdded(orderId, requestMessageId).catch((e) => console.error("[order-items] request:", e instanceof Error ? e.message : e));
-  }
 
   // who changed what — the customer sees it on the order and gets a notification
   const staff = await prisma.user.findUnique({ where: { id: Number(user.id) }, select: { name: true } }).catch(() => null);
