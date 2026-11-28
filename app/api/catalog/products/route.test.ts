@@ -1,3 +1,4 @@
+vi.mock("@/lib/brandVisibility", () => ({ visibleBrandsWhere: async () => ({}) }));
 import { LEGACY_CAMPAIGN } from "@/lib/campaign";
 import { describe, expect, it, vi } from "vitest";
 
@@ -55,8 +56,8 @@ describe("promotion filter combined with catalog filters",()=>{
       await GET(new Request("http://x/api/catalog/products?facets=brand&quick=promo&search=тонер"));
       const where=db.product.groupBy.mock.calls.at(-1)![0].where;
       expect(where.hidden).toBe(false);
-      expect(where.AND).toHaveLength(2);
-      expect(where.AND[1]).toEqual({prices:{some:{priceType:{in:["promo_retail"]},price:{gt:0}}}});
+      expect(where.AND).toHaveLength(3);
+      expect(where.AND[2]).toEqual({prices:{some:{priceType:{in:["promo_retail"]},price:{gt:0}}}});
     }finally{clock.mockRestore();}
   });
 });

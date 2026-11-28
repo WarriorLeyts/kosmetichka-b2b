@@ -1,3 +1,4 @@
+import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { prisma } from "@/lib/prisma";
 import { arrivalKindOf, arrivalWindows, getArrivalSettings } from "@/lib/arrivalSettings";
 
@@ -19,7 +20,7 @@ export async function listArrivals({ wholesale, limit = 40, staff = false }: { w
   const places = staff || wholesale ? ["stock", "shop"] : ["shop"];
   const rows = await prisma.productArrival
     .findMany({
-      where: { docDate: { gte: since }, place: { in: places } },
+      where: { docDate: { gte: since }, place: { in: places }, product: { AND: [await visibleBrandsWhere()] } },
       select: { docDate: true, place: true, firstReceiptAt: true, product: { select: { id: true, hidden: true, stock: true, wholesaleStock: true, images: { take: 1, select: { id: true } } } } },
       orderBy: { docDate: "desc" },
     })

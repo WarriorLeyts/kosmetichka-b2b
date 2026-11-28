@@ -1,3 +1,4 @@
+vi.mock("@/lib/brandVisibility", () => ({ visibleBrandsWhere: async () => ({}) }));
 import { beforeEach, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({ settings: { newDays: 10, backDays: 10 }, rows: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({ prisma: { productArrival: { findMany: mock.rows } } }));

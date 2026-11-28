@@ -1,3 +1,4 @@
+import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { resolveImageUrl } from "@/lib/image";
@@ -108,7 +109,7 @@ export async function resolveBlocks(content: PageContent, opts: { withPreview?: 
 
   const manualIds = [...new Set(blocks.flatMap((b) => (b.type === "products" && b.source === "manual" ? b.productIds : [])))];
   const visibleManual = manualIds.length
-    ? new Set((await prisma.product.findMany({ where: { id: { in: manualIds }, hidden: false }, select: { id: true } })).map((p) => p.id))
+    ? new Set((await prisma.product.findMany({ where: { id: { in: manualIds }, hidden: false, AND: [await visibleBrandsWhere()] }, select: { id: true } })).map((p) => p.id))
     : new Set<number>();
 
   // предпросмотр: «основные категории автоматически» — показываем, какие именно (как в приложении)
@@ -168,7 +169,7 @@ async function previewProducts(b: Extract<ResolvedBlock, { type: "products" }>):
     : null;
   const ids = arrivalIds ?? q.ids;
   const where: Prisma.ProductWhereInput = {
-    hidden: false,
+    hidden: false, AND: [await visibleBrandsWhere()],
     ...(q.onlyStock && !arrivalIds ? { stock: { gt: 0 } } : {}),
     ...(ids ? { id: { in: ids } } : {}),
     ...(q.categoryGuid ? { categoryGuid: q.categoryGuid } : {}),

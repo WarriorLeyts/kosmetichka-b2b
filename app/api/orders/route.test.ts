@@ -1,3 +1,4 @@
+vi.mock("@/lib/brandVisibility", () => ({ visibleBrandsWhere: async () => ({}) }));
 import { LEGACY_CAMPAIGN } from "@/lib/campaign";
 /**
  * Order scenarios end to end through POST /api/orders (DB, MAXMA, mail mocked):

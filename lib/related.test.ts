@@ -1,3 +1,4 @@
+vi.mock("@/lib/brandVisibility", () => ({ visibleBrandsWhere: async () => ({}) }));
 import { describe, expect, it, vi } from "vitest";
 
 const products: Record<number, { id: number; brandGuid: string | null; categoryGuid: string | null; prices: { priceType: string; price: number }[]; stock: number; relatedIds?: number[]; hidden?: boolean }> = {

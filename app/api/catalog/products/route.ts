@@ -1,3 +1,4 @@
+import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { getCampaign } from "@/lib/campaignSettings";
 import type { Campaign } from "@/lib/campaign";
 import { promotionProductsWhere } from "@/lib/promotionProducts";
@@ -193,6 +194,7 @@ async function catalogProducts(request: Request, cookieStore: Awaited<ReturnType
   const arrivalIds = arrivalFilter ? (await listArrivals({ wholesale, limit: Number.MAX_SAFE_INTEGER }))
     .filter((a) => a.isNew ? quick.includes("new") : quick.includes("back")).map((a) => a.productId) : [];
 
+  const brandVisibility = await visibleBrandsWhere();
   const where: any = {
     // скрытые в админ-панели товары покупатели не видят (корзина — ?ids= ниже — их ещё показывает)
     hidden: false,
@@ -219,6 +221,8 @@ async function catalogProducts(request: Request, cookieStore: Awaited<ReturnType
         }
       : {}),
   };
+
+  where.AND = [...(where.AND ?? []), brandVisibility];
 
   if (quick.includes("promo")) where.AND = [...(where.AND ?? []), promotionProductsWhere(shownType, Date.now(), campaign)];
 
@@ -279,7 +283,7 @@ async function catalogProducts(request: Request, cookieStore: Awaited<ReturnType
   if (Number.isInteger(relatedParam) && relatedParam > 0) {
     const kind = searchParams.get("kind") === "similar" ? "similar" : "together";
     const ids = await relatedIds(relatedParam, kind, wholesale);
-    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids } }, include, omit }) : [];
+    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, AND: [brandVisibility] }, include, omit }) : [];
     const order = new Map(ids.map((id, i) => [id, i]));
     found.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
     return NextResponse.json({ products: found.map(applyPrices), total: found.length, page: 1, hasMore: false });
@@ -294,7 +298,7 @@ async function catalogProducts(request: Request, cookieStore: Awaited<ReturnType
       .filter((a) => (arrivalsParam === "new" ? a.isNew : arrivalsParam === "back" ? !a.isNew : true))
       .slice(0, 40);
     const ids = list.map((a) => a.productId);
-    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, hidden: false }, include, omit }) : [];
+    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, hidden: false, AND: [brandVisibility] }, include, omit }) : [];
     const meta = new Map(list.map((a, i) => [a.productId, { i, a }]));
     found.sort((x, y) => (meta.get(x.id)?.i ?? 0) - (meta.get(y.id)?.i ?? 0));
     return NextResponse.json({
@@ -310,7 +314,7 @@ async function catalogProducts(request: Request, cookieStore: Awaited<ReturnType
   const idsParam = searchParams.get("ids");
   if (idsParam !== null) {
     const ids = [...new Set(idsParam.split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 120);
-    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids } }, include, omit }) : [];
+    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, AND: [brandVisibility] }, include, omit }) : [];
     return NextResponse.json({ products: found.map(applyPrices), total: found.length, page: 1, hasMore: false });
   }
 

@@ -1,3 +1,4 @@
+vi.mock("@/lib/brandVisibility", () => ({ visibleBrandsWhere: async () => ({}) }));
 import { LEGACY_CAMPAIGN } from "@/lib/campaign";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const tx = vi.hoisted(() => ({ product: { findUnique: vi.fn(), update: vi.fn() }, productVariant: { update: vi.fn(), create: vi.fn(), deleteMany: vi.fn() } }));
