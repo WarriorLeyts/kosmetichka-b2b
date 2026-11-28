@@ -21,7 +21,7 @@ describe("website: retail customers with a card pay the discount price", () => {
     expect(pricingCustomer({ priceType: "retail", loyaltyCard: "  " }, req(true)).priceType).toBe("retail");
     expect(pricingCustomer({ priceType: "retail" }, req(true)).priceType).toBe("retail");
   });
-  it("other price types never change", () => {
+  it("wholesale and other price types never change", () => {
     for (const t of ["wholesale", "big_wholesale", null]) {
       expect(pricingCustomer({ priceType: t, loyaltyCard: "9000123", maxmaDiscount: true }, req(true)).priceType).toBe(t);
     }
@@ -46,4 +46,4 @@ describe("bonuses switched off (no MAXMA_BONUSES in .env)", () => {
   });
 });
 
-it("legacy discount accounts use the actual card state", () => { expect(pricingCustomer({ priceType: "discount", loyaltyCard: null }, req(true)).priceType).toBe("retail"); expect(pricingCustomer({ priceType: "discount", loyaltyCard: "1234", maxmaDiscount: true }, req(true)).priceType).toBe("discount"); });
+it("legacy discount accounts follow the actual card", () => { expect(pricingCustomer({ priceType: "discount", loyaltyCard: null }, req(true)).priceType).toBe("retail"); expect(pricingCustomer({ priceType: "discount", loyaltyCard: "990123", maxmaDiscount: true }, req(true)).priceType).toBe("discount"); });
