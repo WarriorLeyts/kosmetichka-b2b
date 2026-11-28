@@ -286,7 +286,7 @@ export async function findContract(counterpartyRef, orgRef, before = null, env =
   return buyer[0]?.Ref_Key ?? null;
 }
 
-export const PRICE_KIND_NAMES = { retail: "Розница", discount: "Скидка", wholesale: "Опт", big_wholesale: "Крупный опт" };
+export const PRICE_KIND_NAMES = { franchise: "Франшиза", retail: "Розница", discount: "Скидка", wholesale: "Опт", big_wholesale: "Крупный опт" };
 
 /**
  * «Основной договор» «С покупателем» of the template's organisation for a counterparty that has none
@@ -323,7 +323,7 @@ export async function prepareOrder(order, env = process.env, { createMissingCont
   const problems = [];
   const template = await orderTemplate(env);
   const c = order.customer || {};
-  const wholesale = ["wholesale", "big_wholesale"].includes(c.priceType);
+  const wholesale = ["wholesale", "big_wholesale", "franchise"].includes(c.priceType);
   // Order routing: card owner → profile phone → shared site buyer (owner decision, 2026-11-14).
   let counterpartyRef = await findCounterparty(wholesale ? c.oneCId : null, c.phone, env, wholesale ? "" : c.loyaltyCard);
   // A missing/ambiguous personal match never blocks the shared buyer, even when a card is linked.

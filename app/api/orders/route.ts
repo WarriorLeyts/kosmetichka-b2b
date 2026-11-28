@@ -199,7 +199,8 @@ async function createOrder(request: Request) {
   const linesTotal = orderItems.reduce((s, it) => s + it.total, 0);
   const promoDiscount = pricing.discount + (promo?.discount ?? 0);
   const finalTotal = Math.round((linesTotal - promoDiscount - bonusesApplied) * 100) / 100;
-  const minimum = minOrderFor(customer, items);
+  const pendingPrices = tier === "franchise" && lines.some(line => line.price <= 0);
+  const minimum = minOrderFor(customer, items, pendingPrices);
   if (finalTotal < minimum) return NextResponse.json({ error: `Минимальная сумма заказа — ${minimum.toLocaleString("ru-RU")} ₽. Добавьте товары ещё на ${Math.ceil(minimum - finalTotal).toLocaleString("ru-RU")} ₽.`, code: "minimum_order", minimum, total: finalTotal }, { status: 400 });
   const orderData = {
     messages: { create: { source: "customer", isFromPicker: true, automatic: true, text: orderReceiptText() } },

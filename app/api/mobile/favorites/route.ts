@@ -1,3 +1,4 @@
+import { maskFranchiseSnapshot } from "@/lib/franchise";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../_auth";
@@ -25,19 +26,21 @@ function cleanItem(raw: unknown): Record<string, unknown> | null {
 export async function GET() {
   const id = await currentCustomerId();
   if (!id) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
+  const allowed = (await prisma.customer.findUnique({ where: { id }, select: { priceType: true } }))?.priceType === "franchise";
   const f = await prisma.customerFavorites.findUnique({ where: { customerId: id } });
-  return NextResponse.json({ items: f?.items ?? [], updatedAt: f?.updatedAt.toISOString() ?? null });
+  return NextResponse.json({ items: Array.isArray(f?.items) ? f.items.map(i => maskFranchiseSnapshot(i as Record<string, unknown>, allowed)) : [], updatedAt: f?.updatedAt.toISOString() ?? null });
 }
 
 /** PUT /api/mobile/favorites { items } — saves the whole list for all the customer's devices. */
 export async function PUT(request: Request) {
   const id = await currentCustomerId();
   if (!id) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
+  const allowed = (await prisma.customer.findUnique({ where: { id }, select: { priceType: true } }))?.priceType === "franchise";
   const body = await request.json().catch(() => null);
   if (!body || !Array.isArray(body.items)) return NextResponse.json({ error: "Нужен список товаров" }, { status: 400 });
   const seen = new Set<unknown>();
   const items = (body.items as unknown[])
-    .map(cleanItem)
+    .map(cleanItem).map(i => i ? maskFranchiseSnapshot(i, allowed) : null)
     .filter((x): x is Record<string, unknown> => !!x && !seen.has(x.id) && !!seen.add(x.id))
     .slice(0, MAX_ITEMS);
   if (JSON.stringify(items).length > MAX_BYTES) return NextResponse.json({ error: "Слишком много товаров" }, { status: 413 });

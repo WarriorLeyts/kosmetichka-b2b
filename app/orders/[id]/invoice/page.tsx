@@ -1,3 +1,4 @@
+import { pendingFranchiseOrder } from "@/lib/franchise";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
@@ -157,6 +158,7 @@ export default async function CustomerInvoicePage({
         ) : null}
 
         {/* Items table */}
+        {pendingFranchiseOrder(order) ? <p>Предварительный счёт: есть товары без установленной цены. Менеджер установит цены в 1С.</p> : null}
         <table className="mb-6 w-full text-sm">
           <thead>
             <tr className="border-b-2 border-slate-200">
@@ -182,10 +184,10 @@ export default async function CustomerInvoicePage({
                 </td>
                 <td className="py-2.5 text-center text-slate-700">{item.quantity}</td>
                 <td className="py-2.5 text-right text-slate-700">
-                  {item.price.toLocaleString("ru-RU")}
+                  {pendingFranchiseOrder(order) && item.price <= 0 ? "Цена не установлена" : item.price.toLocaleString("ru-RU")}
                 </td>
                 <td className="py-2.5 text-right font-semibold text-slate-800">
-                  {item.total.toLocaleString("ru-RU")}
+                  {pendingFranchiseOrder(order) && item.price <= 0 ? "Уточняется" : item.total.toLocaleString("ru-RU")}
                 </td>
               </tr>
             ))}
@@ -240,7 +242,7 @@ export default async function CustomerInvoicePage({
                   <div className="flex justify-between border-t-2 border-slate-800 pt-3">
                     <span className="text-lg font-black text-slate-800">ИТОГО:</span>
                     <span className="text-lg font-black text-slate-800">
-                      {order.total.toLocaleString("ru-RU")} ₽
+                      {pendingFranchiseOrder(order) && order.total <= 0 ? "Уточняется" : `${order.total.toLocaleString("ru-RU")} ₽`}
                     </span>
                   </div>
                   {order.bonusesCollected > 0 && (

@@ -16,7 +16,7 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function withFlatPrices<
   T extends { prices?: { priceType: string; price: number }[] }
->(product: T, campaign: Campaign = LEGACY_CAMPAIGN) {
+>(product: T, campaign: Campaign = LEGACY_CAMPAIGN, allowFranchise = false) {
   const retailPrice =
     product.prices?.find((p) => p.priceType === "retail")?.price ?? 0;
   const wholesalePrice =
@@ -27,8 +27,11 @@ export function withFlatPrices<
     product.prices?.find((p) => p.priceType === "discount")?.price ?? null;
 
   const special = (type: string) => product.prices?.find((p) => p.priceType === type)?.price ?? null;
-  const regularPrices = { retailPrice, wholesalePrice, bigWholesalePrice, discountPrice };
-  const flat = { ...product, ...regularPrices, regularPrices,
+  const franchisePrice = product.prices?.find(p => p.priceType === "franchise")?.price
+    ?? product.prices?.find(p => p.priceType.trim().toLowerCase() === "франшиза")?.price ?? null;
+  const regularPrices = { retailPrice, wholesalePrice, bigWholesalePrice, discountPrice, ...(allowFranchise ? { franchisePrice } : {}) };
+  const prices = product.prices?.filter(p => allowFranchise || !["franchise", "франшиза"].includes(p.priceType.trim().toLowerCase()));
+  const flat = { ...product, prices, ...regularPrices, regularPrices,
     promoRetailPrice: special("promo_retail"),
     promoWholesalePrice: special("promo_wholesale"),
     promoBigWholesalePrice: special("promo_big_wholesale"),
@@ -43,7 +46,7 @@ export function withFlatPrices<
 
 /** New promotional fields and the regular-price snapshot must follow the guest price mask too. */
 export function maskWholesalePrices(product: any) {
-  const { wholesalePrice: _w, bigWholesalePrice: _b, promoWholesalePrice: _pw,
+  const { franchisePrice: _f, wholesalePrice: _w, bigWholesalePrice: _b, promoWholesalePrice: _pw,
     promoBigWholesalePrice: _pb, prices: _p, regularPrices, ...rest } = product;
   return { ...rest, prices: [], ...(regularPrices ? { regularPrices: {
     retailPrice: regularPrices.retailPrice, discountPrice: regularPrices.discountPrice,
@@ -83,7 +86,7 @@ export function getStockLabel(stock: number | null | undefined) {
 export const WHOLESALE_MIN_STOCK = 12;
 
 export function isWholesaleType(priceType: string | null | undefined): boolean {
-  return priceType === "wholesale" || priceType === "big_wholesale";
+  return priceType === "wholesale" || priceType === "big_wholesale" || priceType === "franchise";
 }
 
 /** The stock a customer of this price type sees: a wholesaler — what he may order (Product.wholesaleStock). */

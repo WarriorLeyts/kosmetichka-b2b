@@ -31,6 +31,7 @@ function maskGuestPrices(product: any) {
 type PriceIndex = {
   at: number;
   wholesale: Map<string, number>;
+  franchise: Map<string, number>;
   retail: Map<string, number>;
   discount: Map<string, number>;
   big: Map<string, number>;
@@ -49,8 +50,9 @@ async function priceIndex(): Promise<PriceIndex> {
   if (priceMemo && Date.now() - priceMemo.at < 120_000) return priceMemo;
   if (!priceMemoLoading) {
     priceMemoLoading = prisma.productPrice
-      .findMany({ where: { priceType: { in: ["wholesale", "discount", "retail", "big_wholesale", "promo_retail", "promo_wholesale", "promo_big_wholesale"] } }, select: { productGuid: true, priceType: true, price: true } })
+      .findMany({ where: { priceType: { in: ["wholesale", "discount", "retail", "big_wholesale", "promo_retail", "promo_wholesale", "promo_big_wholesale", "franchise", "франшиза"] } }, select: { productGuid: true, priceType: true, price: true } })
       .then((rows) => {
+        const franchise = new Map<string, number>();
         const wholesale = new Map<string, number>();
         const retail = new Map<string, number>();
         const discount = new Map<string, number>();
@@ -60,6 +62,7 @@ async function priceIndex(): Promise<PriceIndex> {
         const promoBig = new Map<string, number>();
         const sale = new Set<string>();
         for (const r of rows) {
+          if (["franchise", "франшиза"].includes(r.priceType)) franchise.set(r.productGuid, r.price);
           if (r.priceType === "wholesale") wholesale.set(r.productGuid, r.price);
           else if (r.priceType === "retail") retail.set(r.productGuid, r.price);
           else if (r.priceType === "big_wholesale") big.set(r.productGuid, r.price);
@@ -71,7 +74,7 @@ async function priceIndex(): Promise<PriceIndex> {
             discount.set(r.productGuid, r.price);
           }
         }
-        const next: PriceIndex = { at: Date.now(), wholesale, retail, discount, big, promoRetail, promoWholesale, promoBig, sale, shown: new Map() };
+        const next: PriceIndex = { at: Date.now(), franchise, wholesale, retail, discount, big, promoRetail, promoWholesale, promoBig, sale, shown: new Map() };
         priceMemo = next;
         return next;
       })
@@ -116,9 +119,9 @@ function shownPrices(idx: PriceIndex, type: PriceType, campaign: Campaign): Map<
   const hit = idx.shown.get(key);
   if (hit) return hit;
   const out = new Map<string, number>();
-  const guids = new Set([idx.retail, idx.discount, idx.wholesale, idx.big, idx.promoRetail, idx.promoWholesale, idx.promoBig].flatMap((m) => [...m.keys()]));
+  const guids = new Set([idx.franchise, idx.retail, idx.discount, idx.wholesale, idx.big, idx.promoRetail, idx.promoWholesale, idx.promoBig].flatMap((m) => [...m.keys()]));
   for (const guid of guids) {
-    const price = priceFor({ retailPrice: idx.retail.get(guid), discountPrice: idx.discount.get(guid),
+    const price = priceFor({ franchisePrice: idx.franchise.get(guid), retailPrice: idx.retail.get(guid), discountPrice: idx.discount.get(guid),
       wholesalePrice: idx.wholesale.get(guid), bigWholesalePrice: idx.big.get(guid),
       promoRetailPrice: idx.promoRetail.get(guid), promoWholesalePrice: idx.promoWholesale.get(guid),
       promoBigWholesalePrice: idx.promoBig.get(guid) }, type, now, campaign);
@@ -232,7 +235,7 @@ async function catalogProducts(request: Request, cookieStore: Awaited<ReturnType
   // «Новинка» / «Снова в наличии» on the cards (lib/arrivals.ts): what came in 10 days and this customer can buy
   const arrLabels = await arrivalLabels(wholesale);
   const applyPrices = (product: any) => {
-    const flat = withArrivalLabel(withFlatPrices(product, campaign), arrLabels);
+    const flat = withArrivalLabel(withFlatPrices(product, campaign, priceType === "franchise" || !!staff), arrLabels);
     if (!isAuthenticated) return maskGuestPrices(flat);
     return wholesale ? { ...flat, stock: customerStock(flat.stock, priceType, product.wholesaleStock) } : flat;
   };

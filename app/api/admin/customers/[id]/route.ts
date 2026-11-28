@@ -11,7 +11,7 @@ import { CUSTOMER_GROUPS, odataReady } from "@/lib/onecCustomers";
 import { assignCounterparty } from "@/scripts/onec-counterparty.js";
 import { kickOrderTo1C } from "@/lib/onecOrders";
 
-const PRICE_TYPES = ["retail", "discount", "wholesale", "big_wholesale"];
+const PRICE_TYPES = ["retail", "discount", "wholesale", "big_wholesale", "franchise"];
 const TEXT_FIELDS = ["name", "companyName", "phone", "email", "inn", "city", "address"] as const;
 
 /**
@@ -69,10 +69,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
   const group = body.manager !== undefined ? String(body.manager ?? "").trim() || null : current.manager;
   const ref = body.oneCId !== undefined ? String(body.oneCId ?? "").trim() || null : current.oneCId;
-  if (isWholesaleRole(priceType) && group && current.oneCId && !ref) {
+  if ((isWholesaleRole(priceType) || priceType === "franchise") && group && current.oneCId && !ref) {
     return NextResponse.json({ error: "Нельзя убрать код 1С, оставив назначенного менеджера. Для отвязки очистите оба поля." }, { status: 409 });
   }
-  const needsLink = isWholesaleRole(priceType) && group && (!ref || group !== current.manager || ref !== current.oneCId || priceType !== current.priceType);
+  const needsLink = (isWholesaleRole(priceType) || priceType === "franchise") && group && (!ref || group !== current.manager || ref !== current.oneCId || priceType !== current.priceType);
   if (needsLink) {
     if (!CUSTOMER_GROUPS.includes(group)) return NextResponse.json({ error: "Выберите менеджера из групп 1С" }, { status: 400 });
     if (!odataReady()) return NextResponse.json({ error: "Нет связи с 1С. Назначение менеджера не сохранено." }, { status: 503 });

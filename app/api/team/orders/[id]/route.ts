@@ -1,3 +1,4 @@
+import { pendingFranchiseOrder } from "@/lib/franchise";
 import { orderTier } from "@/lib/orderTier";
 import { orderService } from "@/lib/orderService";
 import { bonusCancellation } from "@/lib/orderRefusal";
@@ -145,6 +146,8 @@ export async function GET(
       canHoldForContact: canHoldForContact(order),
       contactResumeStatus: order.status === "no_contact" ? contactResumeStatus(order.statusLogs) : null,
       total: order.total,
+    priceType: order.priceType,
+    hasPendingPrices: pendingFranchiseOrder(order),
       promoCode: order.promoCode ?? null,
       discount: order.discount,
       bonusesApplied: order.bonusesApplied,

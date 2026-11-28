@@ -29,6 +29,7 @@ export function bigWholesaleMinOrder(now = Date.now(), campaign: Campaign = LEGA
 
 /** The matching 1C promotional price; a missing / zero price keeps the regular tariff. */
 export function promotionalPrice(product: any, type: PriceType, now = Date.now(), campaign: Campaign = LEGACY_CAMPAIGN): number | null {
+  if (type === "franchise") return null;
   if (!pricingCampaignActive(now, campaign) || !campaign.usePromoPrices) return null;
   const field = type === "big_wholesale" ? "promoBigWholesalePrice"
     : type === "wholesale" ? "promoWholesalePrice" : "promoRetailPrice";
@@ -36,13 +37,14 @@ export function promotionalPrice(product: any, type: PriceType, now = Date.now()
   return Number.isFinite(price) && price > 0 ? Math.round(price) : null;
 }
 
-export type PriceType = "guest" | "retail" | "discount" | "wholesale" | "big_wholesale";
+export type PriceType = "guest" | "retail" | "discount" | "wholesale" | "big_wholesale" | "franchise";
 
 /** Базовый тариф клиента (без учёта корзины). */
 export function resolveCustomerPriceType(
   customer: { priceType?: string | null } | null
 ): PriceType {
   if (!customer) return "guest";
+  if (customer.priceType === "franchise") return "franchise";
   if (customer.priceType === "big_wholesale") return "big_wholesale";
   if (customer.priceType === "wholesale") return "wholesale";
   if (customer.priceType === "retail") return "retail";
@@ -52,6 +54,7 @@ export function resolveCustomerPriceType(
 /** Человекочитаемый ярлык тарифа. */
 export function priceTypeLabel(type: PriceType): string {
   switch (type) {
+    case "franchise":     return "Франшиза";
     case "big_wholesale": return "Крупный опт";
     case "wholesale":     return "Опт";
     case "retail":        return "Розница";
@@ -66,6 +69,11 @@ export function priceTypeLabel(type: PriceType): string {
  *   крупный опт → опт → розница, опт → розница, скидка / гость → розница.
  */
 export function priceFor(product: any, type: PriceType, now = Date.now(), campaign: Campaign = LEGACY_CAMPAIGN): number {
+  // Missing franchise prices are pending in 1C, never a different tariff or a free item.
+  if (type === "franchise") {
+    const value = Number((product.regularPrices ?? product).franchisePrice);
+    return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
+  }
   const special = promotionalPrice(product, type, now, campaign);
   if (special !== null) return special;
   // API snapshots retain the ordinary prices so a persisted cart also expires correctly.
@@ -150,7 +158,8 @@ export function nextPriceTier(
 /** Checkout minimums are independent of the thresholds for wholesale price tiers. */
 export const WHOLESALE_CHECKOUT_MIN_ORDER = 1000;
 export const RETAIL_MIN_ORDER = 1000;
-export function minOrderFor(customer: { priceType?: string | null } | null, items: { quantity?: number | string; cardRegistration?: unknown }[] = []): number {
+export function minOrderFor(customer: { priceType?: string | null } | null, items: { quantity?: number | string; cardRegistration?: unknown }[] = [], pendingPrices = false): number {
+  if (customer?.priceType === "franchise") return pendingPrices ? 0 : WHOLESALE_CHECKOUT_MIN_ORDER;
   if (["wholesale", "big_wholesale"].includes(customer?.priceType ?? "")) return WHOLESALE_CHECKOUT_MIN_ORDER;
   if (!["retail", "discount"].includes(customer?.priceType ?? "")) return 0;
   // Retail customers can buy just one loyalty card at 990 ₽.
@@ -163,7 +172,7 @@ export function amountUntilMinOrder(
   cart: any[],
   customer: { priceType?: string | null } | null
 ): number {
-  return Math.max(0, minOrderFor(customer, cart) - calculateCart(cart, customer).total);
+  return Math.max(0, minOrderFor(customer, cart, hasPendingFranchisePrices(cart, customer)) - calculateCart(cart, customer).total);
 }
 
 export type CartPricing = {
@@ -208,10 +217,10 @@ export function cleanPromoSnapshot(raw: Record<string, unknown>): Record<string,
       if (n === null || (typeof n === "number" && Number.isFinite(n))) to[k] = n;
     }
   };
-  copy(raw, out, ["promoRetailPrice", "promoWholesalePrice", "promoBigWholesalePrice"]);
+  copy(raw, out, ["franchisePrice", "promoRetailPrice", "promoWholesalePrice", "promoBigWholesalePrice"]);
   if (raw.regularPrices && typeof raw.regularPrices === "object" && !Array.isArray(raw.regularPrices)) {
     const regular: Record<string, unknown> = {};
-    copy(raw.regularPrices as Record<string, unknown>, regular, ["retailPrice", "discountPrice", "wholesalePrice", "bigWholesalePrice"]);
+    copy(raw.regularPrices as Record<string, unknown>, regular, ["retailPrice", "discountPrice", "wholesalePrice", "bigWholesalePrice", "franchisePrice"]);
     if (Object.keys(regular).length > 0) out.regularPrices = regular;
   }
   return out;
@@ -220,4 +229,9 @@ export function cleanPromoSnapshot(raw: Record<string, unknown>): Record<string,
 
 export function wholesaleMinOrder(now = Date.now(), campaign: Campaign = LEGACY_CAMPAIGN): number {
   return campaignActive(campaign, now) ? campaign.wholesaleMin : WHOLESALE_MIN_ORDER;
+}
+
+/** Unknown franchise prices are completed by the manager in 1C; the known subtotal is provisional. */
+export function hasPendingFranchisePrices(items: { franchisePrice?: number | null; regularPrices?: { franchisePrice?: number | null } }[], customer: { priceType?: string | null } | null): boolean {
+  return customer?.priceType === "franchise" && items.some(p => priceFor(p, "franchise") <= 0);
 }

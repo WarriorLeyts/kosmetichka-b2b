@@ -1,3 +1,4 @@
+import { pendingFranchiseOrder } from "./franchise";
 import { prisma } from "@/lib/prisma";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_LABELS_CUSTOMER } from "@/lib/orderStatus";
 import { SHOP_ADDRESS } from "@/lib/delivery";
@@ -11,7 +12,7 @@ export type InvoiceData = {
   buyer: { name: string; lines: string[]; manager: string | null };
   /** «Способ получения»: what the customer chose in the cart */
   delivery: { title: string; text: string | null } | null;
-  items: { name: string; variant: string | null; code: string | null; quantity: number; price: number; total: number }[];
+  items: { name: string; variant: string | null; code: string | null; quantity: number; price: number; total: number; pendingPrice?: boolean }[];
   totals: { label: string; value: string; strong?: boolean }[];
   comment: string | null;
 };
@@ -48,6 +49,7 @@ export async function loadInvoice(id: number, audience: "staff" | "customer"): P
     include: { customer: true, items: { orderBy: { id: "asc" } } },
   });
   if (!order) return null;
+  const pending = pendingFranchiseOrder(order);
   const c = order.customer;
   const labels = audience === "customer" ? ORDER_STATUS_LABELS_CUSTOMER : ORDER_STATUS_LABELS;
 
@@ -56,7 +58,8 @@ export async function loadInvoice(id: number, audience: "staff" | "customer"): P
     totals.push({ label: "Сумма без скидки:", value: rub(order.total + order.discount + order.bonusesApplied) });
   if (order.discount > 0) totals.push({ label: order.promoCode ? `Скидки (включая промокод ${order.promoCode}):` : "Скидка на заказ:", value: `−${rub(order.discount)}` });
   if (order.bonusesApplied > 0) totals.push({ label: "Списано бонусов:", value: `−${rub(order.bonusesApplied)}` });
-  totals.push({ label: "ИТОГО:", value: rub(order.total), strong: true });
+  totals.push({ label: pending ? "ПРЕДВАРИТЕЛЬНО:" : "ИТОГО:", value: pending && order.total <= 0 ? "Уточняется" : rub(order.total), strong: true });
+  if (pending) totals.push({ label: "Есть товары без цены:", value: "Цены устанавливаются в 1С" });
   if (order.bonusesCollected > 0) totals.push({ label: "Начислится бонусов:", value: order.bonusesCollected.toLocaleString("ru-RU") });
 
   return {
@@ -77,6 +80,7 @@ export async function loadInvoice(id: number, audience: "staff" | "customer"): P
       code: it.barcode || null,
       quantity: it.quantity,
       price: it.price,
+      pendingPrice: pending && it.price <= 0,
       total: it.total,
     })),
     totals,

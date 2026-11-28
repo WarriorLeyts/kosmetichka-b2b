@@ -142,7 +142,8 @@ export async function GET(request: NextRequest) {
     console.log(`[exchange] sale query: fetching orders with payment/approved status`);
 
     const PRICE_TYPE_LABELS: Record<string, string> = {
-      wholesale: "Опт",
+      franchise: "Франшиза",
+    wholesale: "Опт",
       big_wholesale: "Крупный опт",
       retail: "Розница",
       discount: "Скидка",

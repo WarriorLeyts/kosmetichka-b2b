@@ -25,6 +25,7 @@ const AUTO_APPROVE_TYPES = new Set(["retail"]);
 export async function POST(request: Request) {
   const body = await request.json();
   const { name, companyName, phone, email, password, captchaToken, smsCode, priceType: rawPriceType, source, address: rawAddress } = body;
+  if (rawPriceType === "franchise") return NextResponse.json({ error: "Цены «Франшиза» включает только администратор" }, { status: 403 });
   // «Как вы узнали о нас?» / «Вы уже заказывали у нас?» — asked in the form itself (optional; same rules as /api/mobile/profile/survey)
   const referralSource = typeof body?.referralSource === "string" ? body.referralSource.replace(/\s+/g, " ").trim().slice(0, 120) : "";
   const orderedBefore = typeof body?.orderedBefore === "boolean" ? body.orderedBefore : null;

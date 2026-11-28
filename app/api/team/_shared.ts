@@ -36,6 +36,7 @@ export const ROLE_LABELS: Record<string, string> = {
 };
 
 export const PRICE_TYPE_LABELS: Record<string, string> = {
+  franchise: "Франшиза",
   retail: "Розница",
   discount: "Скидка по карте",
   wholesale: "Опт",
