@@ -61,3 +61,28 @@ it("filters saved products using database IDs even when a snapshot has a fake br
   expect(old).toHaveLength(2); // GET never rewrites a customer's saved lists.
   expect(db.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: { in: [42, 43] }, NOT: expect.any(Object) }) }));
 });
+
+it("shares one policy read across a request burst and retries after a failed read", async () => {
+  let finish!: (rows: { key: string }[]) => void;
+  db.cmsSetting.findMany.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const burst = Array.from({ length: 20 }, () => hiddenBrandIds());
+  expect(db.cmsSetting.findMany).toHaveBeenCalledTimes(1);
+  finish([{ key: HIDDEN_BRAND_PREFIX + "angiopharm" }]);
+  expect(await Promise.all(burst)).toEqual(Array.from({ length: 20 }, () => ["angiopharm"]));
+  invalidateBrandVisibility();
+  db.cmsSetting.findMany.mockRejectedValueOnce(new Error("offline"));
+  await expect(hiddenBrandIds()).rejects.toThrow("offline");
+  db.cmsSetting.findMany.mockResolvedValue([]);
+  expect(await hiddenBrandIds()).toEqual([]);
+});
+it("never caches an old read that finishes after the admin changes the policy", async () => {
+  let finish!: (rows: { key: string }[]) => void;
+  db.cmsSetting.findMany.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const pending = hiddenBrandIds();
+  invalidateBrandVisibility();
+  db.cmsSetting.findMany.mockResolvedValue([{ key: HIDDEN_BRAND_PREFIX + "angiopharm" }]);
+  finish([]);
+  expect(await pending).toEqual(["angiopharm"]);
+  expect(await hiddenBrandIds()).toEqual(["angiopharm"]);
+  expect(db.cmsSetting.findMany).toHaveBeenCalledTimes(2);
+});

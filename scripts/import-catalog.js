@@ -1,3 +1,4 @@
+import { databasePoolUrl } from "./database-pool.js";
 import { refreshWholesaleStock } from "./wholesale-stock-policy.js";
 import { PrismaClient } from "@prisma/client";
 import { XMLParser } from "fast-xml-parser";
@@ -7,7 +8,7 @@ import { hideMissing, isDeletedIn1C } from "./onec-helpers.js";
 // 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
 const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ datasourceUrl: databasePoolUrl(process.env.DATABASE_URL, "import") });
 
 const BRAND_PROPERTY_ID = "bd42a1bd-7e0a-11ee-adf4-a8a15932577b";
 

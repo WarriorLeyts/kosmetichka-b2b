@@ -1,3 +1,4 @@
+import { databasePoolUrl } from "./database-pool.js";
 // All barcodes of products from 1С over OData → «ProductBarcode».
 //   node scripts/import-barcodes.js          after an exchange: only the products of import.xml / offers.xml that
 //                                              changed since the last run (a full package → everything)
@@ -8,7 +9,7 @@ import { PrismaClient } from "@prisma/client";
 import { odataConfigured } from "./onec-odata.js";
 import { diffBarcodes, fetchAllBarcodes, fetchBarcodesOf, isFullPackage, productGuidsInXml, unitNames } from "./onec-barcodes.js";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ datasourceUrl: databasePoolUrl(process.env.DATABASE_URL, "import") });
 const APP_ROOT = process.env.APP_ROOT || process.cwd();
 const DATA_1C = nodePath.join(process.env.DATA_DIR || nodePath.join(APP_ROOT, "data"), "1c");
 const STATE = nodePath.join(DATA_1C, ".barcodes-state.json");

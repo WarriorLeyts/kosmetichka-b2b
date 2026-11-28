@@ -1,3 +1,4 @@
+import { databasePoolUrl } from "./database-pool.js";
 // «Новые поступления» from 1С → «ProductArrival» (the longer of the two periods + 2 days, rebuilt every run): after each exchange
 // (scripts/sync-all.js) and every 30 minutes (lib/arrivalsSync.ts). Unposted / deleted documents disappear.
 import { PrismaClient } from "@prisma/client";
@@ -5,7 +6,7 @@ import { odataConfigured } from "./onec-odata.js";
 import { fetchArrivals } from "./onec-arrivals.js";
 import { moscowLocal } from "./onec-orders.js";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ datasourceUrl: databasePoolUrl(process.env.DATABASE_URL, "import") });
 /** the periods of «Новинка» / «Снова в наличии» set in the admin panel (CmsSetting «arrivals», lib/arrivalSettings.ts) */
 async function periods() {
   const row = await prisma.cmsSetting.findUnique({ where: { key: "arrivals" } }).catch(() => null);
