@@ -1,3 +1,4 @@
+import { maskFranchiseSnapshot } from "@/lib/franchise";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../_auth";
@@ -31,17 +32,19 @@ function cleanLine(raw: unknown): Record<string, unknown> | null {
 export async function GET() {
   const id = await currentCustomerId();
   if (!id) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
+  const allowed = (await prisma.customer.findUnique({ where: { id }, select: { priceType: true } }))?.priceType === "franchise";
   const c = await prisma.customerCart.findUnique({ where: { customerId: id } });
-  return NextResponse.json({ items: c?.items ?? [], comment: c?.comment ?? "", updatedAt: c?.updatedAt.toISOString() ?? null });
+  return NextResponse.json({ items: Array.isArray(c?.items) ? c.items.map(i => maskFranchiseSnapshot(i as Record<string, unknown>, allowed)) : [], comment: c?.comment ?? "", updatedAt: c?.updatedAt.toISOString() ?? null });
 }
 
 /** PUT /api/mobile/cart { items, comment } — saves the cart (the whole of it) for all the customer's devices. */
 export async function PUT(request: Request) {
   const id = await currentCustomerId();
   if (!id) return NextResponse.json({ error: "Нужно войти" }, { status: 401 });
+  const allowed = (await prisma.customer.findUnique({ where: { id }, select: { priceType: true } }))?.priceType === "franchise";
   const body = await request.json().catch(() => null);
   if (!body || !Array.isArray(body.items)) return NextResponse.json({ error: "Нужен список товаров" }, { status: 400 });
-  const items = (body.items as unknown[]).map(cleanLine).filter((x): x is Record<string, unknown> => !!x).slice(0, MAX_LINES);
+  const items = (body.items as unknown[]).map(cleanLine).map(i => i ? maskFranchiseSnapshot(i, allowed) : null).filter((x): x is Record<string, unknown> => !!x).slice(0, MAX_LINES);
   const comment = typeof body.comment === "string" ? body.comment.slice(0, 2000) : "";
   if (JSON.stringify(items).length > MAX_BYTES) return NextResponse.json({ error: "Корзина слишком большая" }, { status: 413 });
   const c = await prisma.customerCart.upsert({

@@ -9,6 +9,7 @@
  */
 
 export const ROLE_LABELS: Record<string, string> = {
+  franchise: "Франшиза",
   retail: "Розница",
   discount: "Скидка по карте",
   wholesale: "Опт",
@@ -56,6 +57,7 @@ export function maxAccess(a: string | null | undefined, b: string | null | undef
 /** What happens when the customer picks `target`. */
 export function switchDecision(c: RoleState, target: SwitchTarget): "same" | "switch" | "request" | "forbidden" {
   if (c.priceType === target) return "same";
+  if (c.priceType === "franchise") return "forbidden";
   const access = accessOf(c);
   if (target === "retail") return access ? "switch" : "forbidden";
   if (access && RANK[target] <= RANK[access]) return "switch";
@@ -71,6 +73,7 @@ export type RoleOption = {
 
 /** Options shown to the customer (retail is offered only to customers with wholesale access). */
 export function roleOptions(c: RoleState): RoleOption[] {
+  if (c.priceType === "franchise") return [{ value: "franchise", label: "Франшиза", state: "current" }];
   const out: RoleOption[] = [];
   for (const value of ["retail", "wholesale", "big_wholesale"] as SwitchTarget[]) {
     const d = switchDecision(c, value);

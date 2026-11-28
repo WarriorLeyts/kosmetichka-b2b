@@ -14,6 +14,7 @@ function checkApiKey(request: NextRequest) {
 const PRICE_TYPE_LABELS: Record<string, string> = {
   wholesale: "Опт",
   big_wholesale: "Крупный опт",
+  franchise: "Франшиза",
   retail: "Розница",
   discount: "Скидка",
 };

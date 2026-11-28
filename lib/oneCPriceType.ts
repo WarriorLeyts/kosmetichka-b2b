@@ -4,6 +4,7 @@
  * «Крупный опт» in 1C is ignored, and 1C itself is not changed. (scripts/import-customers.js: same rule.)
  */
 export function registrationPriceType(chosen: string, oneCType: string | null | undefined): string {
+  if (chosen === "franchise") return "retail";
   if (chosen === "big_wholesale") return "wholesale";
   if (oneCType === "wholesale") return "wholesale";
   return chosen;

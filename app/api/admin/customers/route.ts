@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { foreignContactPhone, normalizePhone, registrationEmail, toSmsAeroPhone } from "@/lib/phone";
 
-const PRICE_TYPES = ["retail", "wholesale", "big_wholesale"];
+const PRICE_TYPES = ["retail", "wholesale", "big_wholesale", "franchise"];
 class DuplicateCustomer extends Error {}
 
 /** Admin-created accounts use the existing customer login; no customer session or messages are sent. */
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
         const created = await tx.customer.create({ data: {
           name, phone, email, companyName: companyName || null, address: address || null,
           password: hashedPassword, role: "customer", priceType,
-          wholesaleAccess: priceType === "retail" ? null : priceType,
+          wholesaleAccess: ["wholesale", "big_wholesale"].includes(priceType) ? priceType : null,
           isApproved: body.isApproved ?? true, isActive: true,
           // Manually entered contacts are not SMS ownership verification. Cards and counterparties
           // are explicitly linked later in the customer card, never guessed from this number.

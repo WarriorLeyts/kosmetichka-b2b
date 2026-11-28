@@ -54,7 +54,7 @@ export async function GET(
     ? (await prisma.customer.findUnique({ where: { id: Number(customer.id) }, select: { priceType: true } }))?.priceType ?? null
     : null;
   // «Новинка» / «Снова в наличии» (lib/arrivals.ts) — as on the catalog card
-  const flat = withArrivalLabel(withFlatPrices(product, await getCampaign()), await arrivalLabels(isWholesaleType(priceType)));
+  const flat = withArrivalLabel(withFlatPrices(product, await getCampaign(), priceType === "franchise" || !!staff), await arrivalLabels(isWholesaleType(priceType)));
   if (signedIn) {
     // a wholesale customer sees what he may order: the shop minus its 12 + the warehouse
     return NextResponse.json(isWholesaleType(priceType) ? { ...flat, stock: customerStock(flat.stock, priceType, product.wholesaleStock) } : flat);

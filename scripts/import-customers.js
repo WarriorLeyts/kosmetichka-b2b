@@ -179,9 +179,9 @@ async function main() {
     const oc = [...matches.values()][0];
     // A manager already chosen by staff is never silently replaced by a phone match in another group.
     if (customer.manager && customer.manager !== oc.manager) continue;
-    const upgrade = oc.priceType === "wholesale" && !["wholesale", "big_wholesale"].includes(customer.priceType);
+    const upgrade = oc.priceType === "wholesale" && !["wholesale", "big_wholesale", "franchise"].includes(customer.priceType);
     const result = await prisma.customer.updateMany({
-      where: { id: customer.id, oneCId: null, phone: customer.phone, phoneUnverified: false, manager: customer.manager },
+      where: { id: customer.id, priceType: customer.priceType, oneCId: null, phone: customer.phone, phoneUnverified: false, manager: customer.manager },
       data: { oneCId: oc.oneCId, manager: oc.manager, isApproved: true, ...(upgrade ? { priceType: "wholesale" } : {}) },
     });
     if (result.count) await prisma.order.updateMany({ where: { customerId: customer.id, status: { in: ["payment", "approved"] }, oneCExportedAt: null }, data: { oneCNextTryAt: null } });

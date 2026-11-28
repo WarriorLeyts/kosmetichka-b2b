@@ -1,3 +1,4 @@
+import { pendingFranchiseOrder } from "@/lib/franchise";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { currentCustomerId } from "../../_auth";
@@ -46,6 +47,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     confirmRequestedAt: waitingSince(order)?.toISOString() ?? null,
     status: order.status,
     total: order.total,
+    priceType: order.priceType,
+    hasPendingPrices: pendingFranchiseOrder(order),
     promoCode: order.promoCode ?? null,
     discount: order.discount,
     bonusesApplied: order.bonusesApplied,

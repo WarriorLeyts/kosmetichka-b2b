@@ -115,9 +115,9 @@ async function editItems(request: NextRequest, { params }: Props) {
       if (isCardProduct(p) || p.name === CARD_PRODUCT_NAME) return NextResponse.json({ error: "Для покупки карты используйте кнопку «Добавить карту Косметичка» и укажите данные владельца." }, { status: 400 });
       const pm = Object.fromEntries(p.prices.map((x) => [x.priceType, Number(x.price)]));
       const price = Math.round(
-        priceFor({ retailPrice: pm.retail, discountPrice: pm.discount, wholesalePrice: pm.wholesale, bigWholesalePrice: pm.big_wholesale, promoRetailPrice: pm.promo_retail, promoWholesalePrice: pm.promo_wholesale, promoBigWholesalePrice: pm.promo_big_wholesale }, type, Date.now(), campaign)
+        priceFor({ franchisePrice: pm.franchise ?? pm["франшиза"], retailPrice: pm.retail, discountPrice: pm.discount, wholesalePrice: pm.wholesale, bigWholesalePrice: pm.big_wholesale, promoRetailPrice: pm.promo_retail, promoWholesalePrice: pm.promo_wholesale, promoBigWholesalePrice: pm.promo_big_wholesale }, type, Date.now(), campaign)
       );
-      if (!price) return NextResponse.json({ error: `Цена для товара «${p.name}» не найдена` }, { status: 400 });
+      if (!price && type !== "franchise") return NextResponse.json({ error: `Цена для товара «${p.name}» не найдена` }, { status: 400 });
       ni.price = price;
       // name and barcode from the catalogue (what reaches invoices and 1C), never from the request
       ni.productName = p.name;

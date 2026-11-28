@@ -86,7 +86,7 @@ export async function priceOrder(
   const cartForPricing = items.map((item) => {
     const product = productById.get(Number(item.id));
     return {
-      ...withFlatPrices(product ?? { prices: [] }, campaign),
+      ...withFlatPrices(product ?? { prices: [] }, campaign, customer.priceType === "franchise"),
       ...(product && isCardProduct(product) ? { retailPrice: CARD_PRICE, discountPrice: CARD_PRICE, wholesalePrice: CARD_PRICE, bigWholesalePrice: CARD_PRICE, regularPrices: { retailPrice: CARD_PRICE, discountPrice: CARD_PRICE, wholesalePrice: CARD_PRICE, bigWholesalePrice: CARD_PRICE }, promoRetailPrice: null, promoWholesalePrice: null, promoBigWholesalePrice: null } : {}),
       quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
     };
@@ -111,7 +111,7 @@ export async function priceOrder(
 
     // as in priceFor(): a missing / zero price falls back — big wholesale → wholesale → retail
     const price = isCardProduct(product) ? CARD_PRICE : priceFor(cartForPricing[index], appliedPriceType, now, campaign);
-    if (price <= 0) {
+    if (price <= 0 && appliedPriceType !== "franchise") {
       throw new Error(`Цена для товара «${product.name}» не найдена. Обратитесь к менеджеру.`);
     }
     const quantity = Math.floor(Number(item.quantity));

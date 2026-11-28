@@ -96,8 +96,8 @@ export function invoicePdf(inv: InvoiceData): Promise<Buffer> {
     if (it.code) doc.font("r").fontSize(8).fillColor(FAINT).text(it.code, x.name, doc.y + 1, { width: nameW });
     const mid = y + (rowH - 12) / 2;
     doc.font("r").fontSize(10).fillColor(TEXT).text(String(it.quantity), x.qty, mid, { width: cols.qty, align: "center" });
-    doc.text(num(it.price), x.price, mid, { width: cols.price, align: "right" });
-    doc.font("b").fillColor(INK).text(num(it.total), x.sum, mid, { width: cols.sum, align: "right" });
+    doc.text(it.pendingPrice ? "Не установлена" : num(it.price), x.price, mid, { width: cols.price, align: "right" });
+    doc.font("b").fillColor(INK).text(it.pendingPrice ? "Уточняется" : num(it.total), x.sum, mid, { width: cols.sum, align: "right" });
     doc.y = y + rowH + 8;
     doc.moveTo(L, doc.y - 4).lineTo(L + W, doc.y - 4).lineWidth(0.6).strokeColor("#f1f5f9").stroke();
   });

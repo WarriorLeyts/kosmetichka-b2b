@@ -33,6 +33,7 @@ export type FlatProduct = {
   discountPrice?: number | null;
   wholesalePrice?: number | null;
   bigWholesalePrice?: number | null;
+  franchisePrice?: number | null;
   promoRetailPrice?: number | null;
   promoWholesalePrice?: number | null;
   promoBigWholesalePrice?: number | null;
@@ -41,6 +42,7 @@ export type FlatProduct = {
     discountPrice?: number | null;
     wholesalePrice?: number | null;
     bigWholesalePrice?: number | null;
+  franchisePrice?: number | null;
   };
 
   images?: ProductImage[];

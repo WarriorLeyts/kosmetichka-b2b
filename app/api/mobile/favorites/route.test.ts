@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const who = vi.hoisted(() => ({ id: 7 as number | null }));
 vi.mock("../_auth", () => ({ currentCustomerId: vi.fn(async () => who.id) }));
 const db = vi.hoisted(() => ({
+  customer: { findUnique: vi.fn(async () => ({ priceType: "retail" })) },
   customerFavorites: {
     findUnique: vi.fn(),
     upsert: vi.fn(async (_a: { create: { items: unknown[] } }) => ({ updatedAt: new Date("2026-11-05T12:00:00Z") })),
@@ -19,6 +20,7 @@ const saved = () => (db.customerFavorites.upsert.mock.calls[0] as [{ create: { i
 beforeEach(() => {
   vi.clearAllMocks();
   who.id = 7;
+  db.customer.findUnique.mockResolvedValue({ priceType: "retail" });
 });
 
 describe("favorites", () => {
@@ -42,4 +44,15 @@ describe("favorites", () => {
   it("needs a list", async () => {
     expect((await put({ items: "x" })).status).toBe(400);
   });
+});
+
+it("removes franchise snapshots from ordinary customer saves", async () => {
+  await put({ items: [{ id: 5, cartKey: "5", quantity: 2, franchisePrice: 15, regularPrices: { franchisePrice: 15, retailPrice: 100 } }] });
+  expect(saved()[0]).not.toHaveProperty("franchisePrice");
+  expect(saved()[0].regularPrices).toEqual({ retailPrice: 100 });
+});
+it("keeps franchise snapshots only for a currently authorized franchise customer", async () => {
+  db.customer.findUnique.mockResolvedValue({ priceType: "franchise" });
+  await put({ items: [{ id: 5, cartKey: "5", quantity: 2, franchisePrice: 15, regularPrices: { franchisePrice: 15 } }] });
+  expect(saved()[0].franchisePrice).toBe(15);
 });

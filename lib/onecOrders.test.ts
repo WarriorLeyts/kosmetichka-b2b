@@ -59,3 +59,9 @@ describe("site orders → «Заказ покупателя» in 1С over OData"
     }
   });
 });
+
+it("keeps an unpriced franchise line in the 1C document for manager pricing", () => {
+  const body = buildOrderBody({ id: 999, createdAt: new Date(), customer: { priceType: "franchise" }, items: [{ guid: "p", quantity: 3, price: 0, total: 0 }] }, { template: { Организация_Key: "org", Запасы: [{}] }, counterpartyRef: "cp", contractRef: "ct", units: new Map() });
+  expect(body.Запасы).toHaveLength(1);
+  expect(body.Запасы[0]).toMatchObject({ Номенклатура: "p", Количество: 3, Цена: 0, Сумма: 0 });
+});
