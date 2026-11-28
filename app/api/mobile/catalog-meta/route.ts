@@ -40,7 +40,7 @@ export async function GET(request: Request) {
   return NextResponse.json(body, {
     headers: {
       "Cache-Control": staff ? "private, no-store" : "public, max-age=300, stale-while-revalidate=86400",
-      "Vary": "Cookie",
+      "Vary": "Cookie, X-Kosmetichka-Client",
     },
   });
 }
