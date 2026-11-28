@@ -1,3 +1,4 @@
+import { brandProductExcluded, visibleBrandsWhere } from "@/lib/brandVisibility";
 import { getCampaign } from "@/lib/campaignSettings";
 import { cache } from "react";
 import { notFound, permanentRedirect } from "next/navigation";
@@ -19,7 +20,7 @@ type Props = {
  * one DB round-trip instead of two.
  */
 const getProduct = cache(async (id: number) => {
-  return prisma.product.findUnique({
+  const product = await prisma.product.findUnique({
     where: { id },
     include: {
       category: true,
@@ -32,6 +33,7 @@ const getProduct = cache(async (id: number) => {
       },
     },
   });
+  return product && !(await brandProductExcluded(product)) ? product : null;
 });
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -97,7 +99,7 @@ export default async function ProductPage({ params }: Props) {
 
   const relatedProducts = product.brandGuid
     ? await prisma.product.findMany({
-        where: { brandGuid: product.brandGuid, id: { not: product.id }, hidden: false },
+        where: { brandGuid: product.brandGuid, id: { not: product.id }, hidden: false, AND: [await visibleBrandsWhere()] },
         take: 8,
         include: { category: true, brand: true, images: true, prices: true },
         orderBy: { name: "asc" },

@@ -1,3 +1,4 @@
+vi.mock("@/lib/brandVisibility", () => ({ visibleBrandsWhere: async () => ({}) }));
 import { beforeEach, expect, it, vi } from "vitest";
 const s = vi.hoisted(() => ({ id: 7 as number | null, type: "wholesale", rows: [] as any[] }));
 const db = vi.hoisted(() => ({ customer: { findUnique: vi.fn() }, wishlistItem: { findMany: vi.fn() } }));
@@ -11,7 +12,7 @@ it("uses a private 24-hour window scoped to the customer and does not disclose s
   expect(body.items).toHaveLength(1); expect(body.items[0]).toMatchObject({ id: 42, quantity: 15 });
   expect(body.items[0]).not.toHaveProperty("stock"); expect(body.items[0]).not.toHaveProperty("wholesaleStock");
   expect(Date.parse(body.items[0].expiresAt) - Date.parse(body.items[0].notifiedAt)).toBe(86400000);
-  expect(db.wishlistItem.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ customerId: 7, notified: true, product: { hidden: false }, notifiedAt: { gt: expect.any(Date) } }) }));
+  expect(db.wishlistItem.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ customerId: 7, notified: true, product: { hidden: false, AND: [{}] }, notifiedAt: { gt: expect.any(Date) } }) }));
   expect(response.headers.get("cache-control")).toContain("no-store");
 });
 it("requires login before reading customer data", async () => { s.id = null; expect((await GET()).status).toBe(401); expect(db.wishlistItem.findMany).not.toHaveBeenCalled(); });

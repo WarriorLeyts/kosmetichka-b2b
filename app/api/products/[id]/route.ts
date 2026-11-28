@@ -1,3 +1,4 @@
+import { brandProductExcluded } from "@/lib/brandVisibility";
 import { getCampaign } from "@/lib/campaignSettings";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -47,7 +48,7 @@ export async function GET(
   const staff = staffToken ? await verifyToken(staffToken) : null;
   const signedIn = Boolean(customer?.id) || ["admin", "manager", "picker"].includes(String(staff?.role ?? ""));
   // скрытый в админ-панели товар — только сотрудникам
-  if (product.hidden && !staff) {
+  if (!staff && (product.hidden || await brandProductExcluded(product))) {
     return NextResponse.json({ error: "Товар не найден — возможно, его убрали из каталога" }, { status: 404 });
   }
   const priceType = customer?.id

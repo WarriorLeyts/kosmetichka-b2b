@@ -1,3 +1,4 @@
+vi.mock("@/lib/brandVisibility", () => ({ visibleBrandsWhere: async () => ({}) }));
 import { LEGACY_CAMPAIGN } from "@/lib/campaign";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

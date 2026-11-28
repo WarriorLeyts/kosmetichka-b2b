@@ -1,3 +1,4 @@
+vi.mock("@/lib/brandVisibility", () => ({ visibleBrandsWhere: async () => ({}) }));
 import { afterEach, expect, it, vi } from "vitest";
 const db=vi.hoisted(()=>({cmsSetting:{findUnique:vi.fn()},product:{findMany:vi.fn()}}));
 vi.mock("./prisma",()=>({prisma:db}));

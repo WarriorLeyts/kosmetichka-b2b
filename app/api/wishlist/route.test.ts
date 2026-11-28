@@ -1,3 +1,4 @@
+vi.mock("@/lib/brandVisibility", () => ({ visibleBrandsWhere: async () => ({}) }));
 import { beforeEach, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ id: 7 as number | null }));
 const db = vi.hoisted(() => ({ product: { findFirst: vi.fn() }, customer: { findUnique: vi.fn() }, wishlistItem: { findUnique: vi.fn(), upsert: vi.fn() } }));

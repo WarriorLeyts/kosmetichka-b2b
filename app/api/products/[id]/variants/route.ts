@@ -1,3 +1,4 @@
+import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -14,7 +15,7 @@ export async function GET(
   const { id } = await params;
 
   const variants = await prisma.productVariant.findMany({
-    where: { productId: Number(id), available: true, product: { assortmentEnabled: true, hidden: false } },
+    where: { productId: Number(id), available: true, product: { assortmentEnabled: true, hidden: false, AND: [await visibleBrandsWhere()] } },
     include: { image: { select: { id: true, path: true } } },
     orderBy: { sortOrder: "asc" },
   });

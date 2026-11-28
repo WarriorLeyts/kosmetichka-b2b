@@ -1,3 +1,4 @@
+import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { AssortmentSelectionError } from "./assortmentSelection";
 import type { Campaign } from "./campaign";
 import { getCampaign } from "./campaignSettings";
@@ -67,7 +68,7 @@ export async function priceOrder(
   const productIds: number[] = items.map((item) => Number(item.id));
 
   const products = await prisma.product.findMany({
-    where: { id: { in: productIds } },
+    where: { id: { in: productIds }, AND: [await visibleBrandsWhere()] },
     include: { prices: true, variants: { include: { image: true } } },
   });
 

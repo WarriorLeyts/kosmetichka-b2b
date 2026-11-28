@@ -1,3 +1,4 @@
+import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -17,6 +18,8 @@ const inStock = (wholesale: boolean) => (wholesale ? { wholesaleStock: { gt: 0 }
 const retail = (p: P) => p.prices.find((x) => x.priceType === "retail")?.price ?? p.prices[0]?.price ?? 0;
 
 export async function relatedIds(productId: number, kind: RelatedKind, wholesale: boolean): Promise<number[]> {
+  const visibility = await visibleBrandsWhere();
+  const stockWhere = { ...inStock(wholesale), AND: [visibility] };
   const self = await prisma.product.findUnique({ where: { id: productId }, select: { id: true, brandGuid: true, categoryGuid: true, relatedIds: true, prices: { select: { priceType: true, price: true } } } });
   if (!self) return [];
   const out: number[] = [];
@@ -28,7 +31,7 @@ export async function relatedIds(productId: number, kind: RelatedKind, wholesale
     // «Сопутствующие товары», выбранные в админ-панели, — первыми (в наличии и не скрытые)
     const manual = self.relatedIds ?? [];
     if (manual.length) {
-      const ok = new Set((await prisma.product.findMany({ where: { id: { in: manual }, ...inStock(wholesale) }, select: { id: true } })).map((p) => p.id));
+      const ok = new Set((await prisma.product.findMany({ where: { id: { in: manual }, ...stockWhere }, select: { id: true } })).map((p) => p.id));
       add(manual.filter((id) => ok.has(id)));
     }
     const rows = await prisma.$queryRaw<{ productId: number; n: number }[]>`
@@ -38,12 +41,12 @@ export async function relatedIds(productId: number, kind: RelatedKind, wholesale
       WHERE a."productId" = ${productId}
       GROUP BY b."productId" ORDER BY n DESC LIMIT 60`;
     if (rows.length) {
-      const ok = new Set((await prisma.product.findMany({ where: { id: { in: rows.map((r) => r.productId) }, ...inStock(wholesale) }, select: { id: true } })).map((p) => p.id));
+      const ok = new Set((await prisma.product.findMany({ where: { id: { in: rows.map((r) => r.productId) }, ...stockWhere }, select: { id: true } })).map((p) => p.id));
       add(rows.map((r) => r.productId).filter((id) => ok.has(id)));
     }
     if (out.length < RELATED_LIMIT && self.brandGuid) {
       const more = await prisma.product.findMany({
-        where: { brandGuid: self.brandGuid, id: { notIn: [productId, ...out] }, ...(self.categoryGuid ? { NOT: { categoryGuid: self.categoryGuid } } : {}), ...inStock(wholesale) },
+        where: { brandGuid: self.brandGuid, id: { notIn: [productId, ...out] }, ...(self.categoryGuid ? { NOT: { categoryGuid: self.categoryGuid } } : {}), ...stockWhere },
         orderBy: [{ salesCount: "desc" }, { updatedAt: "desc" }],
         take: RELATED_LIMIT,
         select: { id: true },
@@ -55,7 +58,7 @@ export async function relatedIds(productId: number, kind: RelatedKind, wholesale
 
   if (!self.categoryGuid) return [];
   const cands = await prisma.product.findMany({
-    where: { categoryGuid: self.categoryGuid, id: { not: productId }, ...inStock(wholesale) },
+    where: { categoryGuid: self.categoryGuid, id: { not: productId }, ...stockWhere },
     orderBy: [{ salesCount: "desc" }],
     take: 300,
     select: { id: true, brandGuid: true, categoryGuid: true, prices: { select: { priceType: true, price: true } } },

@@ -1,3 +1,4 @@
+import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveImageUrl } from "@/lib/image";
@@ -14,7 +15,7 @@ export async function GET() {
   if (!body) {
     const [categories, brands, s] = await Promise.all([
       prisma.category.findMany({ orderBy: { sortOrder: "asc" } }),
-      prisma.brand.findMany({ orderBy: { name: "asc" } }),
+      prisma.brand.findMany({ where: { products: { some: { hidden: false, AND: [await visibleBrandsWhere()] } } }, orderBy: { name: "asc" } }),
       getCatalogSettings(),
     ]);
     const hidden = new Set(s.categories.hidden);
