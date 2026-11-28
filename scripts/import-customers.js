@@ -1,3 +1,4 @@
+import { databasePoolUrl } from "./database-pool.js";
 import { PrismaClient } from "@prisma/client";
 import { XMLParser } from "fast-xml-parser";
 import fs from "fs";
@@ -8,7 +9,7 @@ import { counterpartyPhones, counterpartyPhoneIndex } from "./onec-phones.js";
 // 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
 const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ datasourceUrl: databasePoolUrl(process.env.DATABASE_URL, "import") });
 
 const parser = new XMLParser({
   ignoreAttributes: false,

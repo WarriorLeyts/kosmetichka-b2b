@@ -1,3 +1,4 @@
+import { databasePoolUrl } from "./database-pool.js";
 import { brandVisibilityWhere, readHiddenBrands } from "./catalog-visibility.js";
 import { originalPerfumeCategories, shopReserve } from "./wholesale-stock-policy.js";
 import { becameOrderable, availableForSubscriber } from "./restock-availability.js";
@@ -12,7 +13,7 @@ import { hideMissing, offerTotalStock, offerWarehouseStock, toKopecks, warehouse
 // 1C files: DATA_DIR in production (outside the build), otherwise <cwd>/data/1c
 const DATA_1C = process.env.DATA_DIR ? nodePath.join(process.env.DATA_DIR, "1c") : nodePath.join(process.cwd(), "data", "1c");
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ datasourceUrl: databasePoolUrl(process.env.DATABASE_URL, "import") });
 
 const parser = new XMLParser({
   ignoreAttributes: false,

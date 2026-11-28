@@ -1,3 +1,4 @@
+import { databasePoolUrl } from "./database-pool.js";
 import { PrismaClient } from "@prisma/client";
 import { XMLParser } from "fast-xml-parser";
 import fs from "fs";
@@ -23,7 +24,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // data/1c is resolved from cwd, like in the other import-*.js scripts
 // (in production the 1C files live in .next/standalone/data/1c).
 const ROOT = process.cwd();
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ datasourceUrl: databasePoolUrl(process.env.DATABASE_URL, "import") });
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
 const xml = fs.readFileSync(path.join(DATA_1C, "import.xml"), "utf8");

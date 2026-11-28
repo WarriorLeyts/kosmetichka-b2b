@@ -1,3 +1,4 @@
+import { databasePoolUrl } from "@/scripts/database-pool.js";
 import { PrismaClient } from "@prisma/client";
 import { emitForOperation, setOwnerLookup } from "@/lib/realtime";
 
@@ -6,7 +7,7 @@ import { emitForOperation, setOwnerLookup } from "@/lib/realtime";
  * also tells the open screens to reload (lib/realtime.ts) — no route has to remember to do it.
  */
 function createClient() {
-  const base = new PrismaClient();
+  const base = new PrismaClient({ datasourceUrl: databasePoolUrl(process.env.DATABASE_URL) });
   setOwnerLookup(async (orderId) => (await base.order.findUnique({ where: { id: orderId }, select: { customerId: true } }))?.customerId ?? null);
   return base.$extends({
     query: {
@@ -26,8 +27,6 @@ function createClient() {
 type Client = ReturnType<typeof createClient>;
 const globalForPrisma = globalThis as unknown as { prisma: Client | undefined };
 
-export const prisma: Client = globalForPrisma.prisma ?? createClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+// Next bundles route handlers separately in production too. Every bundle in this Node process
+// must reuse the same client; otherwise each creates another independent connection pool.
+export const prisma: Client = globalForPrisma.prisma ?? (globalForPrisma.prisma = createClient());
