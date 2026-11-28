@@ -23,7 +23,7 @@ export async function GET() {
 
   const [items, me, missingCount] = await Promise.all([
     prisma.wishlistItem.findMany({
-      where: { customerId },
+      where: { customerId, product: { AND: [await visibleBrandsWhere()] } },
       orderBy: { createdAt: "desc" },
       include: {
         product: {
