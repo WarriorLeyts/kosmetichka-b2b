@@ -27,3 +27,11 @@ export async function readHiddenBrands(db) {
 export function productExcluded(product, ids) {
   return ids.includes(product.brandGuid) || (ids.includes(ANGIOPHARM_ID) && (isAngiopharm(product.name) || isAngiopharm(product.brand?.name)));
 }
+
+/** Products without an attached photo are staff-only; order snapshots are deliberately separate. */
+export function catalogPhotoWhere(staff = false) {
+  return staff ? {} : { images: { some: { path: { not: "" } } } };
+}
+export function hasCatalogPhoto(product) {
+  return Array.isArray(product.images) && product.images.some(image => typeof image.path === "string" && image.path.trim().length > 0);
+}

@@ -1,3 +1,4 @@
+import { catalogPhotoWhere } from "@/scripts/catalog-visibility.js";
 import { NextResponse } from "next/server";
 import { ADMIN_ONLY, requireStaff } from "../_auth";
 import { prisma } from "@/lib/prisma";
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
   const id = demandId(b.wishId), productId = demandId(b.productId);
   if (!id || !productId) return NextResponse.json({ error: "Укажите запрос и ID товара" }, { status: 400 });
   const wish = await prisma.productWish.findUnique({ where: { id }, include: { customer: { select: { id: true, isActive: true, priceType: true } } } });
-  const product = await prisma.product.findFirst({ where: { id: productId, hidden: false }, select: { id: true, name: true, stock: true, wholesaleStock: true } });
+  const product = await prisma.product.findFirst({ where: { id: productId, hidden: false, ...catalogPhotoWhere() }, select: { id: true, name: true, stock: true, wholesaleStock: true } });
   if (!wish || !product) return NextResponse.json({ error: "Запрос или товар не найден" }, { status: 404 });
   if (wish.linkedProductId) return NextResponse.json({ error: "Этот запрос уже связан с товаром. Обновите список." }, { status: 409 });
   const item = await prisma.$transaction(async tx => {

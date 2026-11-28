@@ -1,12 +1,12 @@
+import { catalogViewer } from "@/lib/catalogViewer";
+import { hasCatalogPhoto } from "@/scripts/catalog-visibility.js";
 import { brandProductExcluded } from "@/lib/brandVisibility";
 import { getCampaign } from "@/lib/campaignSettings";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { customerStock, guestStock, isWholesaleType, withFlatPrices, maskWholesalePrices } from "@/lib/utils";
 import { cookies } from "next/headers";
-import { verifyCustomerToken } from "@/lib/customerAuth";
 import { arrivalLabels, withArrivalLabel } from "@/lib/arrivals";
-import { verifyToken } from "@/lib/auth";
 
 export async function GET(
   _request: Request,
@@ -42,23 +42,31 @@ export async function GET(
 
   // wholesale prices only for signed-in customers and staff (as /api/catalog/products)
   const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-  const customer = token ? await verifyCustomerToken(token) : null;
-  const staffToken = customer?.id ? null : cookieStore.get("admin_token")?.value;
-  const staff = staffToken ? await verifyToken(staffToken) : null;
+  const { customer, staff } = await catalogViewer(_request, cookieStore);
+  const photoStaff = ["admin", "manager"].includes(String(staff?.role ?? ""));
   const signedIn = Boolean(customer?.id) || ["admin", "manager", "picker"].includes(String(staff?.role ?? ""));
   // скрытый в админ-панели товар — только сотрудникам
   if (!staff && (product.hidden || await brandProductExcluded(product))) {
     return NextResponse.json({ error: "Товар не найден — возможно, его убрали из каталога" }, { status: 404 });
   }
+  const photoMissing = !hasCatalogPhoto(product);
+  let ownOrder: { id: number } | null = null;
+  if (!photoStaff && photoMissing) {
+    ownOrder = customer?.id ? await prisma.order.findFirst({
+      where: { customerId: Number(customer.id), items: { some: { productId } } },
+      select: { id: true }, orderBy: { id: "desc" },
+    }) : null;
+    if (!ownOrder) return NextResponse.json({ error: "Товар не найден" }, { status: 404 });
+  }
   const priceType = customer?.id
     ? (await prisma.customer.findUnique({ where: { id: Number(customer.id) }, select: { priceType: true } }))?.priceType ?? null
     : null;
   // «Новинка» / «Снова в наличии» (lib/arrivals.ts) — as on the catalog card
-  const flat = withArrivalLabel(withFlatPrices(product, await getCampaign(), priceType === "franchise" || !!staff), await arrivalLabels(isWholesaleType(priceType)));
+  const flatWithLabels = withArrivalLabel(withFlatPrices(product, await getCampaign(), priceType === "franchise" || !!staff), await arrivalLabels(isWholesaleType(priceType)));
+  const flat = { ...flatWithLabels, ...(ownOrder ? { orderOnly: true, orderId: ownOrder.id } : {}) };
   if (signedIn) {
     // a wholesale customer sees what he may order: the shop minus its 12 + the warehouse
-    return NextResponse.json(isWholesaleType(priceType) ? { ...flat, stock: customerStock(flat.stock, priceType, product.wholesaleStock) } : flat);
+    return NextResponse.json(isWholesaleType(priceType) ? { ...flat, stock: customerStock(flat.stock, priceType, product.wholesaleStock) } : flat, ownOrder ? { headers: { "Cache-Control": "private, no-store", "Vary": "Cookie" } } : undefined);
   }
   return NextResponse.json({ ...maskWholesalePrices(flat), stock: guestStock(flat.stock) });
 }

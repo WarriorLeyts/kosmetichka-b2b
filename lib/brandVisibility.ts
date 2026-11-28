@@ -1,3 +1,4 @@
+import { CARD_PRODUCT_NAME } from "@/lib/cardPurchase";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { brandVisibilityWhere, readHiddenBrands, productExcluded } from "@/scripts/catalog-visibility.js";
@@ -31,9 +32,8 @@ export async function brandProductExcluded(product: { name: string; brandGuid: s
 export async function filterVisibleSnapshots<T extends Record<string, unknown>>(items: T[]): Promise<T[]> {
   if (!items.length) return items;
   const hidden = await hiddenBrandIds();
-  if (!hidden.length) return items;
   const ids = [...new Set(items.map(i => Number(i.id)).filter(id => Number.isInteger(id) && id > 0))];
-  const blocked = await prisma.product.findMany({ where: { id: { in: ids }, NOT: brandVisibilityWhere(hidden) as Prisma.ProductWhereInput }, select: { id: true } });
+  const blocked = await prisma.product.findMany({ where: { id: { in: ids }, OR: [{ images: { none: { path: { not: "" } } }, NOT: process.env.LOYALTY_CARD_PRODUCT_GUID ? { guid: process.env.LOYALTY_CARD_PRODUCT_GUID } : { name: { equals: CARD_PRODUCT_NAME, mode: "insensitive" } } }, ...(hidden.length ? [{ NOT: brandVisibilityWhere(hidden) as Prisma.ProductWhereInput }] : [])] }, select: { id: true } });
   const excluded = new Set(blocked.map(p => p.id));
   return items.filter(i => !excluded.has(Number(i.id)));
 }

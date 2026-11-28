@@ -1,3 +1,4 @@
+import { catalogPhotoWhere } from "@/scripts/catalog-visibility.js";
 import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { prisma } from "@/lib/prisma";
 
@@ -17,9 +18,9 @@ type P = { id: number; brandGuid: string | null; categoryGuid: string | null; pr
 const inStock = (wholesale: boolean) => (wholesale ? { wholesaleStock: { gt: 0 }, hidden: false } : { stock: { gt: 0 }, hidden: false });
 const retail = (p: P) => p.prices.find((x) => x.priceType === "retail")?.price ?? p.prices[0]?.price ?? 0;
 
-export async function relatedIds(productId: number, kind: RelatedKind, wholesale: boolean): Promise<number[]> {
+export async function relatedIds(productId: number, kind: RelatedKind, wholesale: boolean, staff = false): Promise<number[]> {
   const visibility = await visibleBrandsWhere();
-  const stockWhere = { ...inStock(wholesale), AND: [visibility] };
+  const stockWhere = { ...inStock(wholesale), ...catalogPhotoWhere(staff), AND: [visibility] };
   const self = await prisma.product.findUnique({ where: { id: productId }, select: { id: true, brandGuid: true, categoryGuid: true, relatedIds: true, prices: { select: { priceType: true, price: true } } } });
   if (!self) return [];
   const out: number[] = [];

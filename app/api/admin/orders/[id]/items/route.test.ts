@@ -13,7 +13,7 @@ const db = vi.hoisted(() => ({
   order: { findUnique: vi.fn(), update: vi.fn(async () => ({})) },
   orderItem: { findMany: vi.fn(async () => []), update: vi.fn(async () => ({})), create: vi.fn(async () => ({})) },
   orderItemCheck: { deleteMany: vi.fn(async () => ({})) },
-  product: { findMany: vi.fn(async () => [{ id: 999, name: "Новый товар", barcode: null, prices: [{ priceType: "retail", price: 100 }], variants: [] }]) },
+  product: { findMany: vi.fn(async () => [{ id: 999, name: "Новый товар", barcode: null, images: [], prices: [{ priceType: "retail", price: 100 }], variants: [] }]) },
   productImage: { findMany: vi.fn(async () => []) },
   user: { findUnique: vi.fn(async () => ({ name: "Менеджер" })) },
   $transaction: vi.fn(async (ops: unknown[]) => Promise.all(ops)),
@@ -26,7 +26,7 @@ const call = (body: object) => PUT(new NextRequest("https://x/api/admin/orders/7
 beforeEach(() => { vi.clearAllMocks(); db.order.findUnique.mockResolvedValue({ id: 7, customerId: 1, status: "assembly", customer: { priceType: "retail" }, items }); });
 
 describe("only edited lines lose their assembly mark", () => {
-  it("adding a product while saving all 148 unchanged lines keeps every existing mark", async () => {
+  it("a manager can add a product without photos while keeping every existing assembly mark", async () => {
     expect((await call({ items, newItems: [{ productId: 999, productName: "Новый товар", quantity: 1 }] })).status).toBe(200);
     expect(db.orderItemCheck.deleteMany).not.toHaveBeenCalled();
     expect(db.orderItem.create).toHaveBeenCalledTimes(1);

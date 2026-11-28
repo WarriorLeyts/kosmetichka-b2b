@@ -1,3 +1,4 @@
+import { hasCatalogPhoto } from "@/scripts/catalog-visibility.js";
 import { getCampaign } from "@/lib/campaignSettings";
 import { prisma } from "@/lib/prisma";
 import { priceFor, resolveCustomerPriceType } from "@/lib/pricing";
@@ -26,7 +27,8 @@ export const PRODUCT_REQUEST_STATUSES = ["pending", "approved", "assembly", "con
 
 export async function buildProductRequest(
   customer: { priceType?: string | null },
-  input: { productId: unknown; quantity: unknown; variantName?: unknown }
+  input: { productId: unknown; quantity: unknown; variantName?: unknown },
+  ownOrderId?: number
 ): Promise<ProductRequestCard | { error: string }> {
   const productId = Number(input.productId);
   const quantity = Number(input.quantity);
@@ -44,6 +46,10 @@ export async function buildProductRequest(
     },
   });
   if (!product) return { error: "Товар не найден" };
+  if (!hasCatalogPhoto(product)) {
+    const existing = ownOrderId ? await prisma.orderItem.findFirst({ where: { orderId: ownOrderId, productId }, select: { id: true } }) : null;
+    if (!existing) return { error: "Товар не найден" };
+  }
 
   // a variant (colour, shade) only when the product really has it
   const wanted = typeof input.variantName === "string" ? input.variantName.trim() : "";
@@ -130,9 +136,9 @@ export function customerChatTextAllowed(text: string): boolean {
 export type ProductQuestionCard = Omit<ProductRequestCard, "_t" | "quantity"> & { _t: "product-question"; question: string; addedQuantity?: number };
 export type ChatProductCard = ProductRequestCard | ProductQuestionCard;
 
-export async function buildProductQuestion(customer: { priceType?: string | null }, input: { productId: unknown; question: unknown; variantName?: unknown }): Promise<ProductQuestionCard | { error: string }> {
+export async function buildProductQuestion(customer: { priceType?: string | null }, input: { productId: unknown; question: unknown; variantName?: unknown }, ownOrderId?: number): Promise<ProductQuestionCard | { error: string }> {
   if (typeof input.question !== "string" || !input.question.trim() || input.question.trim().length > 1000) return { error: "Напишите вопрос о товаре — до 1000 символов" };
-  const card = await buildProductRequest(customer, { ...input, quantity: 1 });
+  const card = await buildProductRequest(customer, { ...input, quantity: 1 }, ownOrderId);
   if ("error" in card) return card;
   return { _t: "product-question", id: card.id, name: card.name, variantName: card.variantName, imagePath: card.imagePath, price: card.price, question: input.question.trim() };
 }

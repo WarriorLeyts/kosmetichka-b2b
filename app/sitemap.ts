@@ -1,3 +1,4 @@
+import { catalogPhotoWhere } from "@/scripts/catalog-visibility.js";
 import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { productPath } from "@/lib/productSlug";
 import { MetadataRoute } from "next";
@@ -51,7 +52,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const products = await prisma.product.findMany({
       select: { id: true, slug: true, updatedAt: true },
       // products that can be bought now; the ones out of stock come back with the next stock
-      where: { stock: { gt: 0 }, hidden: false, AND: [visibility] },
+      where: { stock: { gt: 0 }, hidden: false, ...catalogPhotoWhere(), AND: [visibility] },
     });
 
     const productPages: MetadataRoute.Sitemap = products.map((p) => ({
@@ -64,7 +65,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // category pages (/catalog/<slug>): the ones with goods for sale, not hidden in the admin panel
     const [cats, counts, settings, docs] = await Promise.all([
       prisma.category.findMany({ select: { guid: true, name: true, parentGuid: true } }),
-      prisma.product.groupBy({ by: ["categoryGuid"], where: { stock: { gt: 0 }, hidden: false, AND: [visibility] }, _count: { _all: true } }),
+      prisma.product.groupBy({ by: ["categoryGuid"], where: { stock: { gt: 0 }, hidden: false, ...catalogPhotoWhere(), AND: [visibility] }, _count: { _all: true } }),
       getCatalogSettings(),
       prisma.sitePage.findMany({ where: { key: { startsWith: "doc:" }, NOT: { published: { equals: Prisma.DbNull } } }, select: { key: true, publishedAt: true } }),
     ]);

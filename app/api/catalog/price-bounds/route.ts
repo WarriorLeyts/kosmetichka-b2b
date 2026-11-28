@@ -1,10 +1,11 @@
+import { catalogPhotoWhere } from "@/scripts/catalog-visibility.js";
 import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   const result = await prisma.productPrice.aggregate({
-    where: { priceType: "wholesale", product: { hidden: false, AND: [await visibleBrandsWhere()] } },
+    where: { priceType: "wholesale", product: { hidden: false, ...catalogPhotoWhere(), AND: [await visibleBrandsWhere()] } },
     _min: { price: true },
     _max: { price: true },
   });

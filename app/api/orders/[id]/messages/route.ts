@@ -90,7 +90,7 @@ async function postMessage(
   if (body.productRequest && body.productQuestion) return NextResponse.json({ error: "Выберите одно действие с товаром" }, { status: 400 });
   if (body.productQuestion) {
     const who = await prisma.customer.findUnique({ where: { id: customer.id }, select: { priceType: true } });
-    const card = await buildProductQuestion({ priceType: orderTier({ priceTier: order.priceTier, priceType: order.priceType, customer: who }) }, body.productQuestion);
+    const card = await buildProductQuestion({ priceType: orderTier({ priceTier: order.priceTier, priceType: order.priceType, customer: who }) }, body.productQuestion, order.id);
     if ("error" in card) return NextResponse.json({ error: card.error }, { status: 400 });
     text = JSON.stringify({ ...card, ...(requestId ? { clientRequestId: requestId } : {}) });
   } else if (body.productRequest) {
@@ -99,7 +99,7 @@ async function postMessage(
     }
     // the price of the order («Опт»: by its sum — discount / wholesale / big wholesale)
     const who = await prisma.customer.findUnique({ where: { id: customer.id }, select: { priceType: true } });
-    const card = await buildProductRequest({ priceType: orderTier({ priceTier: order.priceTier, priceType: order.priceType, customer: who }) }, body.productRequest);
+    const card = await buildProductRequest({ priceType: orderTier({ priceTier: order.priceTier, priceType: order.priceType, customer: who }) }, body.productRequest, order.id);
     if ("error" in card) return NextResponse.json({ error: card.error }, { status: 400 });
     text = JSON.stringify({ ...card, ...(requestId ? { clientRequestId: requestId } : {}) });
   } else if (isForgedProductRequest(text) || (typeof text === "string" && !customerChatTextAllowed(text))) {
