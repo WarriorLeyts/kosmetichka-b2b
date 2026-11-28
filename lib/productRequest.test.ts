@@ -1,6 +1,6 @@
 import { LEGACY_CAMPAIGN } from "@/lib/campaign";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const db = vi.hoisted(() => ({ product: { findUnique: vi.fn() } }));
+const db = vi.hoisted(() => ({ product: { findUnique: vi.fn() }, orderItem: { findFirst: vi.fn() } }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 import { buildProductRequest } from "./productRequest";
 
@@ -36,3 +36,12 @@ describe("«Добавить товар» card from the customer's chat", () => 
 });
 
 vi.mock("@/lib/campaignSettings", () => ({ getCampaign: async () => LEGACY_CAMPAIGN }));
+
+it("does not disclose photo-less inventory through a forged chat product ID", async () => {
+  db.product.findUnique.mockResolvedValue({ id: 42, name: "Без фото", prices: [], images: [], variants: [] });
+  expect(await buildProductRequest({ priceType: "retail" }, { productId: 42, quantity: 2 })).toEqual({ error: "Товар не найден" });
+  expect(db.orderItem.findFirst).not.toHaveBeenCalled();
+  db.orderItem.findFirst.mockResolvedValue({ id: 1 });
+  expect(await buildProductRequest({ priceType: "retail" }, { productId: 42, quantity: 2 }, 9)).toMatchObject({ id: 42, name: "Без фото", imagePath: null });
+  expect(db.orderItem.findFirst).toHaveBeenCalledWith({ where: { orderId: 9, productId: 42 }, select: { id: true } });
+});

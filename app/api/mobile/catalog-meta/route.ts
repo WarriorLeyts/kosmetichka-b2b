@@ -1,3 +1,6 @@
+import { catalogViewer } from "@/lib/catalogViewer";
+import { catalogPhotoWhere } from "@/scripts/catalog-visibility.js";
+import { cookies } from "next/headers";
 import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -10,12 +13,15 @@ import { getCatalogMetaMemo, setCatalogMetaMemo } from "@/lib/catalogMetaCache";
 // (order / pictures / hidden categories, quick filters) are applied here; saving them drops the memo.
 
 // GET /api/mobile/catalog-meta — categories + brands for the catalog filters, quick filters
-export async function GET() {
-  let body = getCatalogMetaMemo();
+export async function GET(request: Request) {
+  const { staff: payload } = await catalogViewer(request, await cookies());
+  const staff = ["admin", "manager"].includes(String(payload?.role ?? ""));
+  const key = staff ? "staff" : "public";
+  let body = getCatalogMetaMemo(key);
   if (!body) {
     const [categories, brands, s] = await Promise.all([
       prisma.category.findMany({ orderBy: { sortOrder: "asc" } }),
-      prisma.brand.findMany({ where: { products: { some: { hidden: false, AND: [await visibleBrandsWhere()] } } }, orderBy: { name: "asc" } }),
+      prisma.brand.findMany({ where: { products: { some: { hidden: false, ...catalogPhotoWhere(staff), AND: [await visibleBrandsWhere()] } } }, orderBy: { name: "asc" } }),
       getCatalogSettings(),
     ]);
     const hidden = new Set(s.categories.hidden);
@@ -29,11 +35,12 @@ export async function GET() {
       quick: s.quick,
       quickChips: s.quickChips,
     };
-    setCatalogMetaMemo(body);
+    setCatalogMetaMemo(body, key);
   }
   return NextResponse.json(body, {
     headers: {
-      "Cache-Control": "public, max-age=300, stale-while-revalidate=86400",
+      "Cache-Control": staff ? "private, no-store" : "public, max-age=300, stale-while-revalidate=86400",
+      "Vary": "Cookie",
     },
   });
 }

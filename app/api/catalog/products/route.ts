@@ -1,3 +1,5 @@
+import { catalogViewer } from "@/lib/catalogViewer";
+import { catalogPhotoWhere } from "@/scripts/catalog-visibility.js";
 import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { getCampaign } from "@/lib/campaignSettings";
 import type { Campaign } from "@/lib/campaign";
@@ -9,8 +11,6 @@ import { prisma } from "@/lib/prisma";
 import { relatedIds } from "@/lib/related";
 import { arrivalLabels, listArrivals, withArrivalLabel } from "@/lib/arrivals";
 import { customerStock, guestStock, isWholesaleType, withFlatPrices, maskWholesalePrices } from "@/lib/utils";
-import { verifyCustomerToken } from "@/lib/customerAuth";
-import { verifyToken } from "@/lib/auth";
 import { createHash } from "crypto";
 import { resolveCustomerPriceType, priceFor, pricingCampaignActive, type PriceType } from "@/lib/pricing";
 import { pricingCustomer } from "@/lib/siteMode";
@@ -143,11 +143,9 @@ async function catalogProducts(request: Request, cookieStore: Awaited<ReturnType
   const { searchParams } = new URL(request.url);
 
   // Проверяем авторизацию
-  const token = cookieStore.get("auth_token")?.value;
-  const payload = token ? await verifyCustomerToken(token) : null;
-  // staff (admin / Team app, admin_token) browse the same catalogue with real prices
-  const staffToken = payload?.id ? null : cookieStore.get("admin_token")?.value;
-  const staff = staffToken ? await verifyToken(staffToken) : null;
+  const { customer: payload, staff } = await catalogViewer(request, cookieStore);
+  const isStaff = ["admin", "manager"].includes(String(staff?.role ?? ""));
+  const photoWhere = catalogPhotoWhere(isStaff);
   const isAuthenticated = Boolean(payload?.id) || ["admin", "manager", "picker"].includes(String(staff?.role ?? ""));
   // a wholesale customer sees what he may order: the shop minus its 12 + the warehouse (Product.wholesaleStock)
   const viewer = payload?.id
@@ -191,13 +189,14 @@ async function catalogProducts(request: Request, cookieStore: Awaited<ReturnType
   // «Новинки»: products that came to the company for the first time in the last 10 days (the first receipt in
   // 1С, lib/arrivals.ts) and this customer can buy now — not «appeared on the site», which mixed in old goods
   const arrivalFilter = quick.includes("new") || quick.includes("back");
-  const arrivalIds = arrivalFilter ? (await listArrivals({ wholesale, limit: Number.MAX_SAFE_INTEGER }))
+  const arrivalIds = arrivalFilter ? (await listArrivals({ wholesale, staff: isStaff, limit: Number.MAX_SAFE_INTEGER }))
     .filter((a) => a.isNew ? quick.includes("new") : quick.includes("back")).map((a) => a.productId) : [];
 
   const brandVisibility = await visibleBrandsWhere();
   const where: any = {
     // скрытые в админ-панели товары покупатели не видят (корзина — ?ids= ниже — их ещё показывает)
     hidden: false,
+    ...photoWhere,
     ...(categoryGuids.length > 0 ? { categoryGuid: { in: categoryGuids } } : {}),
     ...(brandGuids.length > 0 ? { brandGuid: { in: brandGuids } } : {}),
     ...(onlyStock ? (wholesale ? { wholesaleStock: { gt: 0 } } : { stock: { gt: 0 } }) : {}),
@@ -282,8 +281,8 @@ async function catalogProducts(request: Request, cookieStore: Awaited<ReturnType
   const relatedParam = Number(searchParams.get("related"));
   if (Number.isInteger(relatedParam) && relatedParam > 0) {
     const kind = searchParams.get("kind") === "similar" ? "similar" : "together";
-    const ids = await relatedIds(relatedParam, kind, wholesale);
-    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, AND: [brandVisibility] }, include, omit }) : [];
+    const ids = await relatedIds(relatedParam, kind, wholesale, isStaff);
+    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, ...photoWhere, AND: [brandVisibility] }, include, omit }) : [];
     const order = new Map(ids.map((id, i) => [id, i]));
     found.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
     return NextResponse.json({ products: found.map(applyPrices), total: found.length, page: 1, hasMore: false });
@@ -294,11 +293,11 @@ async function catalogProducts(request: Request, cookieStore: Awaited<ReturnType
   // arrivals=new — only «Новинки» (first receipt ever), arrivals=back — only «Снова в наличии», arrivals=1 — both
   const arrivalsParam = searchParams.get("arrivals");
   if (arrivalsParam === "1" || arrivalsParam === "new" || arrivalsParam === "back") {
-    const list = (await listArrivals({ wholesale, limit: 2000 }))
+    const list = (await listArrivals({ wholesale, staff: isStaff, limit: 2000 }))
       .filter((a) => (arrivalsParam === "new" ? a.isNew : arrivalsParam === "back" ? !a.isNew : true))
       .slice(0, 40);
     const ids = list.map((a) => a.productId);
-    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, hidden: false, AND: [brandVisibility] }, include, omit }) : [];
+    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, hidden: false, ...photoWhere, AND: [brandVisibility] }, include, omit }) : [];
     const meta = new Map(list.map((a, i) => [a.productId, { i, a }]));
     found.sort((x, y) => (meta.get(x.id)?.i ?? 0) - (meta.get(y.id)?.i ?? 0));
     return NextResponse.json({
@@ -314,7 +313,7 @@ async function catalogProducts(request: Request, cookieStore: Awaited<ReturnType
   const idsParam = searchParams.get("ids");
   if (idsParam !== null) {
     const ids = [...new Set(idsParam.split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 120);
-    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, AND: [brandVisibility] }, include, omit }) : [];
+    const found = ids.length ? await prisma.product.findMany({ where: { id: { in: ids }, ...photoWhere, AND: [brandVisibility] }, include, omit }) : [];
     return NextResponse.json({ products: found.map(applyPrices), total: found.length, page: 1, hasMore: false });
   }
 
@@ -421,7 +420,7 @@ async function catalogProducts(request: Request, cookieStore: Awaited<ReturnType
   const pageIds = sortedIds.ids.slice((page - 1) * limit, page * limit);
 
   const products = await prisma.product.findMany({
-    where: { id: { in: pageIds } },
+    where: { id: { in: pageIds }, hidden: false, ...photoWhere, AND: [brandVisibility] },
     include,
     omit,
   });

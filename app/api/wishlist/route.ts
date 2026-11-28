@@ -1,3 +1,4 @@
+import { catalogPhotoWhere } from "@/scripts/catalog-visibility.js";
 import { cookies } from "next/headers";
 import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { NextResponse } from "next/server";
@@ -23,7 +24,7 @@ export async function GET() {
 
   const [items, me, missingCount] = await Promise.all([
     prisma.wishlistItem.findMany({
-      where: { customerId, product: { AND: [await visibleBrandsWhere()] } },
+      where: { customerId, product: { ...catalogPhotoWhere(), AND: [await visibleBrandsWhere()] } },
       orderBy: { createdAt: "desc" },
       include: {
         product: {
@@ -83,7 +84,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ added: false });
   } else {
-    const product = await prisma.product.findFirst({ where: { id: productId, hidden: false, AND: [await visibleBrandsWhere()] }, select: { id: true } });
+    const product = await prisma.product.findFirst({ where: { id: productId, hidden: false, ...catalogPhotoWhere(), AND: [await visibleBrandsWhere()] }, select: { id: true } });
     if (!product) return NextResponse.json({ error: "Товар не найден" }, { status: 404 });
     await prisma.wishlistItem.create({
       data: { customerId, productId: Number(productId), notified: false },
@@ -131,7 +132,7 @@ export async function PUT(request: Request) {
   const productId = demandId(body.productId), quantity = demandQuantity(body.quantity);
   if (!productId || !quantity) return NextResponse.json({ error: "Укажите товар и целое количество от 1 до 10 000" }, { status: 400 });
   const [product, customer] = await Promise.all([
-    prisma.product.findFirst({ where: { id: productId, hidden: false, AND: [await visibleBrandsWhere()] }, select: { id: true, stock: true, wholesaleStock: true } }),
+    prisma.product.findFirst({ where: { id: productId, hidden: false, ...catalogPhotoWhere(), AND: [await visibleBrandsWhere()] }, select: { id: true, stock: true, wholesaleStock: true } }),
     prisma.customer.findUnique({ where: { id: customerId }, select: { priceType: true } }),
   ]);
   if (!product) return NextResponse.json({ error: "Товар не найден" }, { status: 404 });

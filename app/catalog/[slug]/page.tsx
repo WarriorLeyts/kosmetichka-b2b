@@ -1,3 +1,4 @@
+import { catalogPhotoWhere } from "@/scripts/catalog-visibility.js";
 import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -63,7 +64,7 @@ export default async function CategoryPage({ params }: Props) {
   if (!userAgent({ headers: await headers() }).isBot) redirect(`/catalog?category=${encodeURIComponent(f.cat.guid)}`);
   const seo = (await getCatalogSettings()).seo.categories[f.cat.guid];
   const products = await prisma.product.findMany({
-    where: { categoryGuid: { in: f.guids }, hidden: false, stock: { gt: 0 }, AND: [await visibleBrandsWhere()] },
+    where: { categoryGuid: { in: f.guids }, hidden: false, ...catalogPhotoWhere(), stock: { gt: 0 }, AND: [await visibleBrandsWhere()] },
     orderBy: [{ salesCount: "desc" }, { id: "desc" }],
     take: 120,
     select: { id: true, slug: true, name: true, images: { take: 1, orderBy: [{ sortOrder: "asc" }, { id: "asc" }], select: { path: true } } },

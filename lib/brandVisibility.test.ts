@@ -59,7 +59,7 @@ it("filters saved products using database IDs even when a snapshot has a fake br
   const old = [{ id: 42, name: "Другое", brand: { name: "CELIMAX" } }, { id: 43, name: "Обычный крем" }];
   expect(await filterVisibleSnapshots(old)).toEqual([old[1]]);
   expect(old).toHaveLength(2); // GET never rewrites a customer's saved lists.
-  expect(db.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: { in: [42, 43] }, NOT: expect.any(Object) }) }));
+  expect(db.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: { in: [42, 43] }, OR: expect.any(Array) }) }));
 });
 
 it("shares one policy read across a request burst and retries after a failed read", async () => {

@@ -1,3 +1,4 @@
+import { catalogPhotoWhere } from "@/scripts/catalog-visibility.js";
 import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { prisma } from "@/lib/prisma";
 import { arrivalKindOf, arrivalWindows, getArrivalSettings } from "@/lib/arrivalSettings";
@@ -20,7 +21,7 @@ export async function listArrivals({ wholesale, limit = 40, staff = false }: { w
   const places = staff || wholesale ? ["stock", "shop"] : ["shop"];
   const rows = await prisma.productArrival
     .findMany({
-      where: { docDate: { gte: since }, place: { in: places }, product: { AND: [await visibleBrandsWhere()] } },
+      where: { docDate: { gte: since }, place: { in: places }, product: { ...catalogPhotoWhere(staff), AND: [await visibleBrandsWhere()] } },
       select: { docDate: true, place: true, firstReceiptAt: true, product: { select: { id: true, hidden: true, stock: true, wholesaleStock: true, images: { take: 1, select: { id: true } } } } },
       orderBy: { docDate: "desc" },
     })
@@ -31,7 +32,7 @@ export async function listArrivals({ wholesale, limit = 40, staff = false }: { w
   const out = new Map<number, Arrival>();
   for (const r of rows) {
     const p = r.product;
-    if (p.hidden || !p.images.length) continue;
+    if (p.hidden || (!staff && !p.images.length)) continue;
     // in stock for this customer: retail — the shop (Product.stock), wholesale — what he may order
     const avail = staff ? (p.stock ?? 0) > 0 || p.wholesaleStock > 0 : wholesale ? p.wholesaleStock > 0 : (p.stock ?? 0) > 0;
     if (!avail) continue;

@@ -1,9 +1,10 @@
+import { catalogPhotoWhere } from "@/scripts/catalog-visibility.js";
 import { visibleBrandsWhere } from "@/lib/brandVisibility";
 import { AssortmentSelectionError } from "./assortmentSelection";
 import type { Campaign } from "./campaign";
 import { getCampaign } from "./campaignSettings";
 import { variantImageUrl } from "./assortment";
-import { CARD_PRICE, cardRegistration, isCardProduct } from "./cardPurchase";
+import { CARD_PRICE, CARD_PRODUCT_NAME, cardRegistration, isCardProduct } from "./cardPurchase";
 import { prisma } from "@/lib/prisma";
 import { calculateCart, priceFor, type PriceType, type CartPricing } from "@/lib/pricing";
 import { customerStock, withFlatPrices } from "@/lib/utils";
@@ -68,7 +69,7 @@ export async function priceOrder(
   const productIds: number[] = items.map((item) => Number(item.id));
 
   const products = await prisma.product.findMany({
-    where: { id: { in: productIds }, AND: [await visibleBrandsWhere()] },
+    where: { id: { in: productIds }, AND: [await visibleBrandsWhere(), { OR: [catalogPhotoWhere(), (process.env.LOYALTY_CARD_PRODUCT_GUID ? { guid: process.env.LOYALTY_CARD_PRODUCT_GUID } : { name: { equals: CARD_PRODUCT_NAME, mode: "insensitive" } })] }] },
     include: { prices: true, variants: { include: { image: true } } },
   });
 

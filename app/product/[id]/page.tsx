@@ -1,3 +1,4 @@
+import { catalogPhotoWhere, hasCatalogPhoto } from "@/scripts/catalog-visibility.js";
 import { brandProductExcluded, visibleBrandsWhere } from "@/lib/brandVisibility";
 import { getCampaign } from "@/lib/campaignSettings";
 import { cache } from "react";
@@ -33,7 +34,7 @@ const getProduct = cache(async (id: number) => {
       },
     },
   });
-  return product && !(await brandProductExcluded(product)) ? product : null;
+  return product && hasCatalogPhoto(product) && !(await brandProductExcluded(product)) ? product : null;
 });
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -99,7 +100,7 @@ export default async function ProductPage({ params }: Props) {
 
   const relatedProducts = product.brandGuid
     ? await prisma.product.findMany({
-        where: { brandGuid: product.brandGuid, id: { not: product.id }, hidden: false, AND: [await visibleBrandsWhere()] },
+        where: { brandGuid: product.brandGuid, id: { not: product.id }, hidden: false, ...catalogPhotoWhere(), AND: [await visibleBrandsWhere()] },
         take: 8,
         include: { category: true, brand: true, images: true, prices: true },
         orderBy: { name: "asc" },

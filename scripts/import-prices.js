@@ -1,5 +1,5 @@
 import { databasePoolUrl } from "./database-pool.js";
-import { brandVisibilityWhere, readHiddenBrands } from "./catalog-visibility.js";
+import { brandVisibilityWhere, readHiddenBrands, catalogPhotoWhere } from "./catalog-visibility.js";
 import { originalPerfumeCategories, shopReserve } from "./wholesale-stock-policy.js";
 import { becameOrderable, availableForSubscriber } from "./restock-availability.js";
 import { recordRestock } from "./record-restock.js";
@@ -76,7 +76,7 @@ async function sendWishlistNotifications(productIds) {
   if (!productIds.length) return;
 
   const candidates = await prisma.wishlistItem.findMany({
-    where: { productId: { in: productIds }, notified: false, product: { AND: [brandVisibilityWhere(await readHiddenBrands(prisma))] } },
+    where: { productId: { in: productIds }, notified: false, product: { ...catalogPhotoWhere(), AND: [brandVisibilityWhere(await readHiddenBrands(prisma))] } },
     include: {
       customer: { select: { id: true, email: true, name: true, priceType: true, isActive: true } },
       product:  { select: { id: true, name: true, stock: true, wholesaleStock: true, hidden: true } },
