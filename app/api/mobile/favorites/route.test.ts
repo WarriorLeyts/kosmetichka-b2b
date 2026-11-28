@@ -1,3 +1,4 @@
+vi.mock("@/lib/brandVisibility", () => ({ filterVisibleSnapshots: async (items: unknown[]) => items }));
 /** Shared favourites: saved per customer, products cleaned and not repeated, guests refused. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

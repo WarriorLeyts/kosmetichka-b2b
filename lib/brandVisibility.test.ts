@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Prisma } from "@prisma/client";
 import { angiopharmWhere, brandVisibilityWhere, HIDDEN_BRAND_PREFIX, isAngiopharm, productExcluded } from "../scripts/catalog-visibility.js";
-const db = vi.hoisted(() => ({ cmsSetting: { findMany: vi.fn() } }));
+const db = vi.hoisted(() => ({ cmsSetting: { findMany: vi.fn() }, product: { findMany: vi.fn() } }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
-import { hiddenBrandIds, invalidateBrandVisibility, visibleBrandsWhere } from "./brandVisibility";
+import { hiddenBrandIds, invalidateBrandVisibility, visibleBrandsWhere, filterVisibleSnapshots } from "./brandVisibility";
 
 // The policy's Prisma predicate has only AND/OR/NOT, nullable brand relations, and contains/in.
 function matches(p: { name: string; brand?: { guid: string; name: string } | null }, w: Prisma.ProductWhereInput): boolean {
@@ -51,4 +51,13 @@ describe("persistent brand exclusions", () => {
     db.cmsSetting.findMany.mockRejectedValue(new Error("DB unavailable"));
     await expect(visibleBrandsWhere()).rejects.toThrow("DB unavailable");
   });
+});
+
+it("filters saved products using database IDs even when a snapshot has a fake brand/name", async () => {
+  db.cmsSetting.findMany.mockResolvedValue([{ key: HIDDEN_BRAND_PREFIX + "angiopharm" }]);
+  db.product.findMany.mockResolvedValue([{ id: 42 }]);
+  const old = [{ id: 42, name: "Другое", brand: { name: "CELIMAX" } }, { id: 43, name: "Обычный крем" }];
+  expect(await filterVisibleSnapshots(old)).toEqual([old[1]]);
+  expect(old).toHaveLength(2); // GET never rewrites a customer's saved lists.
+  expect(db.product.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: { in: [42, 43] }, NOT: expect.any(Object) }) }));
 });

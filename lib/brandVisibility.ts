@@ -19,3 +19,14 @@ export async function visibleBrandsWhere(): Promise<Prisma.ProductWhereInput> {
 export async function brandProductExcluded(product: { name: string; brandGuid: string | null; brand?: { name: string } | null }): Promise<boolean> {
   return productExcluded(product, await hiddenBrandIds());
 }
+
+/** Do not trust old JSON snapshots: the current database product decides brand visibility. */
+export async function filterVisibleSnapshots<T extends Record<string, unknown>>(items: T[]): Promise<T[]> {
+  if (!items.length) return items;
+  const hidden = await hiddenBrandIds();
+  if (!hidden.length) return items;
+  const ids = [...new Set(items.map(i => Number(i.id)).filter(id => Number.isInteger(id) && id > 0))];
+  const blocked = await prisma.product.findMany({ where: { id: { in: ids }, NOT: brandVisibilityWhere(hidden) as Prisma.ProductWhereInput }, select: { id: true } });
+  const excluded = new Set(blocked.map(p => p.id));
+  return items.filter(i => !excluded.has(Number(i.id)));
+}

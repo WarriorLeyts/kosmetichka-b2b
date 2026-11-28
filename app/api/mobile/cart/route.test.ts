@@ -1,3 +1,4 @@
+vi.mock("@/lib/brandVisibility", () => ({ filterVisibleSnapshots: async (items: unknown[]) => items }));
 /** The shared cart: saved per customer, lines cleaned, guests refused. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
